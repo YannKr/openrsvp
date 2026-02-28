@@ -17,6 +17,7 @@ import (
 	"github.com/openrsvp/openrsvp/internal/message"
 	"github.com/openrsvp/openrsvp/internal/notification"
 	"github.com/openrsvp/openrsvp/internal/notification/email"
+	"github.com/openrsvp/openrsvp/internal/notification/templates"
 	"github.com/openrsvp/openrsvp/internal/rsvp"
 	"github.com/openrsvp/openrsvp/internal/scheduler"
 	"github.com/openrsvp/openrsvp/internal/security"
@@ -105,6 +106,65 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		return &message.AttendeeInfo{ID: attendee.ID, EventID: attendee.EventID}, nil
 	}
 	messageHandler := message.NewHandler(messageService, authMiddleware, message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken)
+
+	// Wire email dispatch into message service so organizer messages are
+	// delivered to attendees via email.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		messageService.SetNotifyAttendees(func(ctx context.Context, eventID, recipientGroup, subject, body string) {
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("message notify: failed to get event")
+				return
+			}
+
+			attendees, err := rsvpService.ListByEvent(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("message notify: failed to list attendees")
+				return
+			}
+
+			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+
+			sent := 0
+			for _, a := range attendees {
+				// Filter by group.
+				if recipientGroup != "all" && a.RSVPStatus != recipientGroup {
+					continue
+				}
+				if a.Email == nil || *a.Email == "" {
+					continue
+				}
+
+				htmlBody, plainBody, err := templates.RenderEventReminder(ev.Title, eventDate, location, body, inviteURL)
+				if err != nil {
+					logger.Error().Err(err).Str("attendee_id", a.ID).Msg("message notify: failed to render template")
+					continue
+				}
+
+				if err := notifService.Send(ctx, eventID, a.ID, notification.ChannelEmail, &notification.Message{
+					To:      *a.Email,
+					Subject: subject,
+					Body:    htmlBody,
+					Plain:   plainBody,
+				}); err != nil {
+					logger.Error().Err(err).Str("attendee_email", *a.Email).Msg("message notify: failed to send email")
+					continue
+				}
+				sent++
+			}
+
+			logger.Info().
+				Str("event_id", eventID).
+				Str("group", recipientGroup).
+				Int("sent", sent).
+				Msg("message notify: emails dispatched")
+		})
+	}
 
 	// Wire up scheduler and reminder layer.
 	reminderStore := scheduler.NewReminderStore(db)

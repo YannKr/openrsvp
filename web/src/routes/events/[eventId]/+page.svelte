@@ -12,6 +12,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { onMount } from 'svelte';
 
+	let copied = $state(false);
 	let loading = $state(true);
 	let event: Event | null = $state(null);
 	let attendees: Attendee[] = $state([]);
@@ -70,6 +71,18 @@
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to publish event');
+		}
+	}
+
+	async function copyShareLink() {
+		if (!event) return;
+		try {
+			await navigator.clipboard.writeText(`${$page.url.origin}/i/${event.shareToken}`);
+			copied = true;
+			toast.success('Link copied!');
+			setTimeout(() => (copied = false), 2000);
+		} catch {
+			toast.error('Failed to copy link');
 		}
 	}
 
@@ -140,10 +153,26 @@
 				</div>
 			</div>
 			{#if event.shareToken}
-				<div class="mt-4 pt-4 border-t border-slate-200">
+				<div class="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
 					<p class="text-xs text-slate-500">
 						Share link: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600">{$page.url.origin}/i/{event.shareToken}</code>
 					</p>
+					<button
+						type="button"
+						onclick={copyShareLink}
+						class="inline-flex items-center justify-center rounded p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+						title="Copy share link"
+					>
+						{#if copied}
+							<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+							</svg>
+						{:else}
+							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+							</svg>
+						{/if}
+					</button>
 				</div>
 			{/if}
 		</Card>

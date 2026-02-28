@@ -13,10 +13,16 @@ var (
 	ErrEmptyBody    = errors.New("body is required")
 )
 
+// NotifyAttendeesFunc is called after an organizer message is stored to
+// dispatch email/SMS notifications to the matching attendees. It runs
+// asynchronously so it does not block the HTTP response.
+type NotifyAttendeesFunc func(ctx context.Context, eventID, recipientGroup, subject, body string)
+
 // Service implements the messaging business logic.
 type Service struct {
-	store  *Store
-	logger zerolog.Logger
+	store           *Store
+	logger          zerolog.Logger
+	notifyAttendees NotifyAttendeesFunc
 }
 
 // NewService creates a new message Service.
@@ -25,6 +31,12 @@ func NewService(store *Store, logger zerolog.Logger) *Service {
 		store:  store,
 		logger: logger,
 	}
+}
+
+// SetNotifyAttendees registers the function that dispatches email notifications
+// to attendees after an organizer sends a message.
+func (s *Service) SetNotifyAttendees(fn NotifyAttendeesFunc) {
+	s.notifyAttendees = fn
 }
 
 // SendFromOrganizer creates a message from an organizer to an attendee or
@@ -57,6 +69,11 @@ func (s *Service) SendFromOrganizer(ctx context.Context, eventID, organizerID st
 		Str("recipient_type", req.RecipientType).
 		Str("recipient_id", req.RecipientID).
 		Msg("organizer message sent")
+
+	// Dispatch email notifications asynchronously.
+	if s.notifyAttendees != nil && req.RecipientType == "group" {
+		go s.notifyAttendees(context.Background(), eventID, req.RecipientID, req.Subject, req.Body)
+	}
 
 	return msg, nil
 }
