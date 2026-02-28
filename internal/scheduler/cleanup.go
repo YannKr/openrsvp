@@ -11,11 +11,17 @@ import (
 	"github.com/openrsvp/openrsvp/internal/database"
 )
 
+// RetentionNotifyFunc is a callback invoked when an event is approaching its
+// retention deadline. It receives the organizer email, event title, and the
+// time remaining before deletion.
+type RetentionNotifyFunc func(ctx context.Context, organizerEmail, eventTitle string, expiresAt time.Time)
+
 // CleanupJob polls for events whose retention period has expired and deletes
 // them. It also logs warnings for events approaching their retention deadline.
 type CleanupJob struct {
-	db     database.DB
-	logger zerolog.Logger
+	db              database.DB
+	logger          zerolog.Logger
+	retentionNotify RetentionNotifyFunc
 }
 
 // NewCleanupJob creates a new CleanupJob.
@@ -24,6 +30,13 @@ func NewCleanupJob(db database.DB, logger zerolog.Logger) *CleanupJob {
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetRetentionNotify sets the callback used to notify organizers about
+// upcoming data deletion. The callback is invoked for each event that is
+// within 7 days of its retention deadline.
+func (j *CleanupJob) SetRetentionNotify(fn RetentionNotifyFunc) {
+	j.retentionNotify = fn
 }
 
 // Name returns the job identifier.
@@ -52,19 +65,18 @@ func (j *CleanupJob) Run(ctx context.Context) error {
 
 // warnExpiring finds events where event_date + retention_days - 7 days < now
 // and logs a warning. It only warns for events that haven't been warned yet
-// (status is not 'warned').
+// (status is not 'warned'). If a retention notification callback is set,
+// it also sends an email to the organizer.
 func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 	now := time.Now().UTC()
 
 	// Find events nearing their retention deadline (within 7 days).
-	// We look for events where:
-	//   event_date + retention_days is within 7 days from now
-	//   AND the event has not already been warned (status != 'retention_warning')
 	rows, err := j.db.QueryContext(ctx,
-		`SELECT id, title, event_date, retention_days
-		 FROM events
-		 WHERE status != 'retention_warning'
-		   AND status != 'archived'`,
+		`SELECT e.id, e.title, e.event_date, e.retention_days, o.email
+		 FROM events e
+		 JOIN organizers o ON o.id = e.organizer_id
+		 WHERE e.status != 'retention_warning'
+		   AND e.status != 'archived'`,
 	)
 	if err != nil {
 		return fmt.Errorf("query expiring events: %w", err)
@@ -73,11 +85,19 @@ func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 
 	warningThreshold := 7 * 24 * time.Hour
 
+	type warningEvent struct {
+		id             string
+		title          string
+		organizerEmail string
+		expiresAt      time.Time
+	}
+	var toWarn []warningEvent
+
 	for rows.Next() {
-		var id, title, eventDateStr string
+		var id, title, eventDateStr, organizerEmail string
 		var retentionDays int
 
-		if err := rows.Scan(&id, &title, &eventDateStr, &retentionDays); err != nil {
+		if err := rows.Scan(&id, &title, &eventDateStr, &retentionDays, &organizerEmail); err != nil {
 			j.logger.Error().Err(err).Msg("scan expiring event")
 			continue
 		}
@@ -93,16 +113,41 @@ func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 
 		// Warn if within 7 days of expiry but not yet expired.
 		if timeUntilExpiry > 0 && timeUntilExpiry <= warningThreshold {
-			j.logger.Warn().
-				Str("event_id", id).
-				Str("title", title).
-				Time("expires_at", expiresAt).
-				Dur("time_remaining", timeUntilExpiry).
-				Msg("event approaching retention deadline")
+			toWarn = append(toWarn, warningEvent{
+				id:             id,
+				title:          title,
+				organizerEmail: organizerEmail,
+				expiresAt:      expiresAt,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate expiring events: %w", err)
+	}
+	rows.Close()
+
+	// Process warnings after closing the cursor (important for single-conn DBs).
+	for _, ev := range toWarn {
+		j.logger.Warn().
+			Str("event_id", ev.id).
+			Str("title", ev.title).
+			Time("expires_at", ev.expiresAt).
+			Msg("event approaching retention deadline")
+
+		// Send notification if callback is configured.
+		if j.retentionNotify != nil && ev.organizerEmail != "" {
+			j.retentionNotify(ctx, ev.organizerEmail, ev.title, ev.expiresAt)
+		}
+
+		// Mark event as warned so we don't re-notify.
+		_, markErr := j.db.ExecContext(ctx,
+			`UPDATE events SET status = 'retention_warning' WHERE id = ?`, ev.id)
+		if markErr != nil {
+			j.logger.Error().Err(markErr).Str("event_id", ev.id).Msg("failed to mark retention warning")
 		}
 	}
 
-	return rows.Err()
+	return nil
 }
 
 // deleteExpired finds and deletes events where event_date + retention_days < now.
@@ -149,6 +194,7 @@ func (j *CleanupJob) deleteExpired(ctx context.Context) error {
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate expired events: %w", err)
 	}
+	rows.Close()
 
 	if len(expiredIDs) == 0 {
 		return nil

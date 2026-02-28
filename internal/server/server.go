@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -16,7 +15,6 @@ import (
 	"github.com/openrsvp/openrsvp/internal/invite"
 	"github.com/openrsvp/openrsvp/internal/message"
 	"github.com/openrsvp/openrsvp/internal/notification"
-	"github.com/openrsvp/openrsvp/internal/notification/email"
 	"github.com/openrsvp/openrsvp/internal/notification/templates"
 	"github.com/openrsvp/openrsvp/internal/rsvp"
 	"github.com/openrsvp/openrsvp/internal/scheduler"
@@ -25,19 +23,19 @@ import (
 
 // Server is the main HTTP server for OpenRSVP.
 type Server struct {
-	cfg              *config.Config
-	db               database.DB
-	logger           zerolog.Logger
-	http             *http.Server
-	authHandler      *auth.Handler
-	eventHandler     *event.Handler
-	rsvpHandler      *rsvp.Handler
-	inviteHandler    *invite.Handler
-	messageHandler   *message.Handler
-	reminderHandler  *scheduler.Handler
-	notifService     *notification.Service
-	scheduler        *scheduler.Scheduler
-	securityMw       *security.Middleware
+	cfg             *config.Config
+	db              database.DB
+	logger          zerolog.Logger
+	http            *http.Server
+	authHandler     *auth.Handler
+	eventHandler    *event.Handler
+	rsvpHandler     *rsvp.Handler
+	inviteHandler   *invite.Handler
+	messageHandler  *message.Handler
+	reminderHandler *scheduler.Handler
+	notifService    *notification.Service
+	scheduler       *scheduler.Scheduler
+	securityMw      *security.Middleware
 }
 
 // New creates a new Server instance.
@@ -72,11 +70,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx))
 
 	// Wire up notification layer.
-	notifRegistry := notification.NewRegistry()
-	if cfg.SMTPHost != "" {
-		smtpProvider := email.NewSMTPProvider(cfg.SMTPHost, strconv.Itoa(cfg.SMTPPort), cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
-		notifRegistry.Register(smtpProvider)
-	}
+	notifRegistry := buildNotificationRegistry(cfg, logger)
 	notifService := notification.NewService(notifRegistry, db, logger)
 
 	// Wire email sending into auth service (breaks circular dep via function).
@@ -202,6 +196,51 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				Int("sent", sent).
 				Msg("message notify: emails dispatched")
 		})
+
+		messageService.SetNotifyOrganizer(func(ctx context.Context, eventID, attendeeID, subject, body string) {
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("attendee notify: failed to get event")
+				return
+			}
+
+			organizer, err := authStore.FindOrganizerByID(ctx, ev.OrganizerID)
+			if err != nil {
+				logger.Error().Err(err).Str("organizer_id", ev.OrganizerID).Msg("attendee notify: failed to get organizer")
+				return
+			}
+			if organizer == nil || organizer.Email == "" {
+				return
+			}
+
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+
+			dashboardURL := cfg.BaseURL + "/events/" + eventID + "/messages"
+			htmlBody, plainBody, err := templates.RenderEventReminder(
+				ev.Title,
+				eventDate,
+				location,
+				"A guest sent you a new message:\n\n"+body,
+				dashboardURL,
+			)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("attendee notify: failed to render template")
+				return
+			}
+
+			if err := notifService.Send(ctx, eventID, attendeeID, notification.ChannelEmail, &notification.Message{
+				To:      organizer.Email,
+				Subject: "New attendee message — " + subject,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); err != nil {
+				logger.Error().Err(err).Str("organizer_email", organizer.Email).Msg("attendee notify: failed to send email")
+			}
+		})
 	}
 
 	// Wire up scheduler and reminder layer.
@@ -210,6 +249,36 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	sched := scheduler.New(logger)
 	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, logger)
 	cleanupJob := scheduler.NewCleanupJob(db, logger)
+
+	// Wire retention warning notifications into the cleanup job.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		cleanupJob.SetRetentionNotify(func(ctx context.Context, organizerEmail, eventTitle string, expiresAt time.Time) {
+			expiresStr := expiresAt.Format("January 2, 2006")
+			dashboardURL := cfg.BaseURL + "/events"
+
+			htmlBody, plainBody, err := templates.RenderRetentionWarning(eventTitle, expiresStr, dashboardURL)
+			if err != nil {
+				logger.Error().Err(err).Str("event_title", eventTitle).Msg("retention warning: failed to render template")
+				return
+			}
+
+			provider, provErr := notifRegistry.Get(notification.ChannelEmail)
+			if provErr != nil {
+				logger.Error().Err(provErr).Msg("retention warning: no email provider")
+				return
+			}
+
+			if sendErr := provider.Send(ctx, &notification.Message{
+				To:      organizerEmail,
+				Subject: "Data Retention Notice — " + eventTitle,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); sendErr != nil {
+				logger.Error().Err(sendErr).Str("email", organizerEmail).Msg("retention warning: failed to send email")
+			}
+		})
+	}
+
 	sched.Register(reminderJob)
 	sched.Register(cleanupJob)
 

@@ -3,23 +3,41 @@
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
 	import { currentEvent } from '$lib/stores/events';
-	import { formatDateTime } from '$lib/utils/dates';
-	import type { Event, Attendee, RSVPStats } from '$lib/types';
+	import { formatDateTime, toISOLocal } from '$lib/utils/dates';
+	import type { Event, Attendee, RSVPStats, Reminder } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import DateTimePicker from '$lib/components/ui/DateTimePicker.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
+	import Textarea from '$lib/components/ui/Textarea.svelte';
 	import { onMount } from 'svelte';
 
 	let copied = $state(false);
 	let loading = $state(true);
 	let event: Event | null = $state(null);
 	let attendees: Attendee[] = $state([]);
+	let reminders: Reminder[] = $state([]);
 	let stats: RSVPStats = $state({ attending: 0, maybe: 0, declined: 0, pending: 0, total: 0 });
 	let activeFilter: string = $state('all');
+	let creatingReminder = $state(false);
+	let reminderRemindAt = $state(toISOLocal(new Date(Date.now() + 60 * 60 * 1000)));
+	let reminderTargetGroup: Reminder['targetGroup'] = $state('all');
+	let reminderMessage = $state('');
+	let reminderErrors: Record<string, string> = $state({});
 
 	const eventId = $derived($page.params.eventId);
+	const reminderMinDate = $derived(toISOLocal(new Date()));
+
+	const reminderTargetOptions = [
+		{ value: 'all', label: 'All Attendees' },
+		{ value: 'attending', label: 'Attending' },
+		{ value: 'maybe', label: 'Maybe' },
+		{ value: 'declined', label: 'Declined' },
+		{ value: 'pending', label: 'Pending RSVP' }
+	];
 
 	let filteredAttendees = $derived.by(() => {
 		if (activeFilter === 'all') return attendees;
@@ -28,17 +46,19 @@
 
 	onMount(async () => {
 		try {
-			const [eventResult, attendeeResult, statsResult] = await Promise.all([
+			const [eventResult, attendeeResult, statsResult, remindersResult] = await Promise.all([
 				api.get<{ data: Event }>(`/events/${eventId}`),
 				api.get<{ data: Attendee[] }>(`/rsvp/event/${eventId}`).catch(() => ({ data: [] })),
 				api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
 					data: { attending: 0, maybe: 0, declined: 0, pending: 0, total: 0 }
-				}))
+				})),
+				api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] }))
 			]);
 			event = eventResult.data;
 			$currentEvent = event;
 			attendees = attendeeResult.data;
 			stats = statsResult.data;
+			reminders = remindersResult.data;
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to load event');
@@ -96,6 +116,47 @@
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to cancel event');
+		}
+	}
+
+	async function createReminder() {
+		if (!event) return;
+
+		reminderErrors = {};
+		if (!reminderRemindAt) {
+			reminderErrors.remindAt = 'Reminder date is required';
+		}
+
+		if (Object.keys(reminderErrors).length > 0) {
+			return;
+		}
+
+		creatingReminder = true;
+		try {
+			const result = await api.post<{ data: Reminder }>(`/reminders/event/${eventId}`, {
+				remindAt: new Date(reminderRemindAt).toISOString(),
+				targetGroup: reminderTargetGroup,
+				message: reminderMessage.trim()
+			});
+			reminders = [...reminders, result.data].sort((a, b) => a.remindAt.localeCompare(b.remindAt));
+			reminderMessage = '';
+			toast.success('Reminder scheduled');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to schedule reminder');
+		} finally {
+			creatingReminder = false;
+		}
+	}
+
+	async function cancelReminder(reminderId: string) {
+		try {
+			await api.delete<{ data: { message: string } }>(`/reminders/${reminderId}`);
+			reminders = reminders.map((r) => (r.id === reminderId ? { ...r, status: 'cancelled' } : r));
+			toast.success('Reminder cancelled');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to cancel reminder');
 		}
 	}
 </script>
@@ -192,6 +253,80 @@
 				</div>
 			{/each}
 		</div>
+
+		<!-- Reminder management -->
+		<Card class="mb-6">
+			{#snippet header()}
+				<h2 class="text-lg font-semibold text-slate-900">Scheduled Reminders</h2>
+			{/snippet}
+
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					createReminder();
+				}}
+				class="space-y-4"
+			>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<DateTimePicker
+						label="Remind At"
+						name="remindAt"
+						bind:value={reminderRemindAt}
+						min={reminderMinDate}
+						error={reminderErrors.remindAt || ''}
+						required
+					/>
+					<Select
+						label="Target Group"
+						name="targetGroup"
+						bind:value={reminderTargetGroup}
+						options={reminderTargetOptions}
+					/>
+				</div>
+
+				<Textarea
+					label="Custom Message (optional)"
+					name="message"
+					bind:value={reminderMessage}
+					placeholder="Don’t forget to RSVP before Friday!"
+					rows={3}
+				/>
+
+				<div class="flex justify-end">
+					<Button type="submit" loading={creatingReminder}>Schedule Reminder</Button>
+				</div>
+			</form>
+
+			{#if reminders.length === 0}
+				<p class="text-sm text-slate-500 text-center py-8 border-t border-slate-200 mt-6">
+					No reminders scheduled.
+				</p>
+			{:else}
+				<div class="divide-y divide-slate-200 -mx-6 -mb-4 border-t border-slate-200 mt-6">
+					{#each reminders as reminder (reminder.id)}
+						<div class="px-6 py-4 flex items-center justify-between gap-4">
+							<div class="min-w-0">
+								<p class="text-sm font-medium text-slate-900">
+									{formatDateTime(reminder.remindAt)}
+								</p>
+								<p class="text-xs text-slate-500 mt-0.5">
+									Target: {reminder.targetGroup}
+								</p>
+								{#if reminder.message}
+									<p class="text-sm text-slate-700 mt-2 whitespace-pre-wrap">{reminder.message}</p>
+								{/if}
+							</div>
+							<div class="flex items-center gap-2">
+								<Badge variant={statusVariant(reminder.status)}>{reminder.status}</Badge>
+								{#if reminder.status === 'scheduled'}
+									<Button size="sm" variant="outline" onclick={() => cancelReminder(reminder.id)}>Cancel</Button>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</Card>
 
 		<!-- Attendee list -->
 		<Card>

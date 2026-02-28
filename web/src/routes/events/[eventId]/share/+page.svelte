@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
-	import type { Event, Attendee, RSVPStats } from '$lib/types';
+	import type { Event, RSVPStats } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -18,8 +18,7 @@
 	let stats: RSVPStats = $state({ attending: 0, maybe: 0, declined: 0, pending: 0, total: 0 });
 	let copied = $state(false);
 	let qrDataUrl = $state('');
-
-	let shareUrl = $derived(event ? `${$page.url.origin}/i/${event.shareToken}` : '');
+	let shareUrl = $state('');
 
 	onMount(async () => {
 		try {
@@ -31,6 +30,7 @@
 			]);
 			event = eventResult.data;
 			stats = statsResult.data;
+			shareUrl = event ? `${window.location.origin}/i/${event.shareToken}` : '';
 		if (eventResult.data) {
 				const url = `${window.location.origin}/i/${eventResult.data.shareToken}`;
 				try {

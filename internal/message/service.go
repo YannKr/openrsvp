@@ -18,11 +18,16 @@ var (
 // asynchronously so it does not block the HTTP response.
 type NotifyAttendeesFunc func(ctx context.Context, eventID, recipientGroup, subject, body string)
 
+// NotifyOrganizerFunc is called after an attendee message is stored to
+// notify the organizer asynchronously.
+type NotifyOrganizerFunc func(ctx context.Context, eventID, attendeeID, subject, body string)
+
 // Service implements the messaging business logic.
 type Service struct {
 	store           *Store
 	logger          zerolog.Logger
 	notifyAttendees NotifyAttendeesFunc
+	notifyOrganizer NotifyOrganizerFunc
 }
 
 // NewService creates a new message Service.
@@ -37,6 +42,12 @@ func NewService(store *Store, logger zerolog.Logger) *Service {
 // to attendees after an organizer sends a message.
 func (s *Service) SetNotifyAttendees(fn NotifyAttendeesFunc) {
 	s.notifyAttendees = fn
+}
+
+// SetNotifyOrganizer registers the function that dispatches notifications
+// to organizers after an attendee sends a message.
+func (s *Service) SetNotifyOrganizer(fn NotifyOrganizerFunc) {
+	s.notifyOrganizer = fn
 }
 
 // SendFromOrganizer creates a message from an organizer to an attendee or
@@ -106,6 +117,10 @@ func (s *Service) SendFromAttendee(ctx context.Context, eventID, attendeeID stri
 		Str("event_id", eventID).
 		Str("attendee_id", attendeeID).
 		Msg("attendee message sent")
+
+	if s.notifyOrganizer != nil {
+		go s.notifyOrganizer(context.Background(), eventID, attendeeID, req.Subject, req.Body)
+	}
 
 	return msg, nil
 }

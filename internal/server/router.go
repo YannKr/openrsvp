@@ -41,10 +41,26 @@ func (s *Server) routes() *chi.Mux {
 
 	// --- API v1 ---
 	r.Route("/api/v1", func(api chi.Router) {
+		// Sanitize all incoming JSON request bodies.
+		api.Use(s.securityMw.Sanitize)
+
 		api.Get("/health", s.handleHealth)
-		api.Mount("/auth", s.authHandler.Routes())
+
+		// Auth routes with stricter rate limiting (10/min).
+		api.Route("/auth", func(auth chi.Router) {
+			auth.Use(security.RateLimitMiddleware(s.securityMw.AuthRateLimiter))
+			auth.Mount("/", s.authHandler.Routes())
+		})
+
 		api.Mount("/events", s.eventHandler.Routes())
-		api.Mount("/rsvp", s.rsvpHandler.Routes())
+
+		// RSVP routes with moderate rate limiting (30/min) and honeypot on public submissions.
+		api.Route("/rsvp", func(rsvpR chi.Router) {
+			rsvpR.Use(security.RateLimitMiddleware(s.securityMw.RSVPRateLimiter))
+			rsvpR.Use(s.securityMw.Honeypot)
+			rsvpR.Mount("/", s.rsvpHandler.Routes())
+		})
+
 		api.Mount("/invite", s.inviteHandler.Routes())
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())

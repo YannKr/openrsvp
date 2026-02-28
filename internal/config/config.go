@@ -26,11 +26,24 @@ type Config struct {
 
 	// Notifications
 	NotificationEmailProvider string
+	NotificationSMSProvider   string
 	SMTPHost                  string
 	SMTPPort                  int
 	SMTPUsername              string
 	SMTPPassword              string
 	SMTPFrom                  string
+	SendGridAPIKey            string
+	SendGridFrom              string
+	SESRegion                 string
+	SESUsername               string
+	SESPassword               string
+	SESFrom                   string
+	TwilioAccountSID          string
+	TwilioAuthToken           string
+	TwilioFromNumber          string
+	VonageAPIKey              string
+	VonageAPISecret           string
+	VonageFrom                string
 
 	// Data Retention
 	DefaultRetentionDays int
@@ -85,11 +98,24 @@ func Load() (*Config, error) {
 		BaseURL:         baseURL,
 
 		NotificationEmailProvider: getEnv("NOTIFICATION_EMAIL_PROVIDER", "smtp"),
+		NotificationSMSProvider:   getEnv("NOTIFICATION_SMS_PROVIDER", ""),
 		SMTPHost:                  getEnv("SMTP_HOST", "localhost"),
 		SMTPPort:                  smtpPort,
 		SMTPUsername:              getEnv("SMTP_USERNAME", ""),
 		SMTPPassword:              getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:                  getEnv("SMTP_FROM", "noreply@openrsvp.local"),
+		SendGridAPIKey:            getEnv("SENDGRID_API_KEY", ""),
+		SendGridFrom:              getEnv("SENDGRID_FROM", ""),
+		SESRegion:                 getEnv("SES_REGION", ""),
+		SESUsername:               getEnv("SES_USERNAME", ""),
+		SESPassword:               getEnv("SES_PASSWORD", ""),
+		SESFrom:                   getEnv("SES_FROM", ""),
+		TwilioAccountSID:          getEnv("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:           getEnv("TWILIO_AUTH_TOKEN", ""),
+		TwilioFromNumber:          getEnv("TWILIO_FROM_NUMBER", ""),
+		VonageAPIKey:              getEnv("VONAGE_API_KEY", ""),
+		VonageAPISecret:           getEnv("VONAGE_API_SECRET", ""),
+		VonageFrom:                getEnv("VONAGE_FROM", ""),
 
 		DefaultRetentionDays: retentionDays,
 	}

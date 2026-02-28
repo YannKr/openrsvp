@@ -8,19 +8,21 @@ import (
 	"strings"
 )
 
-//go:embed magic_link.html rsvp_confirmation.html event_reminder.html
+//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html
 var templateFS embed.FS
 
 var (
 	magicLinkTmpl        *template.Template
 	rsvpConfirmationTmpl *template.Template
 	eventReminderTmpl    *template.Template
+	retentionWarningTmpl *template.Template
 )
 
 func init() {
 	magicLinkTmpl = template.Must(template.ParseFS(templateFS, "magic_link.html"))
 	rsvpConfirmationTmpl = template.Must(template.ParseFS(templateFS, "rsvp_confirmation.html"))
 	eventReminderTmpl = template.Must(template.ParseFS(templateFS, "event_reminder.html"))
+	retentionWarningTmpl = template.Must(template.ParseFS(templateFS, "retention_warning.html"))
 }
 
 // magicLinkData holds the template data for a magic link email.
@@ -45,6 +47,13 @@ type eventReminderData struct {
 	Location   string
 	Message    string
 	InviteURL  string
+}
+
+// retentionWarningData holds the template data for a retention warning email.
+type retentionWarningData struct {
+	EventTitle   string
+	ExpiresAt    string
+	DashboardURL string
 }
 
 // RenderMagicLink renders the magic link email template and returns the HTML
@@ -122,6 +131,31 @@ func RenderEventReminder(eventTitle, eventDate, location, message, inviteURL str
 		sb.WriteString(fmt.Sprintf("Message from the organizer:\n%s\n\n", message))
 	}
 	sb.WriteString(fmt.Sprintf("View your invitation:\n%s\n", inviteURL))
+
+	return buf.String(), sb.String(), nil
+}
+
+// RenderRetentionWarning renders the retention warning email template and
+// returns the HTML body and a plain text fallback.
+func RenderRetentionWarning(eventTitle, expiresAt, dashboardURL string) (html, plain string, err error) {
+	data := retentionWarningData{
+		EventTitle:   eventTitle,
+		ExpiresAt:    expiresAt,
+		DashboardURL: dashboardURL,
+	}
+
+	var buf bytes.Buffer
+	if err := retentionWarningTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render retention warning template: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Data Retention Notice\n\n")
+	sb.WriteString(fmt.Sprintf("Your event \"%s\" is scheduled for automatic deletion on %s.\n\n", eventTitle, expiresAt))
+	sb.WriteString("After this date, all event data including attendee RSVPs, messages, and invite cards will be permanently deleted.\n\n")
+	if dashboardURL != "" {
+		sb.WriteString(fmt.Sprintf("To extend the retention period, visit:\n%s\n", dashboardURL))
+	}
 
 	return buf.String(), sb.String(), nil
 }
