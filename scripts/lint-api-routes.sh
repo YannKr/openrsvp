@@ -43,6 +43,7 @@ extract_routes() {
   extract_routes invite    /invite
   extract_routes message   /messages
   extract_routes scheduler /reminders
+  extract_routes feedback  /feedback
 } | sort -u > "$BACKEND_FILE"
 
 backend_count=$(wc -l < "$BACKEND_FILE" | tr -d ' ')

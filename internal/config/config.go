@@ -45,6 +45,11 @@ type Config struct {
 	VonageAPISecret           string
 	VonageFrom                string
 
+	// Feedback
+	FeedbackGitHubToken string
+	FeedbackGitHubRepo  string
+	FeedbackEmail       string
+
 	// Data Retention
 	DefaultRetentionDays int
 }
@@ -116,6 +121,10 @@ func Load() (*Config, error) {
 		VonageAPIKey:              getEnv("VONAGE_API_KEY", ""),
 		VonageAPISecret:           getEnv("VONAGE_API_SECRET", ""),
 		VonageFrom:                getEnv("VONAGE_FROM", ""),
+
+		FeedbackGitHubToken: getEnv("FEEDBACK_GITHUB_TOKEN", ""),
+		FeedbackGitHubRepo:  getEnv("FEEDBACK_GITHUB_REPO", ""),
+		FeedbackEmail:       getEnv("FEEDBACK_EMAIL", ""),
 
 		DefaultRetentionDays: retentionDays,
 	}

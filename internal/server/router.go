@@ -64,6 +64,7 @@ func (s *Server) routes() *chi.Mux {
 		api.Mount("/invite", s.inviteHandler.Routes())
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())
+		api.Mount("/feedback", s.feedbackHandler.Routes())
 	})
 
 	// --- Static files / SPA fallback ---

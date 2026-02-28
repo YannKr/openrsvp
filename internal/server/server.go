@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/auth"
 	"github.com/openrsvp/openrsvp/internal/config"
 	"github.com/openrsvp/openrsvp/internal/database"
 	"github.com/openrsvp/openrsvp/internal/event"
+	"github.com/openrsvp/openrsvp/internal/feedback"
 	"github.com/openrsvp/openrsvp/internal/invite"
 	"github.com/openrsvp/openrsvp/internal/message"
 	"github.com/openrsvp/openrsvp/internal/notification"
@@ -32,6 +34,7 @@ type Server struct {
 	rsvpHandler     *rsvp.Handler
 	inviteHandler   *invite.Handler
 	messageHandler  *message.Handler
+	feedbackHandler *feedback.Handler
 	reminderHandler *scheduler.Handler
 	notifService    *notification.Service
 	scheduler       *scheduler.Scheduler
@@ -126,6 +129,31 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			}
 		})
 	}
+
+	// Wire up feedback layer.
+	feedbackSvc := feedback.NewService(cfg.FeedbackGitHubToken, cfg.FeedbackGitHubRepo, cfg.FeedbackEmail)
+	if notifRegistry.Has(notification.ChannelEmail) {
+		feedbackSvc.SetEmailSender(func(ctx context.Context, to, subject, body, plain string) error {
+			provider, err := notifRegistry.Get(notification.ChannelEmail)
+			if err != nil {
+				return err
+			}
+			return provider.Send(ctx, &notification.Message{
+				To:      to,
+				Subject: subject,
+				Body:    body,
+				Plain:   plain,
+			})
+		})
+	}
+	organizerEmailFromCtx := func(ctx context.Context) (string, bool) {
+		org := auth.OrganizerFromContext(ctx)
+		if org == nil {
+			return "", false
+		}
+		return org.Email, true
+	}
+	feedbackHandler := feedback.NewHandler(feedbackSvc, authMiddleware, feedback.OrganizerFromCtx(organizerEmailFromCtx))
 
 	// Wire up message layer.
 	messageStore := message.NewStore(db)
@@ -246,6 +274,52 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Wire up scheduler and reminder layer.
 	reminderStore := scheduler.NewReminderStore(db)
 	reminderHandler := scheduler.NewHandler(reminderStore, authMiddleware, scheduler.OrganizerFromCtx(organizerFromCtx))
+
+	// Create default reminders (1 week and 3 days before) when an event is published.
+	eventService.SetOnPublish(func(ctx context.Context, e *event.Event) {
+		type defaultReminder struct {
+			offset  time.Duration
+			message string
+		}
+		defaults := []defaultReminder{
+			{7 * 24 * time.Hour, "Reminder: " + e.Title + " is in 1 week!"},
+			{3 * 24 * time.Hour, "Reminder: " + e.Title + " is in 3 days!"},
+		}
+
+		now := time.Now().UTC()
+		for _, d := range defaults {
+			remindAt := e.EventDate.Add(-d.offset)
+			if remindAt.Before(now) {
+				logger.Debug().
+					Str("event_id", e.ID).
+					Time("remind_at", remindAt).
+					Msg("skipping default reminder (already in the past)")
+				continue
+			}
+
+			r := &scheduler.Reminder{
+				ID:          uuid.Must(uuid.NewV7()).String(),
+				EventID:     e.ID,
+				RemindAt:    remindAt,
+				TargetGroup: "all",
+				Message:     d.message,
+				Status:      "scheduled",
+			}
+			if err := reminderStore.Create(ctx, r); err != nil {
+				logger.Error().Err(err).
+					Str("event_id", e.ID).
+					Time("remind_at", remindAt).
+					Msg("failed to create default reminder")
+				continue
+			}
+			logger.Info().
+				Str("event_id", e.ID).
+				Str("reminder_id", r.ID).
+				Time("remind_at", remindAt).
+				Msg("created default reminder")
+		}
+	})
+
 	sched := scheduler.New(logger)
 	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, logger)
 	cleanupJob := scheduler.NewCleanupJob(db, logger)
@@ -301,6 +375,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		rsvpHandler:     rsvpHandler,
 		inviteHandler:   inviteHandler,
 		messageHandler:  messageHandler,
+		feedbackHandler: feedbackHandler,
 		reminderHandler: reminderHandler,
 		notifService:    notifService,
 		scheduler:       sched,
