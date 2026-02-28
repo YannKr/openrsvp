@@ -1,0 +1,16 @@
+services:
+  openrsvp:
+    build: .
+    ports:
+      - "8091:8080"
+    volumes:
+      - openrsvp-data:/data
+    env_file:
+      - .env
+    environment:
+      - DB_DRIVER=sqlite
+      - DB_DSN=/data/openrsvp.db
+    restart: unless-stopped
+
+volumes:
+  openrsvp-data:

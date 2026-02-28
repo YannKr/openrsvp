@@ -1,0 +1,1 @@
+ALTER TABLE organizers ADD COLUMN timezone TEXT NOT NULL DEFAULT '';

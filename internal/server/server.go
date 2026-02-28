@@ -1,0 +1,191 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/auth"
+	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/openrsvp/openrsvp/internal/event"
+	"github.com/openrsvp/openrsvp/internal/invite"
+	"github.com/openrsvp/openrsvp/internal/message"
+	"github.com/openrsvp/openrsvp/internal/notification"
+	"github.com/openrsvp/openrsvp/internal/notification/email"
+	"github.com/openrsvp/openrsvp/internal/rsvp"
+	"github.com/openrsvp/openrsvp/internal/scheduler"
+	"github.com/openrsvp/openrsvp/internal/security"
+)
+
+// Server is the main HTTP server for OpenRSVP.
+type Server struct {
+	cfg              *config.Config
+	db               database.DB
+	logger           zerolog.Logger
+	http             *http.Server
+	authHandler      *auth.Handler
+	eventHandler     *event.Handler
+	rsvpHandler      *rsvp.Handler
+	inviteHandler    *invite.Handler
+	messageHandler   *message.Handler
+	reminderHandler  *scheduler.Handler
+	notifService     *notification.Service
+	scheduler        *scheduler.Scheduler
+	securityMw       *security.Middleware
+}
+
+// New creates a new Server instance.
+func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
+	// Wire up auth layer.
+	authStore := auth.NewStore(db)
+	authService := auth.NewService(authStore, cfg, logger)
+	authHandler := auth.NewHandler(authService, cfg, logger)
+	authMiddleware := auth.RequireAuth(authService)
+
+	organizerFromCtx := func(ctx context.Context) (string, bool) {
+		org := auth.OrganizerFromContext(ctx)
+		if org == nil {
+			return "", false
+		}
+		return org.ID, true
+	}
+
+	// Wire up event layer.
+	eventStore := event.NewStore(db)
+	eventService := event.NewService(eventStore, cfg.DefaultRetentionDays)
+	eventHandler := event.NewHandler(eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx))
+
+	// Wire up invite layer (before RSVP since RSVP depends on it).
+	inviteStore := invite.NewStore(db)
+	inviteService := invite.NewService(inviteStore)
+	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx))
+
+	// Wire up RSVP layer.
+	rsvpStore := rsvp.NewStore(db)
+	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService)
+	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx))
+
+	// Wire up notification layer.
+	notifRegistry := notification.NewRegistry()
+	if cfg.SMTPHost != "" {
+		smtpProvider := email.NewSMTPProvider(cfg.SMTPHost, strconv.Itoa(cfg.SMTPPort), cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+		notifRegistry.Register(smtpProvider)
+	}
+	notifService := notification.NewService(notifRegistry, db, logger)
+
+	// Wire email sending into auth service (breaks circular dep via function).
+	if notifRegistry.Has(notification.ChannelEmail) {
+		authService.SetEmailSender(func(ctx context.Context, to, subject, htmlBody, plainBody string) error {
+			provider, err := notifRegistry.Get(notification.ChannelEmail)
+			if err != nil {
+				return err
+			}
+			return provider.Send(ctx, &notification.Message{
+				To:      to,
+				Subject: subject,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			})
+		})
+	}
+
+	// Wire up message layer.
+	messageStore := message.NewStore(db)
+	messageService := message.NewService(messageStore, logger)
+	attendeeFromToken := func(ctx context.Context, rsvpToken string) (*message.AttendeeInfo, error) {
+		attendee, err := rsvpService.GetByToken(ctx, rsvpToken)
+		if err != nil {
+			return nil, err
+		}
+		return &message.AttendeeInfo{ID: attendee.ID, EventID: attendee.EventID}, nil
+	}
+	messageHandler := message.NewHandler(messageService, authMiddleware, message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken)
+
+	// Wire up scheduler and reminder layer.
+	reminderStore := scheduler.NewReminderStore(db)
+	reminderHandler := scheduler.NewHandler(reminderStore, authMiddleware, scheduler.OrganizerFromCtx(organizerFromCtx))
+	sched := scheduler.New(logger)
+	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, logger)
+	cleanupJob := scheduler.NewCleanupJob(db, logger)
+	sched.Register(reminderJob)
+	sched.Register(cleanupJob)
+
+	// Wire up security middleware.
+	secMw := security.NewMiddleware(security.SecurityConfig{
+		AuthRateLimit:    10,
+		RSVPRateLimit:    30,
+		GeneralRateLimit: 100,
+		RateWindow:       1 * time.Minute,
+		CSRFExcludePaths: []string{"/api/v1/rsvp/public/", "/api/v1/auth/"},
+		IsProduction:     cfg.Env == "production",
+	})
+
+	s := &Server{
+		cfg:             cfg,
+		db:              db,
+		logger:          logger,
+		authHandler:     authHandler,
+		eventHandler:    eventHandler,
+		rsvpHandler:     rsvpHandler,
+		inviteHandler:   inviteHandler,
+		messageHandler:  messageHandler,
+		reminderHandler: reminderHandler,
+		notifService:    notifService,
+		scheduler:       sched,
+		securityMw:      secMw,
+	}
+
+	router := s.routes()
+
+	s.http = &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	return s
+}
+
+// Start begins listening and blocks until the provided context is cancelled.
+// It performs a graceful shutdown when the context is done.
+func (s *Server) Start(ctx context.Context) error {
+	// Start background scheduler.
+	s.scheduler.Start(ctx)
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		s.logger.Info().Str("addr", s.http.Addr).Msg("server listening")
+		if err := s.http.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+		close(errCh)
+	}()
+
+	select {
+	case err := <-errCh:
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+		s.logger.Info().Msg("shutting down server")
+	}
+
+	// Stop scheduler first.
+	s.scheduler.Stop()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := s.http.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("server shutdown: %w", err)
+	}
+
+	s.logger.Info().Msg("server stopped gracefully")
+	return nil
+}

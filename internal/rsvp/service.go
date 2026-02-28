@@ -1,0 +1,289 @@
+package rsvp
+
+import (
+	"context"
+	"crypto/rand"
+	"fmt"
+
+	"github.com/google/uuid"
+
+	"github.com/openrsvp/openrsvp/internal/event"
+	"github.com/openrsvp/openrsvp/internal/invite"
+)
+
+// base62Chars is the alphabet used for generating RSVP tokens.
+const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// Service contains the business logic for the RSVP system.
+type Service struct {
+	store         *Store
+	eventService  *event.Service
+	inviteService *invite.Service
+}
+
+// NewService creates a new RSVP Service.
+func NewService(store *Store, eventService *event.Service, inviteService *invite.Service) *Service {
+	return &Service{
+		store:         store,
+		eventService:  eventService,
+		inviteService: inviteService,
+	}
+}
+
+// PublicInviteData holds the combined event and invite data for the public invite page.
+type PublicInviteData struct {
+	Event  *event.Event       `json:"event"`
+	Invite *invite.InviteCard `json:"invite"`
+}
+
+// GetPublicInvite retrieves event and invite card data by share token for the
+// public invitation page.
+func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*PublicInviteData, error) {
+	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if ev.Status != "published" {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	card, err := s.inviteService.GetByEventID(ctx, ev.ID)
+	if err != nil {
+		// Return a default card if none exists.
+		card = &invite.InviteCard{
+			EventID:        ev.ID,
+			TemplateID:     "balloon-party",
+			Heading:        "You're Invited!",
+			Body:           "",
+			Footer:         "",
+			PrimaryColor:   "#6366f1",
+			SecondaryColor: "#f0abfc",
+			Font:           "Inter",
+			CustomData:     "{}",
+		}
+	}
+
+	return &PublicInviteData{
+		Event:  ev,
+		Invite: card,
+	}, nil
+}
+
+// SubmitRSVP processes an RSVP submission for an event identified by its share
+// token. It deduplicates by email or phone, performing an upsert when a
+// matching attendee already exists.
+func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPRequest) (*Attendee, error) {
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if req.RSVPStatus == "" {
+		return nil, fmt.Errorf("rsvpStatus is required")
+	}
+	if !isValidRSVPStatus(req.RSVPStatus) {
+		return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
+	}
+	if req.ContactMethod == "" {
+		req.ContactMethod = "email"
+	}
+	if req.ContactMethod != "email" && req.ContactMethod != "sms" {
+		return nil, fmt.Errorf("invalid contactMethod: must be email or sms")
+	}
+	if req.Email == nil && req.Phone == nil {
+		return nil, fmt.Errorf("email or phone is required")
+	}
+
+	// Look up the event by share token.
+	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if ev.Status != "published" {
+		return nil, fmt.Errorf("event is not accepting RSVPs")
+	}
+
+	// Check for existing attendee (deduplicate by email or phone).
+	var existing *Attendee
+	if req.Email != nil && *req.Email != "" {
+		existing, err = s.store.FindByEventAndEmail(ctx, ev.ID, *req.Email)
+		if err != nil {
+			return nil, fmt.Errorf("lookup attendee by email: %w", err)
+		}
+	}
+	if existing == nil && req.Phone != nil && *req.Phone != "" {
+		existing, err = s.store.FindByEventAndPhone(ctx, ev.ID, *req.Phone)
+		if err != nil {
+			return nil, fmt.Errorf("lookup attendee by phone: %w", err)
+		}
+	}
+
+	if existing != nil {
+		// Update the existing RSVP.
+		existing.Name = req.Name
+		existing.RSVPStatus = req.RSVPStatus
+		existing.DietaryNotes = req.DietaryNotes
+		existing.PlusOnes = req.PlusOnes
+		existing.ContactMethod = req.ContactMethod
+		if req.Email != nil {
+			existing.Email = req.Email
+		}
+		if req.Phone != nil {
+			existing.Phone = req.Phone
+		}
+		if err := s.store.Update(ctx, existing); err != nil {
+			return nil, err
+		}
+		return existing, nil
+	}
+
+	// Create a new attendee.
+	rsvpToken, err := generateBase62Token(12)
+	if err != nil {
+		return nil, fmt.Errorf("generate rsvp token: %w", err)
+	}
+
+	attendee := &Attendee{
+		ID:            uuid.Must(uuid.NewV7()).String(),
+		EventID:       ev.ID,
+		Name:          req.Name,
+		Email:         req.Email,
+		Phone:         req.Phone,
+		RSVPStatus:    req.RSVPStatus,
+		RSVPToken:     rsvpToken,
+		ContactMethod: req.ContactMethod,
+		DietaryNotes:  req.DietaryNotes,
+		PlusOnes:      req.PlusOnes,
+	}
+
+	if err := s.store.Create(ctx, attendee); err != nil {
+		return nil, err
+	}
+
+	return attendee, nil
+}
+
+// RsvpWithEvent bundles an attendee with their event for the public RSVP page.
+type RsvpWithEvent struct {
+	Attendee *Attendee    `json:"attendee"`
+	Event    *event.Event `json:"event"`
+}
+
+// GetByToken retrieves an attendee by their RSVP token.
+func (s *Service) GetByToken(ctx context.Context, rsvpToken string) (*Attendee, error) {
+	a, err := s.store.FindByRSVPToken(ctx, rsvpToken)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, fmt.Errorf("rsvp not found")
+	}
+	return a, nil
+}
+
+// GetByTokenWithEvent retrieves an attendee and their associated event.
+func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*RsvpWithEvent, error) {
+	a, err := s.store.FindByRSVPToken(ctx, rsvpToken)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, fmt.Errorf("rsvp not found")
+	}
+
+	ev, err := s.eventService.GetByID(ctx, a.EventID)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	return &RsvpWithEvent{
+		Attendee: a,
+		Event:    ev,
+	}, nil
+}
+
+// UpdateByToken applies partial updates to an RSVP identified by its token.
+func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req UpdateRSVPRequest) (*Attendee, error) {
+	a, err := s.store.FindByRSVPToken(ctx, rsvpToken)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, fmt.Errorf("rsvp not found")
+	}
+
+	if req.Name != nil {
+		a.Name = *req.Name
+	}
+	if req.RSVPStatus != nil {
+		if !isValidRSVPStatus(*req.RSVPStatus) {
+			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
+		}
+		a.RSVPStatus = *req.RSVPStatus
+	}
+	if req.DietaryNotes != nil {
+		a.DietaryNotes = *req.DietaryNotes
+	}
+	if req.PlusOnes != nil {
+		a.PlusOnes = *req.PlusOnes
+	}
+
+	if err := s.store.Update(ctx, a); err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
+
+// ListByEvent retrieves all attendees for a given event.
+func (s *Service) ListByEvent(ctx context.Context, eventID string) ([]*Attendee, error) {
+	attendees, err := s.store.FindByEventID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if attendees == nil {
+		attendees = []*Attendee{}
+	}
+	return attendees, nil
+}
+
+// GetStats returns aggregate RSVP statistics for an event.
+func (s *Service) GetStats(ctx context.Context, eventID string) (*RSVPStats, error) {
+	return s.store.GetStats(ctx, eventID)
+}
+
+// RemoveAttendee deletes an attendee from an event.
+func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string) error {
+	a, err := s.store.FindByID(ctx, attendeeID)
+	if err != nil {
+		return err
+	}
+	if a == nil {
+		return fmt.Errorf("attendee not found")
+	}
+	if a.EventID != eventID {
+		return fmt.Errorf("attendee does not belong to this event")
+	}
+	return s.store.Delete(ctx, attendeeID)
+}
+
+// isValidRSVPStatus checks whether the given status is one of the allowed values.
+func isValidRSVPStatus(status string) bool {
+	switch status {
+	case "attending", "maybe", "declined", "pending":
+		return true
+	default:
+		return false
+	}
+}
+
+// generateBase62Token generates a random token of the given length using base62
+// characters (0-9, a-z, A-Z).
+func generateBase62Token(length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("read random bytes: %w", err)
+	}
+	for i := range b {
+		b[i] = base62Chars[int(b[i])%len(base62Chars)]
+	}
+	return string(b), nil
+}

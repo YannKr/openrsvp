@@ -1,0 +1,13 @@
+.git
+.github
+*.md
+.env
+.env.*
+!.env.example
+web/node_modules
+web/.svelte-kit
+web/build
+*.db
+*.db-journal
+*.db-wal
+tmp/

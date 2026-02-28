@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Reminder</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
+    <tr>
+      <td align="center" style="padding:40px 0;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 40px 0;text-align:center;">
+              <h1 style="margin:0;font-size:24px;font-weight:700;color:#1a1a2e;">OpenRSVP</h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 40px;">
+              <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#333333;">Event Reminder</h2>
+              <p style="margin:0 0 24px;font-size:16px;line-height:24px;color:#555555;">
+                This is a friendly reminder about an upcoming event.
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background-color:#f8f9fa;border-radius:6px;">
+                <tr>
+                  <td style="padding:20px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding:4px 0;font-size:14px;color:#777777;">Event</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#333333;text-align:right;">{{.EventTitle}}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;font-size:14px;color:#777777;">Date</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#333333;text-align:right;">{{.EventDate}}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;font-size:14px;color:#777777;">Location</td>
+                        <td style="padding:4px 0;font-size:14px;font-weight:600;color:#333333;text-align:right;">{{.Location}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              {{if .Message}}
+              <div style="margin:0 0 24px;padding:16px;background-color:#eef2ff;border-left:4px solid #4f46e5;border-radius:0 4px 4px 0;">
+                <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#4f46e5;text-transform:uppercase;">Message from the organizer</p>
+                <p style="margin:0;font-size:14px;line-height:22px;color:#333333;">{{.Message}}</p>
+              </div>
+              {{end}}
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+                <tr>
+                  <td style="border-radius:6px;background-color:#4f46e5;">
+                    <a href="{{.InviteURL}}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">
+                      View Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:13px;line-height:20px;color:#777777;text-align:center;">
+                If the button does not work, copy and paste this link into your browser:<br>
+                <span style="color:#4f46e5;word-break:break-all;">{{.InviteURL}}</span>
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:0 40px 32px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#999999;">
+                &copy; OpenRSVP &mdash; Simple event RSVPs
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

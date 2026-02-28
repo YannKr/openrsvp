@@ -1,0 +1,35 @@
+# Go
+/openrsvp
+/bin/
+*.exe
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Embedded frontend (build artifact, except .gitkeep)
+internal/server/frontend/*
+!internal/server/frontend/.gitkeep
+
+# Node
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+tmp/

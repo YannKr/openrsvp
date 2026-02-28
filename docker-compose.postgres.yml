@@ -1,0 +1,29 @@
+services:
+  openrsvp:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_DRIVER=postgres
+      - DB_DSN=postgres://openrsvp:openrsvp@postgres:5432/openrsvp?sslmode=disable
+    volumes: []
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openrsvp
+      POSTGRES_PASSWORD: openrsvp
+      POSTGRES_DB: openrsvp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openrsvp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
