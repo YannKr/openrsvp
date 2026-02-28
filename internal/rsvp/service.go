@@ -14,11 +14,16 @@ import (
 // base62Chars is the alphabet used for generating RSVP tokens.
 const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+// NotifyRSVPFunc is called after an RSVP is submitted or updated to send a
+// confirmation email to the attendee. It runs asynchronously.
+type NotifyRSVPFunc func(ctx context.Context, eventID string, attendee *Attendee)
+
 // Service contains the business logic for the RSVP system.
 type Service struct {
 	store         *Store
 	eventService  *event.Service
 	inviteService *invite.Service
+	notifyRSVP    NotifyRSVPFunc
 }
 
 // NewService creates a new RSVP Service.
@@ -28,6 +33,11 @@ func NewService(store *Store, eventService *event.Service, inviteService *invite
 		eventService:  eventService,
 		inviteService: inviteService,
 	}
+}
+
+// SetNotifyRSVP registers the function that sends RSVP confirmation emails.
+func (s *Service) SetNotifyRSVP(fn NotifyRSVPFunc) {
+	s.notifyRSVP = fn
 }
 
 // PublicInviteData holds the combined event and invite data for the public invite page.
@@ -132,6 +142,9 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		if err := s.store.Update(ctx, existing); err != nil {
 			return nil, err
 		}
+		if s.notifyRSVP != nil {
+			go s.notifyRSVP(context.Background(), ev.ID, existing)
+		}
 		return existing, nil
 	}
 
@@ -156,6 +169,10 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 
 	if err := s.store.Create(ctx, attendee); err != nil {
 		return nil, err
+	}
+
+	if s.notifyRSVP != nil {
+		go s.notifyRSVP(context.Background(), ev.ID, attendee)
 	}
 
 	return attendee, nil

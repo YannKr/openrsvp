@@ -95,6 +95,44 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		})
 	}
 
+	// Wire RSVP confirmation emails into the RSVP service.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		rsvpService.SetNotifyRSVP(func(ctx context.Context, eventID string, attendee *rsvp.Attendee) {
+			if attendee.Email == nil || *attendee.Email == "" {
+				return
+			}
+
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("rsvp notify: failed to get event")
+				return
+			}
+
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+			modifyURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
+
+			htmlBody, plainBody, err := templates.RenderRSVPConfirmation(ev.Title, eventDate, location, attendee.RSVPStatus, modifyURL)
+			if err != nil {
+				logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("rsvp notify: failed to render template")
+				return
+			}
+
+			subject := "RSVP Confirmation — " + ev.Title
+			if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
+				To:      *attendee.Email,
+				Subject: subject,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); err != nil {
+				logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("rsvp notify: failed to send email")
+			}
+		})
+	}
+
 	// Wire up message layer.
 	messageStore := message.NewStore(db)
 	messageService := message.NewService(messageStore, logger)
