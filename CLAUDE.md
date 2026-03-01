@@ -2,12 +2,11 @@
 
 ## Build & Test Commands
 
-- `make build` — builds frontend then Go binary with embedded frontend
-- `make dev` — runs Go backend only (use `cd web && npm run dev` for frontend)
+- **Always verify builds using Docker**: `docker compose down && docker compose up --build -d`
 - `CGO_ENABLED=1 go test ./... -race` — run full test suite
 - `CGO_ENABLED=1 go test ./internal/event/... -v -race` — run a single package
-- `cd web && npm run build` — build frontend only
-- `go build ./...` — check Go compilation
+- `cd web && npm run check` — run TypeScript/Svelte type checking
+- `go build ./...` — quick Go compilation check
 
 ## Code Style
 
