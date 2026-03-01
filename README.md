@@ -113,6 +113,54 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `NOTIFICATION_EMAIL_PROVIDER` | `smtp` | Email provider (`smtp`, `sendgrid`, `ses`) |
 | `DEFAULT_RETENTION_DAYS` | `30` | Days after event to auto-delete data |
 
+### Email Providers
+
+**SMTP** (default):
+
+| Variable | Description |
+|----------|-------------|
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP server port (default: `587`) |
+| `SMTP_USERNAME` | SMTP username |
+| `SMTP_PASSWORD` | SMTP password |
+| `SMTP_FROM` | Sender email address |
+
+**SendGrid** (`NOTIFICATION_EMAIL_PROVIDER=sendgrid`):
+
+| Variable | Description |
+|----------|-------------|
+| `SENDGRID_API_KEY` | SendGrid API key (`SG.xxxxx`) |
+| `SENDGRID_FROM` | Sender email address |
+
+**AWS SES** (`NOTIFICATION_EMAIL_PROVIDER=ses`):
+
+| Variable | Description |
+|----------|-------------|
+| `SES_REGION` | AWS region (e.g. `us-east-1`) |
+| `SES_USERNAME` | SES SMTP username |
+| `SES_PASSWORD` | SES SMTP password |
+| `SES_FROM` | Sender email address |
+
+### SMS Providers (Optional)
+
+Set `NOTIFICATION_SMS_PROVIDER` to enable SMS notifications for reminders.
+
+**Twilio** (`NOTIFICATION_SMS_PROVIDER=twilio`):
+
+| Variable | Description |
+|----------|-------------|
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID (`ACxxxxx`) |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
+| `TWILIO_FROM_NUMBER` | Twilio sender phone number (`+15551234567`) |
+
+**Vonage** (`NOTIFICATION_SMS_PROVIDER=vonage`):
+
+| Variable | Description |
+|----------|-------------|
+| `VONAGE_API_KEY` | Vonage API key |
+| `VONAGE_API_SECRET` | Vonage API secret |
+| `VONAGE_FROM` | Sender name or number |
+
 ## API
 
 All API endpoints are under `/api/v1`. The server also provides:
