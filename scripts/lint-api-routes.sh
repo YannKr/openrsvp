@@ -53,7 +53,7 @@ if [ "$backend_count" -eq 0 ]; then
 fi
 
 # ── 2. Extract frontend API calls ────────────────────────────────────────────
-grep -rn -E 'api\.(get|post|put|patch|delete)\b' "$ROOT/web/src/" \
+grep -rn -E 'api\.(get|post|put|patch|delete|upload)\b' "$ROOT/web/src/" \
   --include='*.svelte' --include='*.ts' 2>/dev/null \
   | grep -v 'api\.getToken' \
   | while IFS= read -r match; do
@@ -64,7 +64,9 @@ grep -rn -E 'api\.(get|post|put|patch|delete)\b' "$ROOT/web/src/" \
   content="${lineinfo#*:}"
 
   # Extract method
-  method=$(echo "$content" | sed -E 's/.*api\.(get|post|put|patch|delete).*/\1/')
+  method=$(echo "$content" | sed -E 's/.*api\.(get|post|put|patch|delete|upload).*/\1/')
+  # Map upload to post (upload uses POST under the hood)
+  [ "$method" = "upload" ] && method="post"
 
   # Remove TypeScript generic type parameters: <{ data: Foo }>
   clean=$(echo "$content" | sed -E 's/<[^>]*>//g')

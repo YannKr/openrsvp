@@ -320,6 +320,30 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	reminderStore := scheduler.NewReminderStore(db)
 	reminderHandler := scheduler.NewHandler(reminderStore, authMiddleware, scheduler.OrganizerFromCtx(organizerFromCtx))
 
+	// Copy invite card design when an event is duplicated.
+	eventService.SetOnDuplicate(func(ctx context.Context, srcEventID, newEventID string) {
+		card, err := inviteService.GetByEventID(ctx, srcEventID)
+		if err != nil || card == nil {
+			return
+		}
+		_, err = inviteService.Save(ctx, newEventID, invite.SaveInviteRequest{
+			TemplateID:     card.TemplateID,
+			Heading:        card.Heading,
+			Body:           card.Body,
+			Footer:         card.Footer,
+			PrimaryColor:   card.PrimaryColor,
+			SecondaryColor: card.SecondaryColor,
+			Font:           card.Font,
+			CustomData:     card.CustomData,
+		})
+		if err != nil {
+			logger.Error().Err(err).
+				Str("src_event_id", srcEventID).
+				Str("new_event_id", newEventID).
+				Msg("failed to copy invite card during duplication")
+		}
+	})
+
 	// Create default reminders (1 week and 3 days before) when an event is published.
 	eventService.SetOnPublish(func(ctx context.Context, e *event.Event) {
 		type defaultReminder struct {

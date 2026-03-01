@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,6 +63,14 @@ func (s *Server) routes() *chi.Mux {
 		})
 
 		api.Mount("/invite", s.inviteHandler.Routes())
+
+		// Serve uploaded files (public, for shared invite pages).
+		uploadsPrefix := "/uploads/"
+		api.Get(uploadsPrefix+"*", func(w http.ResponseWriter, r *http.Request) {
+			// Strip prefix to get filename, serve from uploads dir.
+			name := strings.TrimPrefix(r.URL.Path, "/api/v1"+uploadsPrefix)
+			http.ServeFile(w, r, s.uploadsDir+"/"+name)
+		})
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())
 		api.Mount("/feedback", s.feedbackHandler.Routes())

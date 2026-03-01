@@ -80,10 +80,13 @@ export interface Reminder {
 
 export interface RSVPStats {
 	attending: number;
+	attendingHeadcount: number;
 	maybe: number;
+	maybeHeadcount: number;
 	declined: number;
 	pending: number;
 	total: number;
+	totalHeadcount: number;
 }
 
 export interface ApiError {

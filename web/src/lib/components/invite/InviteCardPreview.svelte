@@ -10,6 +10,7 @@
 		eventTitle: string;
 		eventDate: string;
 		eventLocation: string;
+		customData?: string;
 	}
 
 	let {
@@ -22,8 +23,21 @@
 		font,
 		eventTitle,
 		eventDate,
-		eventLocation
+		eventLocation,
+		customData = '{}'
 	}: Props = $props();
+
+	const parsedCustomData = $derived.by(() => {
+		try {
+			return JSON.parse(customData || '{}');
+		} catch {
+			return {};
+		}
+	});
+
+	const backgroundImage = $derived(parsedCustomData?.backgroundImage || '');
+
+	const isDarkTemplate = $derived(templateId === 'chalkboard');
 
 	const templateConfig = $derived.by(() => {
 		switch (templateId) {
@@ -72,6 +86,51 @@
 					borderColor: primaryColor || '#22c55e',
 					accentColor: secondaryColor || '#a3e635'
 				};
+			case 'elegant-affair':
+				return {
+					wrapperClass: 'elegant-affair',
+					decorBefore: '\u{1F48E}',
+					decorAfter: '\u{1F48E}',
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#7c3aed'}08, ${secondaryColor || '#c084fc'}08)`,
+					borderColor: primaryColor || '#7c3aed',
+					accentColor: secondaryColor || '#c084fc'
+				};
+			case 'clean-minimal':
+				return {
+					wrapperClass: 'clean-minimal',
+					decorBefore: '',
+					decorAfter: '',
+					bgGradient: '#ffffff',
+					borderColor: primaryColor || '#94a3b8',
+					accentColor: secondaryColor || '#64748b'
+				};
+			case 'tropical-vibes':
+				return {
+					wrapperClass: 'tropical-vibes',
+					decorBefore: '\u{1F334}',
+					decorAfter: '\u{1F334}',
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#f97316'}15, ${secondaryColor || '#fbbf24'}15)`,
+					borderColor: primaryColor || '#f97316',
+					accentColor: secondaryColor || '#fbbf24'
+				};
+			case 'vintage-retro':
+				return {
+					wrapperClass: 'vintage-retro',
+					decorBefore: '\u{1F4F7}',
+					decorAfter: '\u{1F4F7}',
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#92400e'}0a, ${secondaryColor || '#d97706'}0a)`,
+					borderColor: primaryColor || '#92400e',
+					accentColor: secondaryColor || '#d97706'
+				};
+			case 'chalkboard':
+				return {
+					wrapperClass: 'chalkboard',
+					decorBefore: '\u{270D}',
+					decorAfter: '\u{270D}',
+					bgGradient: '#1e293b',
+					borderColor: primaryColor || '#475569',
+					accentColor: secondaryColor || '#94a3b8'
+				};
 			default:
 				return {
 					wrapperClass: 'default-template',
@@ -113,6 +172,16 @@
 		--card-font: {font || 'inherit'};
 	"
 >
+	<!-- Background image with readability overlay -->
+	{#if backgroundImage}
+		<div
+			class="bg-image-layer"
+			style="background-image: url({backgroundImage});"
+			aria-hidden="true"
+		></div>
+		<div class="bg-image-overlay" class:bg-image-overlay-dark={isDarkTemplate} aria-hidden="true"></div>
+	{/if}
+
 	<!-- Template decorations -->
 	{#if templateId === 'confetti'}
 		<div class="confetti-dots" aria-hidden="true">
@@ -157,6 +226,31 @@
 			<span class="flower flower-1">{'\u{1F338}'}</span>
 			<span class="flower flower-2">{'\u{1F33B}'}</span>
 			<span class="flower flower-3">{'\u{1F338}'}</span>
+		</div>
+	{/if}
+
+	{#if templateId === 'tropical-vibes'}
+		<div class="wave-decor" aria-hidden="true">
+			<span class="wave wave-1">{'\u{1F30A}'}</span>
+			<span class="wave wave-2">{'\u{1F30A}'}</span>
+			<span class="wave wave-3">{'\u{1F30A}'}</span>
+		</div>
+	{/if}
+
+	{#if templateId === 'chalkboard'}
+		<div class="chalk-dots" aria-hidden="true">
+			{#each Array(12) as _, i}
+				<span
+					class="chalk-dot"
+					style="
+						left: {Math.random() * 100}%;
+						top: {Math.random() * 100}%;
+						width: {2 + Math.random() * 3}px;
+						height: {2 + Math.random() * 3}px;
+						opacity: {0.1 + Math.random() * 0.15};
+					"
+				></span>
+			{/each}
 		</div>
 	{/if}
 
@@ -225,6 +319,24 @@
 		max-width: 32rem;
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	/* Background image layers */
+	.bg-image-layer {
+		position: absolute;
+		inset: 0;
+		background-size: cover;
+		background-position: center;
+		z-index: 0;
+	}
+	.bg-image-overlay {
+		position: absolute;
+		inset: 0;
+		background: rgba(255, 255, 255, 0.85);
+		z-index: 0;
+	}
+	.bg-image-overlay-dark {
+		background: rgba(30, 41, 59, 0.88);
 	}
 
 	/* Balloon Party */
@@ -363,6 +475,145 @@
 	@keyframes sway {
 		0%, 100% { transform: rotate(-5deg); }
 		50% { transform: rotate(5deg); }
+	}
+
+	/* Elegant Affair */
+	.elegant-affair {
+		border-width: 1px;
+		border-radius: 1.5rem;
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+	}
+	.elegant-affair .card-heading {
+		font-size: 2rem;
+		font-weight: 400;
+		font-style: italic;
+		color: var(--primary);
+		letter-spacing: 0.02em;
+	}
+	.elegant-affair .decor-emoji {
+		font-size: 1.25rem;
+		opacity: 0.7;
+	}
+
+	/* Clean Minimal */
+	.clean-minimal {
+		border-width: 1px;
+		border-color: var(--border-color);
+		border-radius: 0.75rem;
+		background: #ffffff;
+	}
+	.clean-minimal .card-heading {
+		font-size: 1.75rem;
+		font-weight: 600;
+		color: #1e293b;
+	}
+	.clean-minimal .event-title {
+		color: #475569;
+	}
+	.clean-minimal .detail-row {
+		color: #64748b;
+	}
+	.clean-minimal .card-body p {
+		color: #475569;
+	}
+
+	/* Tropical Vibes */
+	.tropical-vibes {
+		border-style: dashed;
+		border-width: 2px;
+		border-radius: 1.5rem;
+	}
+	.tropical-vibes .card-heading {
+		font-size: 2rem;
+		font-weight: 800;
+		color: var(--primary);
+	}
+	.tropical-vibes .decor-emoji {
+		font-size: 1.75rem;
+		animation: sway 4s ease-in-out infinite;
+	}
+	.wave-decor {
+		display: flex;
+		justify-content: center;
+		gap: 0.5rem;
+		font-size: 1.5rem;
+		margin-top: 0.5rem;
+		opacity: 0.5;
+		position: relative;
+		z-index: 1;
+	}
+	.wave {
+		display: inline-block;
+		animation: sway 3s ease-in-out infinite;
+	}
+	.wave-2 { animation-delay: 0.3s; }
+	.wave-3 { animation-delay: 0.6s; }
+
+	/* Vintage Retro */
+	.vintage-retro {
+		border-width: 3px;
+		border-radius: 0.25rem;
+		outline: 3px solid var(--border-color);
+		outline-offset: 4px;
+	}
+	.vintage-retro .card-heading {
+		font-size: 1.75rem;
+		font-weight: 800;
+		color: var(--primary);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+	.vintage-retro .decor-emoji {
+		font-size: 1.25rem;
+		opacity: 0.7;
+	}
+	.vintage-retro .card-body p {
+		color: #78350f;
+	}
+	.vintage-retro .detail-row {
+		color: #92400e;
+	}
+
+	/* Chalkboard */
+	.chalkboard {
+		border-style: dashed;
+		border-width: 2px;
+		border-color: var(--border-color);
+		border-radius: 0.5rem;
+		background: #1e293b;
+	}
+	.chalkboard .card-heading {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f1f5f9;
+	}
+	.chalkboard .decor-emoji {
+		font-size: 1.25rem;
+	}
+	.chalkboard .event-title {
+		color: #cbd5e1;
+	}
+	.chalkboard .detail-row {
+		color: #94a3b8;
+	}
+	.chalkboard .detail-icon {
+		color: #94a3b8;
+	}
+	.chalkboard .card-body p {
+		color: #e2e8f0;
+	}
+	.chalkboard .card-footer p {
+		color: #94a3b8;
+	}
+	.chalk-dots {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+	.chalk-dot {
+		position: absolute;
+		border-radius: 50%;
+		background: #f8fafc;
 	}
 
 	/* Default template */

@@ -16,12 +16,17 @@ import (
 // time remaining before deletion.
 type RetentionNotifyFunc func(ctx context.Context, organizerEmail, eventTitle string, expiresAt time.Time)
 
+// OnDeleteEventFunc is called for each event that is about to be deleted,
+// allowing callers to clean up associated resources (e.g. uploaded files).
+type OnDeleteEventFunc func(eventID string)
+
 // CleanupJob polls for events whose retention period has expired and deletes
 // them. It also logs warnings for events approaching their retention deadline.
 type CleanupJob struct {
 	db              database.DB
 	logger          zerolog.Logger
 	retentionNotify RetentionNotifyFunc
+	onDeleteEvent   OnDeleteEventFunc
 }
 
 // NewCleanupJob creates a new CleanupJob.
@@ -37,6 +42,13 @@ func NewCleanupJob(db database.DB, logger zerolog.Logger) *CleanupJob {
 // within 7 days of its retention deadline.
 func (j *CleanupJob) SetRetentionNotify(fn RetentionNotifyFunc) {
 	j.retentionNotify = fn
+}
+
+// SetOnDeleteEvent sets a callback invoked for each event before it is
+// deleted by the retention cleanup. Use this to clean up associated files
+// (e.g. uploaded background images).
+func (j *CleanupJob) SetOnDeleteEvent(fn OnDeleteEventFunc) {
+	j.onDeleteEvent = fn
 }
 
 // Name returns the job identifier.
@@ -208,6 +220,11 @@ func (j *CleanupJob) deleteExpired(ctx context.Context) error {
 	defer tx.Rollback()
 
 	for i, id := range expiredIDs {
+		// Clean up associated resources (uploaded files, etc.) before deletion.
+		if j.onDeleteEvent != nil {
+			j.onDeleteEvent(id)
+		}
+
 		_, err := tx.ExecContext(ctx, "DELETE FROM events WHERE id = ?", id)
 		if err != nil {
 			j.logger.Error().

@@ -3,6 +3,8 @@ package feedback
 import (
 	"context"
 	"fmt"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Service orchestrates feedback submission via GitHub Issues or email fallback.
@@ -37,7 +39,12 @@ func (s *Service) Submit(ctx context.Context, organizerEmail, feedbackType, mess
 		return s.submitEmail(ctx, organizerEmail, feedbackType, message)
 	}
 
-	return fmt.Errorf("no feedback channel configured")
+	log.Info().
+		Str("from", organizerEmail).
+		Str("type", feedbackType).
+		Str("message", message).
+		Msg("feedback received (no external channel configured)")
+	return nil
 }
 
 func (s *Service) submitGitHub(ctx context.Context, organizerEmail, feedbackType, message string) error {

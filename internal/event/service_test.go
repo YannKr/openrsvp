@@ -300,6 +300,102 @@ func TestUpdateEventInvalidContactRequirement(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid contactRequirement")
 }
 
+func TestReopenEvent(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{Title: "Event", EventDate: "2026-06-15T14:00"})
+	require.NoError(t, err)
+
+	_, err = svc.Publish(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.Cancel(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	reopened, err := svc.Reopen(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "draft", reopened.Status)
+}
+
+func TestReopenEventWrongStatus(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{Title: "Event", EventDate: "2026-06-15T14:00"})
+	require.NoError(t, err)
+
+	_, err = svc.Publish(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	// Try to reopen a published event — should fail.
+	_, err = svc.Reopen(ctx, created.ID, org.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cancelled status")
+}
+
+func TestReopenEventForbidden(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{Title: "Event", EventDate: "2026-06-15T14:00"})
+	require.NoError(t, err)
+
+	_, err = svc.Publish(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.Cancel(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	other, err := authStore.CreateOrganizer(ctx, "other@example.com")
+	require.NoError(t, err)
+
+	_, err = svc.Reopen(ctx, created.ID, other.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "forbidden")
+}
+
+func TestDuplicateEvent(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Birthday Party",
+		EventDate: "2026-06-15T14:00",
+		Location:  "Central Park",
+	})
+	require.NoError(t, err)
+
+	dup, err := svc.Duplicate(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+	assert.NotEqual(t, created.ID, dup.ID)
+	assert.NotEqual(t, created.ShareToken, dup.ShareToken)
+	assert.Equal(t, "draft", dup.Status)
+	assert.Equal(t, "Copy of Birthday Party", dup.Title)
+	assert.Equal(t, created.Description, dup.Description)
+	assert.Equal(t, created.Location, dup.Location)
+}
+
+func TestDuplicateEventForbidden(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{Title: "Event", EventDate: "2026-06-15T14:00"})
+	require.NoError(t, err)
+
+	other, err := authStore.CreateOrganizer(ctx, "other@example.com")
+	require.NoError(t, err)
+
+	_, err = svc.Duplicate(ctx, created.ID, other.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "forbidden")
+}
+
 func TestDeleteEvent(t *testing.T) {
 	svc, authStore := setupEvent(t)
 	org := createOrganizer(t, authStore)

@@ -36,6 +36,51 @@ func setupReminder(t *testing.T) (*ReminderStore, string) {
 	return store, ev.ID
 }
 
+// setupDefaultReminders creates a full stack (DB, auth, event, reminder store)
+// and wires the onPublish callback for default reminder creation, returning
+// everything needed to test the publish → reminder flow.
+func setupDefaultReminders(t *testing.T) (*event.Service, *ReminderStore, *auth.Store) {
+	t.Helper()
+	db := testutil.NewTestDB(t)
+	cfg := testutil.TestConfig()
+
+	authStore := auth.NewStore(db)
+	eventStore := event.NewStore(db)
+	eventSvc := event.NewService(eventStore, cfg.DefaultRetentionDays)
+	reminderStore := NewReminderStore(db)
+
+	// Wire the same onPublish callback used in production (server.go).
+	eventSvc.SetOnPublish(func(ctx context.Context, e *event.Event) {
+		type defaultReminder struct {
+			offset  time.Duration
+			message string
+		}
+		defaults := []defaultReminder{
+			{7 * 24 * time.Hour, "Reminder: " + e.Title + " is in 1 week!"},
+			{3 * 24 * time.Hour, "Reminder: " + e.Title + " is in 3 days!"},
+		}
+
+		now := time.Now().UTC()
+		for _, d := range defaults {
+			remindAt := e.EventDate.Add(-d.offset)
+			if remindAt.Before(now) {
+				continue
+			}
+			r := &Reminder{
+				ID:          uuid.Must(uuid.NewV7()).String(),
+				EventID:     e.ID,
+				RemindAt:    remindAt,
+				TargetGroup: "all",
+				Message:     d.message,
+				Status:      "scheduled",
+			}
+			_ = reminderStore.Create(ctx, r)
+		}
+	})
+
+	return eventSvc, reminderStore, authStore
+}
+
 func TestCreateReminder(t *testing.T) {
 	store, eventID := setupReminder(t)
 	ctx := context.Background()
@@ -130,4 +175,111 @@ func TestCancelReminder(t *testing.T) {
 	found, err := store.FindByID(ctx, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "cancelled", found.Status)
+}
+
+// --- Default Reminder Integration Tests ---
+
+func TestDefaultRemindersCreatedOnPublish(t *testing.T) {
+	eventSvc, reminderStore, authStore := setupDefaultReminders(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event far in the future so both reminders are valid.
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:     "Birthday Party",
+		EventDate: "2026-12-25T14:00:00Z",
+	})
+	require.NoError(t, err)
+
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	reminders, err := reminderStore.FindByEventID(ctx, ev.ID)
+	require.NoError(t, err)
+	require.Len(t, reminders, 2)
+
+	// Reminders should be ordered by remind_at ASC (1 week before, then 3 days before).
+	assert.Contains(t, reminders[0].Message, "1 week")
+	assert.Contains(t, reminders[1].Message, "3 days")
+	assert.Equal(t, "all", reminders[0].TargetGroup)
+	assert.Equal(t, "scheduled", reminders[0].Status)
+	assert.Equal(t, "scheduled", reminders[1].Status)
+
+	// Verify reminder times are correct offsets from event date.
+	assert.True(t, reminders[0].RemindAt.Before(reminders[1].RemindAt),
+		"1 week reminder should be before 3 days reminder")
+}
+
+func TestDefaultRemindersSkipPastDates(t *testing.T) {
+	eventSvc, reminderStore, authStore := setupDefaultReminders(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event only 2 days from now — the 1-week and 3-day reminders
+	// are both in the past, so neither should be created.
+	twoDaysOut := time.Now().UTC().Add(2 * 24 * time.Hour).Format(time.RFC3339)
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:     "Last Minute Event",
+		EventDate: twoDaysOut,
+	})
+	require.NoError(t, err)
+
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	reminders, err := reminderStore.FindByEventID(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.Empty(t, reminders, "no reminders should be created when both offsets are in the past")
+}
+
+func TestDefaultRemindersPartialSkip(t *testing.T) {
+	eventSvc, reminderStore, authStore := setupDefaultReminders(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event 5 days from now — 1-week reminder is in the past, but 3-day is valid.
+	fiveDaysOut := time.Now().UTC().Add(5 * 24 * time.Hour).Format(time.RFC3339)
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:     "Upcoming Event",
+		EventDate: fiveDaysOut,
+	})
+	require.NoError(t, err)
+
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	reminders, err := reminderStore.FindByEventID(ctx, ev.ID)
+	require.NoError(t, err)
+	require.Len(t, reminders, 1, "only the 3-day reminder should be created")
+	assert.Contains(t, reminders[0].Message, "3 days")
+}
+
+func TestDefaultRemindersContainEventTitle(t *testing.T) {
+	eventSvc, reminderStore, authStore := setupDefaultReminders(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:     "Unicorn Bash",
+		EventDate: "2026-12-25T14:00:00Z",
+	})
+	require.NoError(t, err)
+
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	reminders, err := reminderStore.FindByEventID(ctx, ev.ID)
+	require.NoError(t, err)
+	for _, r := range reminders {
+		assert.Contains(t, r.Message, "Unicorn Bash",
+			"reminder message should include the event title")
+	}
 }

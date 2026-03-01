@@ -48,7 +48,7 @@ func TestRenderRSVPConfirmation(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, html, "My Event")
-	assert.Contains(t, html, "attending")
+	assert.Contains(t, html, "Attending")
 	assert.Contains(t, plain, "My Event")
 	assert.Contains(t, plain, "http://localhost/r/tok")
 }

@@ -25,7 +25,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata && \
     addgroup -S openrsvp && adduser -S openrsvp -G openrsvp
 COPY --from=backend /openrsvp /usr/local/bin/openrsvp
-RUN mkdir -p /data && chown openrsvp:openrsvp /data
+RUN mkdir -p /data /data/uploads && chown -R openrsvp:openrsvp /data
 USER openrsvp
 ENV DB_DSN=/data/openrsvp.db
 EXPOSE 8080

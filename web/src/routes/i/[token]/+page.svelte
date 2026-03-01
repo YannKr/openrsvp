@@ -104,6 +104,33 @@
 		}
 	}
 
+	// RSVP Lookup state
+	let showLookup = $state(false);
+	let lookupEmail = $state('');
+	let lookupLoading = $state(false);
+	let lookupError = $state('');
+
+	async function handleLookup(e: SubmitEvent) {
+		e.preventDefault();
+		if (!lookupEmail.trim()) {
+			lookupError = 'Please enter your email address.';
+			return;
+		}
+		lookupLoading = true;
+		lookupError = '';
+		try {
+			const result = await api.post<{ data: { rsvpToken: string } }>(`/rsvp/public/${token}/lookup`, {
+				email: lookupEmail.trim()
+			});
+			window.location.href = `/r/${result.data.rsvpToken}`;
+		} catch (err) {
+			const apiErr = err as ApiError;
+			lookupError = apiErr.message || 'No RSVP found for this email.';
+		} finally {
+			lookupLoading = false;
+		}
+	}
+
 	const statusLabel = $derived.by(() => {
 		switch (rsvpStatus) {
 			case 'attending': return "I'll be there!";
@@ -301,37 +328,39 @@
 							</div>
 						</fieldset>
 
-						<!-- Dietary Notes -->
-						<div>
-							<label for="rsvp-dietary" class="block text-sm font-medium text-slate-700 mb-1.5">
-								Dietary Notes <span class="text-slate-400 font-normal">(optional)</span>
-							</label>
-							<textarea
-								id="rsvp-dietary"
-								bind:value={dietaryNotes}
-								placeholder="Any allergies or dietary requirements?"
-								rows="2"
-								class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors resize-none"
-							></textarea>
-						</div>
-
-						<!-- Plus Ones -->
-						<div>
-							<label for="rsvp-plusones" class="block text-sm font-medium text-slate-700 mb-1.5">
-								Additional Guests
-							</label>
-							<div class="flex items-center gap-3">
-								<input
-									id="rsvp-plusones"
-									type="number"
-									min="0"
-									max="10"
-									bind:value={plusOnes}
-									class="w-20 rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"
-								/>
-								<span class="text-sm text-slate-500">additional guest{plusOnes !== 1 ? 's' : ''}</span>
+						{#if rsvpStatus !== 'declined'}
+							<!-- Dietary Notes -->
+							<div>
+								<label for="rsvp-dietary" class="block text-sm font-medium text-slate-700 mb-1.5">
+									Dietary Notes <span class="text-slate-400 font-normal">(optional)</span>
+								</label>
+								<textarea
+									id="rsvp-dietary"
+									bind:value={dietaryNotes}
+									placeholder="Any allergies or dietary requirements?"
+									rows="2"
+									class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors resize-none"
+								></textarea>
 							</div>
-						</div>
+
+							<!-- Plus Ones -->
+							<div>
+								<label for="rsvp-plusones" class="block text-sm font-medium text-slate-700 mb-1.5">
+									Additional Guests
+								</label>
+								<div class="flex items-center gap-3">
+									<input
+										id="rsvp-plusones"
+										type="number"
+										min="0"
+										max="10"
+										bind:value={plusOnes}
+										class="w-20 rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"
+									/>
+									<span class="text-sm text-slate-500">additional guest{plusOnes !== 1 ? 's' : ''}</span>
+								</div>
+							</div>
+						{/if}
 
 						<!-- Error -->
 						{#if submitError}
@@ -360,6 +389,59 @@
 						</button>
 					</form>
 				</div>
+			</div>
+		{/if}
+
+		<!-- Lookup existing RSVP -->
+		{#if !submitted}
+			<div class="w-full max-w-lg mt-6">
+				{#if !showLookup}
+					<p class="text-center">
+						<button type="button" onclick={() => (showLookup = true)} class="text-sm text-indigo-600 hover:text-indigo-700 underline underline-offset-2 transition-colors">
+							Already RSVP'd? Look up your response
+						</button>
+					</p>
+				{:else}
+					<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+						<h3 class="text-lg font-semibold text-slate-900 mb-4">Find Your RSVP</h3>
+						<form onsubmit={handleLookup} class="space-y-4">
+							<div>
+								<label for="lookup-email" class="block text-sm font-medium text-slate-700 mb-1.5">
+									Email Address
+								</label>
+								<input
+									id="lookup-email"
+									type="email"
+									required
+									bind:value={lookupEmail}
+									placeholder="you@example.com"
+									class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"
+								/>
+							</div>
+							{#if lookupError}
+								<div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+									{lookupError}
+								</div>
+							{/if}
+							<div class="flex items-center justify-between">
+								<button type="button" onclick={() => (showLookup = false)} class="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+									Cancel
+								</button>
+								<button
+									type="submit"
+									disabled={lookupLoading}
+									class="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{#if lookupLoading}
+										Finding...
+									{:else}
+										Find my RSVP
+									{/if}
+								</button>
+							</div>
+						</form>
+					</div>
+				{/if}
 			</div>
 		{/if}
 

@@ -42,6 +42,8 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/{eventId}", h.handleUpdate)
 	r.Post("/{eventId}/publish", h.handlePublish)
 	r.Post("/{eventId}/cancel", h.handleCancel)
+	r.Post("/{eventId}/reopen", h.handleReopen)
+	r.Post("/{eventId}/duplicate", h.handleDuplicate)
 	r.Delete("/{eventId}", h.handleDelete)
 
 	return r
@@ -189,6 +191,58 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": ev})
+}
+
+func (h *Handler) handleReopen(w http.ResponseWriter, r *http.Request) {
+	organizerID, ok := h.organizerFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+
+	ev, err := h.service.Reopen(r.Context(), eventID, organizerID)
+	if err != nil {
+		if err.Error() == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			return
+		}
+		if err.Error() == "forbidden: you do not own this event" {
+			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": ev})
+}
+
+func (h *Handler) handleDuplicate(w http.ResponseWriter, r *http.Request) {
+	organizerID, ok := h.organizerFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+
+	ev, err := h.service.Duplicate(r.Context(), eventID, organizerID)
+	if err != nil {
+		if err.Error() == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			return
+		}
+		if err.Error() == "forbidden: you do not own this event" {
+			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"data": ev})
 }
 
 func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {

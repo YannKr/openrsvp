@@ -218,7 +218,7 @@ func TestUpdateRSVPByToken(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	newStatus := "declined"
+	newStatus := "maybe"
 	newNotes := "Vegan"
 	newPlusOnes := 2
 	updated, err := svc.UpdateByToken(ctx, attendee.RSVPToken, UpdateRSVPRequest{
@@ -227,9 +227,18 @@ func TestUpdateRSVPByToken(t *testing.T) {
 		PlusOnes:     &newPlusOnes,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "declined", updated.RSVPStatus)
+	assert.Equal(t, "maybe", updated.RSVPStatus)
 	assert.Equal(t, "Vegan", updated.DietaryNotes)
 	assert.Equal(t, 2, updated.PlusOnes)
+
+	// Declining zeroes out plus ones.
+	declinedStatus := "declined"
+	declined, err := svc.UpdateByToken(ctx, attendee.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: &declinedStatus,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "declined", declined.RSVPStatus)
+	assert.Equal(t, 0, declined.PlusOnes)
 }
 
 func TestListAttendeesByEvent(t *testing.T) {
@@ -263,11 +272,11 @@ func TestGetStats(t *testing.T) {
 	ev := createPublishedEvent(t, eventSvc, org.ID)
 
 	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
-		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 2,
 	})
 	require.NoError(t, err)
 	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
-		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending", PlusOnes: 1,
 	})
 	require.NoError(t, err)
 	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
@@ -282,10 +291,13 @@ func TestGetStats(t *testing.T) {
 	stats, err := svc.GetStats(ctx, ev.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, stats.Attending)
+	assert.Equal(t, 5, stats.AttendingHeadcount) // 2 attendees + 2 + 1 plus ones
 	assert.Equal(t, 1, stats.Maybe)
+	assert.Equal(t, 1, stats.MaybeHeadcount)
 	assert.Equal(t, 1, stats.Declined)
 	assert.Equal(t, 0, stats.Pending)
 	assert.Equal(t, 4, stats.Total)
+	assert.Equal(t, 6, stats.TotalHeadcount) // excludes declined: 2+2+1 attending + 1 maybe
 }
 
 func TestRemoveAttendee(t *testing.T) {
@@ -419,6 +431,126 @@ func TestSubmitRSVPContactRequirementEmailOrPhone(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "email or phone is required")
+}
+
+func TestUpdateAttendeeAsOrganizer(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateAttendeeAsOrganizer(ctx, ev.ID, attendee.ID, OrganizerUpdateAttendeeRequest{
+		Name:         strPtr("Alice Smith"),
+		Email:        strPtr("alice.smith@example.com"),
+		RSVPStatus:   strPtr("maybe"),
+		DietaryNotes: strPtr("Vegetarian"),
+		PlusOnes:     intPtr(3),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Alice Smith", updated.Name)
+	assert.Equal(t, "alice.smith@example.com", *updated.Email)
+	assert.Equal(t, "maybe", updated.RSVPStatus)
+	assert.Equal(t, "Vegetarian", updated.DietaryNotes)
+	assert.Equal(t, 3, updated.PlusOnes)
+}
+
+func TestUpdateAttendeeAsOrganizerWrongEvent(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev1 := createPublishedEvent(t, eventSvc, org.ID)
+
+	ev2, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title: "Other Event", EventDate: "2026-07-15T14:00",
+	})
+	require.NoError(t, err)
+
+	attendee, err := svc.SubmitRSVP(ctx, ev1.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateAttendeeAsOrganizer(ctx, ev2.ID, attendee.ID, OrganizerUpdateAttendeeRequest{
+		RSVPStatus: strPtr("declined"),
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not belong to this event")
+}
+
+func TestUpdateAttendeeAsOrganizerInvalidStatus(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateAttendeeAsOrganizer(ctx, ev.ID, attendee.ID, OrganizerUpdateAttendeeRequest{
+		RSVPStatus: strPtr("invalid"),
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid rsvpStatus")
+}
+
+func TestLookupRSVPByEmail(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	token, err := svc.LookupRSVPByEmail(ctx, ev.ShareToken, "alice@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, attendee.RSVPToken, token)
+}
+
+func TestLookupRSVPByEmailNotFound(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	_, err = svc.LookupRSVPByEmail(ctx, ev.ShareToken, "nobody@example.com")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no RSVP found")
+}
+
+func TestLookupRSVPByEmailUnpublished(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title: "Draft Event", EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.LookupRSVPByEmail(ctx, ev.ShareToken, "alice@example.com")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event not found")
 }
 
 func TestRemoveAttendeeWrongEvent(t *testing.T) {

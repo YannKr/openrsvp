@@ -50,6 +50,9 @@ type Config struct {
 	FeedbackGitHubRepo  string
 	FeedbackEmail       string
 
+	// Uploads
+	UploadsDir string
+
 	// Data Retention
 	DefaultRetentionDays int
 }
@@ -125,6 +128,8 @@ func Load() (*Config, error) {
 		FeedbackGitHubToken: getEnv("FEEDBACK_GITHUB_TOKEN", ""),
 		FeedbackGitHubRepo:  getEnv("FEEDBACK_GITHUB_REPO", ""),
 		FeedbackEmail:       getEnv("FEEDBACK_EMAIL", ""),
+
+		UploadsDir: getEnv("UPLOADS_DIR", "./uploads"),
 
 		DefaultRetentionDays: retentionDays,
 	}

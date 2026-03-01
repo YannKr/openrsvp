@@ -131,7 +131,7 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 // GetStats returns aggregate RSVP counts for a given event.
 func (s *Store) GetStats(ctx context.Context, eventID string) (*RSVPStats, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT rsvp_status, COUNT(*) FROM attendees WHERE event_id = ? GROUP BY rsvp_status`, eventID,
+		`SELECT rsvp_status, COUNT(*), COALESCE(SUM(plus_ones), 0) FROM attendees WHERE event_id = ? GROUP BY rsvp_status`, eventID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get rsvp stats: %w", err)
@@ -141,21 +141,26 @@ func (s *Store) GetStats(ctx context.Context, eventID string) (*RSVPStats, error
 	stats := &RSVPStats{}
 	for rows.Next() {
 		var status string
-		var count int
-		if err := rows.Scan(&status, &count); err != nil {
+		var count, plusOnes int
+		if err := rows.Scan(&status, &count, &plusOnes); err != nil {
 			return nil, fmt.Errorf("scan rsvp stat: %w", err)
 		}
 		switch status {
 		case "attending":
 			stats.Attending = count
+			stats.AttendingHeadcount = count + plusOnes
 		case "maybe":
 			stats.Maybe = count
+			stats.MaybeHeadcount = count + plusOnes
 		case "declined":
 			stats.Declined = count
 		case "pending":
 			stats.Pending = count
 		}
 		stats.Total += count
+		if status != "declined" {
+			stats.TotalHeadcount += count + plusOnes
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate rsvp stats: %w", err)

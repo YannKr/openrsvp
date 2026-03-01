@@ -31,7 +31,7 @@ func setupInvite(t *testing.T) (*Service, string) {
 	require.NoError(t, err)
 
 	store := NewStore(db)
-	svc := NewService(store)
+	svc := NewService(store, t.TempDir())
 	return svc, ev.ID
 }
 
@@ -39,12 +39,17 @@ func TestListTemplates(t *testing.T) {
 	svc, _ := setupInvite(t)
 
 	templates := svc.ListTemplates()
-	assert.Len(t, templates, 5)
+	assert.Len(t, templates, 10)
 	assert.Equal(t, "balloon-party", templates[0].ID)
 	assert.Equal(t, "confetti", templates[1].ID)
 	assert.Equal(t, "unicorn-magic", templates[2].ID)
 	assert.Equal(t, "superhero", templates[3].ID)
 	assert.Equal(t, "garden-picnic", templates[4].ID)
+	assert.Equal(t, "elegant-affair", templates[5].ID)
+	assert.Equal(t, "clean-minimal", templates[6].ID)
+	assert.Equal(t, "tropical-vibes", templates[7].ID)
+	assert.Equal(t, "vintage-retro", templates[8].ID)
+	assert.Equal(t, "chalkboard", templates[9].ID)
 }
 
 func TestSaveInviteCard(t *testing.T) {

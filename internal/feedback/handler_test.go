@@ -153,9 +153,11 @@ func TestHandleSubmit_NoChannelConfigured(t *testing.T) {
 		"message": "Something is broken",
 	})
 
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Equal(t, http.StatusCreated, rr.Code)
 	body := testutil.ParseJSON(t, rr)
-	assert.Equal(t, "internal_error", body["error"])
+	data, ok := body["data"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "submitted", data["status"])
 }
 
 func TestSubmitEmail_Fallback(t *testing.T) {
@@ -187,8 +189,7 @@ func TestSubmitEmail_Error(t *testing.T) {
 func TestSubmit_NoChannel(t *testing.T) {
 	svc := NewService("", "", "")
 	err := svc.Submit(context.Background(), "user@test.com", "bug", "broken")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no feedback channel configured")
+	assert.NoError(t, err)
 }
 
 func TestTruncate(t *testing.T) {

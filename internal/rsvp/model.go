@@ -31,11 +31,14 @@ type RSVPRequest struct {
 
 // RSVPStats holds aggregate counts of RSVP responses for an event.
 type RSVPStats struct {
-	Attending int `json:"attending"`
-	Maybe     int `json:"maybe"`
-	Declined  int `json:"declined"`
-	Pending   int `json:"pending"`
-	Total     int `json:"total"`
+	Attending          int `json:"attending"`
+	AttendingHeadcount int `json:"attendingHeadcount"`
+	Maybe              int `json:"maybe"`
+	MaybeHeadcount     int `json:"maybeHeadcount"`
+	Declined           int `json:"declined"`
+	Pending            int `json:"pending"`
+	Total              int `json:"total"`
+	TotalHeadcount     int `json:"totalHeadcount"`
 }
 
 // UpdateRSVPRequest is the request body for updating an existing RSVP.
@@ -44,4 +47,20 @@ type UpdateRSVPRequest struct {
 	RSVPStatus   *string `json:"rsvpStatus,omitempty"`
 	DietaryNotes *string `json:"dietaryNotes,omitempty"`
 	PlusOnes     *int    `json:"plusOnes,omitempty"`
+}
+
+// OrganizerUpdateAttendeeRequest is the request body for an organizer editing
+// any attendee's RSVP, including contact fields that attendees cannot change.
+type OrganizerUpdateAttendeeRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Email        *string `json:"email,omitempty"`
+	Phone        *string `json:"phone,omitempty"`
+	RSVPStatus   *string `json:"rsvpStatus,omitempty"`
+	DietaryNotes *string `json:"dietaryNotes,omitempty"`
+	PlusOnes     *int    `json:"plusOnes,omitempty"`
+}
+
+// LookupRSVPRequest is the request body for looking up an RSVP by email.
+type LookupRSVPRequest struct {
+	Email string `json:"email"`
 }

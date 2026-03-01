@@ -3,6 +3,7 @@ package security
 import (
 	"bytes"
 	"encoding/json"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
@@ -31,8 +32,10 @@ func init() {
 }
 
 // SanitizeStrict strips all HTML tags from the input string.
+// The result is unescaped because bluemonday HTML-encodes characters like
+// apostrophes (&#39;) which is wrong for plain-text storage.
 func SanitizeStrict(input string) string {
-	return strictPolicy.Sanitize(input)
+	return html.UnescapeString(strictPolicy.Sanitize(input))
 }
 
 // SanitizeMessage allows limited HTML for message bodies. Permitted elements

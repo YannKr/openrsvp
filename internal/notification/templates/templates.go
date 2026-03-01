@@ -70,6 +70,22 @@ type organizerRSVPNotificationData struct {
 	DashboardURL string
 }
 
+// displayStatus returns a human-friendly label for an RSVP status value.
+func displayStatus(status string) string {
+	switch status {
+	case "attending":
+		return "Attending"
+	case "maybe":
+		return "Maybe"
+	case "declined":
+		return "Can't make it"
+	case "pending":
+		return "Pending"
+	default:
+		return status
+	}
+}
+
 // RenderMagicLink renders the magic link email template and returns the HTML
 // body and a plain text fallback.
 func RenderMagicLink(baseURL, token string, expiryMinutes int) (html, plain string, err error) {
@@ -96,11 +112,12 @@ func RenderMagicLink(baseURL, token string, expiryMinutes int) (html, plain stri
 // RenderRSVPConfirmation renders the RSVP confirmation email template and
 // returns the HTML body and a plain text fallback.
 func RenderRSVPConfirmation(eventTitle, eventDate, location, rsvpStatus, modifyURL string) (html, plain string, err error) {
+	label := displayStatus(rsvpStatus)
 	data := rsvpConfirmationData{
 		EventTitle: eventTitle,
 		EventDate:  eventDate,
 		Location:   location,
-		RSVPStatus: rsvpStatus,
+		RSVPStatus: label,
 		ModifyURL:  modifyURL,
 	}
 
@@ -177,10 +194,11 @@ func RenderRetentionWarning(eventTitle, expiresAt, dashboardURL string) (html, p
 // RenderOrganizerRSVPNotification renders the organizer RSVP notification email
 // and returns the HTML body and a plain text fallback.
 func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEmail, guestPhone string, plusOnes int, dashboardURL string) (html, plain string, err error) {
+	label := displayStatus(rsvpStatus)
 	data := organizerRSVPNotificationData{
 		EventTitle:   eventTitle,
 		GuestName:    guestName,
-		RSVPStatus:   rsvpStatus,
+		RSVPStatus:   label,
 		GuestEmail:   guestEmail,
 		GuestPhone:   guestPhone,
 		PlusOnes:     plusOnes,

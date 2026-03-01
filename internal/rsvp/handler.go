@@ -34,6 +34,7 @@ func (h *Handler) Routes() chi.Router {
 	// Public routes (no authentication required).
 	r.Get("/public/{shareToken}", h.handleGetPublicInvite)
 	r.Post("/public/{shareToken}", h.handleSubmitRSVP)
+	r.Post("/public/{shareToken}/lookup", h.handleLookupRSVP)
 	r.Get("/public/token/{rsvpToken}", h.handleGetByToken)
 	r.Put("/public/token/{rsvpToken}", h.handleUpdateByToken)
 	r.Patch("/public/token/{rsvpToken}", h.handleUpdateByToken)
@@ -43,6 +44,7 @@ func (h *Handler) Routes() chi.Router {
 		auth.Use(h.authMiddleware)
 		auth.Get("/event/{eventId}", h.handleListByEvent)
 		auth.Get("/event/{eventId}/stats", h.handleStats)
+		auth.Patch("/event/{eventId}/{attendeeId}", h.handleUpdateAttendee)
 		auth.Delete("/event/{eventId}/{attendeeId}", h.handleRemoveAttendee)
 	})
 
@@ -107,6 +109,61 @@ func (h *Handler) handleUpdateByToken(w http.ResponseWriter, r *http.Request) {
 	attendee, err := h.service.UpdateByToken(r.Context(), rsvpToken, req)
 	if err != nil {
 		if err.Error() == "rsvp not found" {
+			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": attendee})
+}
+
+func (h *Handler) handleLookupRSVP(w http.ResponseWriter, r *http.Request) {
+	shareToken := chi.URLParam(r, "shareToken")
+
+	var req LookupRSVPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	if req.Email == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "email is required")
+		return
+	}
+
+	rsvpToken, err := h.service.LookupRSVPByEmail(r.Context(), shareToken, req.Email)
+	if err != nil {
+		if err.Error() == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			return
+		}
+		writeError(w, http.StatusNotFound, "not_found", "no RSVP found for this email")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"rsvpToken": rsvpToken}})
+}
+
+func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
+	_, ok := h.organizerFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+	attendeeID := chi.URLParam(r, "attendeeId")
+
+	var req OrganizerUpdateAttendeeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	attendee, err := h.service.UpdateAttendeeAsOrganizer(r.Context(), eventID, attendeeID, req)
+	if err != nil {
+		if err.Error() == "attendee not found" || err.Error() == "attendee does not belong to this event" {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}

@@ -98,6 +98,9 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	if req.ContactMethod != "email" && req.ContactMethod != "sms" {
 		return nil, fmt.Errorf("invalid contactMethod: must be email or sms")
 	}
+	if req.RSVPStatus == "declined" {
+		req.PlusOnes = 0
+	}
 
 	// Look up the event by share token.
 	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
@@ -264,6 +267,9 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 	if req.PlusOnes != nil {
 		a.PlusOnes = *req.PlusOnes
 	}
+	if a.RSVPStatus == "declined" {
+		a.PlusOnes = 0
+	}
 
 	if err := s.store.Update(ctx, a); err != nil {
 		return nil, err
@@ -302,6 +308,76 @@ func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string
 		return fmt.Errorf("attendee does not belong to this event")
 	}
 	return s.store.Delete(ctx, attendeeID)
+}
+
+// UpdateAttendeeAsOrganizer applies partial updates to an attendee as the
+// event organizer. Unlike attendee self-service, this allows editing contact
+// fields (email, phone).
+func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attendeeID string, req OrganizerUpdateAttendeeRequest) (*Attendee, error) {
+	a, err := s.store.FindByID(ctx, attendeeID)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, fmt.Errorf("attendee not found")
+	}
+	if a.EventID != eventID {
+		return nil, fmt.Errorf("attendee does not belong to this event")
+	}
+
+	if req.Name != nil {
+		a.Name = *req.Name
+	}
+	if req.Email != nil {
+		a.Email = req.Email
+	}
+	if req.Phone != nil {
+		a.Phone = req.Phone
+	}
+	if req.RSVPStatus != nil {
+		if !isValidRSVPStatus(*req.RSVPStatus) {
+			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
+		}
+		a.RSVPStatus = *req.RSVPStatus
+	}
+	if req.DietaryNotes != nil {
+		a.DietaryNotes = *req.DietaryNotes
+	}
+	if req.PlusOnes != nil {
+		a.PlusOnes = *req.PlusOnes
+	}
+	if a.RSVPStatus == "declined" {
+		a.PlusOnes = 0
+	}
+
+	if err := s.store.Update(ctx, a); err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
+
+// LookupRSVPByEmail finds an attendee's RSVP token by their email address on
+// a published event. This allows attendees who lost their modify link to
+// recover it.
+func (s *Service) LookupRSVPByEmail(ctx context.Context, shareToken, email string) (string, error) {
+	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
+	if err != nil {
+		return "", fmt.Errorf("event not found")
+	}
+	if ev.Status != "published" {
+		return "", fmt.Errorf("event not found")
+	}
+
+	a, err := s.store.FindByEventAndEmail(ctx, ev.ID, email)
+	if err != nil {
+		return "", fmt.Errorf("lookup failed")
+	}
+	if a == nil {
+		return "", fmt.Errorf("no RSVP found for this email")
+	}
+
+	return a.RSVPToken, nil
 }
 
 // isValidRSVPStatus checks whether the given status is one of the allowed values.

@@ -17,6 +17,7 @@ type Service struct {
 	store            *Store
 	defaultRetention int
 	onPublish        func(ctx context.Context, e *Event)
+	onDuplicate      func(ctx context.Context, srcEventID, newEventID string)
 }
 
 // NewService creates a new event Service.
@@ -31,6 +32,12 @@ func NewService(store *Store, defaultRetentionDays int) *Service {
 // successfully published. This is used to create default reminders.
 func (s *Service) SetOnPublish(fn func(ctx context.Context, e *Event)) {
 	s.onPublish = fn
+}
+
+// SetOnDuplicate registers a callback that is invoked after an event is
+// successfully duplicated. This is used to copy the invite card design.
+func (s *Service) SetOnDuplicate(fn func(ctx context.Context, srcEventID, newEventID string)) {
+	s.onDuplicate = fn
 }
 
 // Create validates the request and creates a new event for the given organizer.
@@ -246,6 +253,75 @@ func (s *Service) Cancel(ctx context.Context, eventID, organizerID string) (*Eve
 	}
 
 	return e, nil
+}
+
+// Reopen transitions a cancelled event back to draft status.
+func (s *Service) Reopen(ctx context.Context, eventID, organizerID string) (*Event, error) {
+	e, err := s.store.FindByID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if e.OrganizerID != organizerID {
+		return nil, fmt.Errorf("forbidden: you do not own this event")
+	}
+	if e.Status != "cancelled" {
+		return nil, fmt.Errorf("event can only be reopened from cancelled status, current status: %s", e.Status)
+	}
+
+	e.Status = "draft"
+	if err := s.store.Update(ctx, e); err != nil {
+		return nil, err
+	}
+
+	return e, nil
+}
+
+// Duplicate creates a copy of an existing event with a new ID, share token, and
+// draft status. Attendees and reminders are not copied.
+func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*Event, error) {
+	e, err := s.store.FindByID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if e.OrganizerID != organizerID {
+		return nil, fmt.Errorf("forbidden: you do not own this event")
+	}
+
+	shareToken, err := generateBase62Token(8)
+	if err != nil {
+		return nil, fmt.Errorf("generate share token: %w", err)
+	}
+
+	newEvent := &Event{
+		ID:                 uuid.Must(uuid.NewV7()).String(),
+		OrganizerID:        organizerID,
+		Title:              "Copy of " + e.Title,
+		Description:        e.Description,
+		EventDate:          e.EventDate,
+		EndDate:            e.EndDate,
+		Location:           e.Location,
+		Timezone:           e.Timezone,
+		RetentionDays:      e.RetentionDays,
+		ContactRequirement: e.ContactRequirement,
+		Status:             "draft",
+		ShareToken:         shareToken,
+	}
+
+	if err := s.store.Create(ctx, newEvent); err != nil {
+		return nil, err
+	}
+
+	if s.onDuplicate != nil {
+		s.onDuplicate(ctx, eventID, newEvent.ID)
+	}
+
+	return newEvent, nil
 }
 
 // Delete performs a soft delete by setting the event status to archived.
