@@ -47,14 +47,38 @@
 		}
 	});
 
+	const contactReq = $derived(eventData?.contactRequirement ?? 'email_or_phone');
+	const emailRequired = $derived(contactReq === 'email' || contactReq === 'email_and_phone');
+	const phoneRequired = $derived(contactReq === 'phone' || contactReq === 'email_and_phone');
+
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
 
 		// Honeypot check
 		if (honeypot) return;
 
-		if (!name.trim() || !email.trim()) {
-			submitError = 'Please fill in your name and email.';
+		if (!name.trim()) {
+			submitError = 'Please fill in your name.';
+			return;
+		}
+
+		const hasEmail = !!email.trim();
+		const hasPhone = !!phone.trim();
+
+		if (contactReq === 'email' && !hasEmail) {
+			submitError = 'Email is required.';
+			return;
+		}
+		if (contactReq === 'phone' && !hasPhone) {
+			submitError = 'Phone number is required.';
+			return;
+		}
+		if (contactReq === 'email_and_phone' && (!hasEmail || !hasPhone)) {
+			submitError = 'Both email and phone are required.';
+			return;
+		}
+		if (contactReq === 'email_or_phone' && !hasEmail && !hasPhone) {
+			submitError = 'Please provide an email or phone number.';
 			return;
 		}
 
@@ -130,6 +154,7 @@
 				eventTitle={eventData.title}
 				eventDate={eventData.eventDate}
 				eventLocation={eventData.location}
+				customData={typeof inviteData.customData === 'string' ? inviteData.customData : JSON.stringify(inviteData.customData || {})}
 			/>
 		</div>
 
@@ -205,26 +230,41 @@
 						<!-- Email -->
 						<div>
 							<label for="rsvp-email" class="block text-sm font-medium text-slate-700 mb-1.5">
-								Email Address <span class="text-red-500">*</span>
+								Email Address
+								{#if emailRequired}
+									<span class="text-red-500">*</span>
+								{:else if contactReq === 'email_or_phone'}
+									<span class="text-slate-400 font-normal">(email or phone required)</span>
+								{:else}
+									<span class="text-slate-400 font-normal">(optional)</span>
+								{/if}
 							</label>
 							<input
 								id="rsvp-email"
 								type="email"
-								required
+								required={emailRequired}
 								bind:value={email}
 								placeholder="you@example.com"
 								class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"
 							/>
 						</div>
 
-						<!-- Phone (optional) -->
+						<!-- Phone -->
 						<div>
 							<label for="rsvp-phone" class="block text-sm font-medium text-slate-700 mb-1.5">
-								Phone Number <span class="text-slate-400 font-normal">(optional)</span>
+								Phone Number
+								{#if phoneRequired}
+									<span class="text-red-500">*</span>
+								{:else if contactReq === 'email_or_phone'}
+									<span class="text-slate-400 font-normal">(email or phone required)</span>
+								{:else}
+									<span class="text-slate-400 font-normal">(optional)</span>
+								{/if}
 							</label>
 							<input
 								id="rsvp-phone"
 								type="tel"
+								required={phoneRequired}
 								bind:value={phone}
 								placeholder="+1 (555) 123-4567"
 								class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"

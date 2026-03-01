@@ -14,8 +14,9 @@ const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 
 // Service contains the business logic for event management.
 type Service struct {
-	store             *Store
-	defaultRetention  int
+	store            *Store
+	defaultRetention int
+	onPublish        func(ctx context.Context, e *Event)
 }
 
 // NewService creates a new event Service.
@@ -24,6 +25,12 @@ func NewService(store *Store, defaultRetentionDays int) *Service {
 		store:            store,
 		defaultRetention: defaultRetentionDays,
 	}
+}
+
+// SetOnPublish registers a callback that is invoked after an event is
+// successfully published. This is used to create default reminders.
+func (s *Service) SetOnPublish(fn func(ctx context.Context, e *Event)) {
+	s.onPublish = fn
 }
 
 // Create validates the request and creates a new event for the given organizer.
@@ -58,23 +65,32 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		retentionDays = *req.RetentionDays
 	}
 
+	contactRequirement := "email_or_phone"
+	if req.ContactRequirement != nil && *req.ContactRequirement != "" {
+		if !isValidContactRequirement(*req.ContactRequirement) {
+			return nil, fmt.Errorf("invalid contactRequirement: must be email, phone, email_or_phone, or email_and_phone")
+		}
+		contactRequirement = *req.ContactRequirement
+	}
+
 	shareToken, err := generateBase62Token(8)
 	if err != nil {
 		return nil, fmt.Errorf("generate share token: %w", err)
 	}
 
 	e := &Event{
-		ID:            uuid.Must(uuid.NewV7()).String(),
-		OrganizerID:   organizerID,
-		Title:         req.Title,
-		Description:   req.Description,
-		EventDate:     eventDate,
-		EndDate:       endDate,
-		Location:      req.Location,
-		Timezone:      req.Timezone,
-		RetentionDays: retentionDays,
-		Status:        "draft",
-		ShareToken:    shareToken,
+		ID:                 uuid.Must(uuid.NewV7()).String(),
+		OrganizerID:        organizerID,
+		Title:              req.Title,
+		Description:        req.Description,
+		EventDate:          eventDate,
+		EndDate:            endDate,
+		Location:           req.Location,
+		Timezone:           req.Timezone,
+		RetentionDays:      retentionDays,
+		ContactRequirement: contactRequirement,
+		Status:             "draft",
+		ShareToken:         shareToken,
 	}
 
 	if err := s.store.Create(ctx, e); err != nil {
@@ -166,6 +182,12 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 	if req.RetentionDays != nil {
 		e.RetentionDays = *req.RetentionDays
 	}
+	if req.ContactRequirement != nil {
+		if !isValidContactRequirement(*req.ContactRequirement) {
+			return nil, fmt.Errorf("invalid contactRequirement: must be email, phone, email_or_phone, or email_and_phone")
+		}
+		e.ContactRequirement = *req.ContactRequirement
+	}
 
 	if err := s.store.Update(ctx, e); err != nil {
 		return nil, err
@@ -193,6 +215,10 @@ func (s *Service) Publish(ctx context.Context, eventID, organizerID string) (*Ev
 	e.Status = "published"
 	if err := s.store.Update(ctx, e); err != nil {
 		return nil, err
+	}
+
+	if s.onPublish != nil {
+		s.onPublish(ctx, e)
 	}
 
 	return e, nil
@@ -254,6 +280,17 @@ func parseFlexibleTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("unrecognized datetime format: %s", s)
+}
+
+// isValidContactRequirement checks whether the given value is one of the
+// allowed contact requirement modes.
+func isValidContactRequirement(s string) bool {
+	switch s {
+	case "email", "phone", "email_or_phone", "email_and_phone":
+		return true
+	default:
+		return false
+	}
 }
 
 // generateBase62Token generates a random token of the given length using base62

@@ -8,14 +8,15 @@ import (
 	"strings"
 )
 
-//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html
+//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html
 var templateFS embed.FS
 
 var (
-	magicLinkTmpl        *template.Template
-	rsvpConfirmationTmpl *template.Template
-	eventReminderTmpl    *template.Template
-	retentionWarningTmpl *template.Template
+	magicLinkTmpl             *template.Template
+	rsvpConfirmationTmpl      *template.Template
+	eventReminderTmpl         *template.Template
+	retentionWarningTmpl      *template.Template
+	organizerRSVPNotifyTmpl   *template.Template
 )
 
 func init() {
@@ -23,6 +24,7 @@ func init() {
 	rsvpConfirmationTmpl = template.Must(template.ParseFS(templateFS, "rsvp_confirmation.html"))
 	eventReminderTmpl = template.Must(template.ParseFS(templateFS, "event_reminder.html"))
 	retentionWarningTmpl = template.Must(template.ParseFS(templateFS, "retention_warning.html"))
+	organizerRSVPNotifyTmpl = template.Must(template.ParseFS(templateFS, "organizer_rsvp_notification.html"))
 }
 
 // magicLinkData holds the template data for a magic link email.
@@ -53,6 +55,18 @@ type eventReminderData struct {
 type retentionWarningData struct {
 	EventTitle   string
 	ExpiresAt    string
+	DashboardURL string
+}
+
+// organizerRSVPNotificationData holds the template data for notifying an
+// organizer about a new or updated RSVP.
+type organizerRSVPNotificationData struct {
+	EventTitle   string
+	GuestName    string
+	RSVPStatus   string
+	GuestEmail   string
+	GuestPhone   string
+	PlusOnes     int
 	DashboardURL string
 }
 
@@ -156,6 +170,43 @@ func RenderRetentionWarning(eventTitle, expiresAt, dashboardURL string) (html, p
 	if dashboardURL != "" {
 		sb.WriteString(fmt.Sprintf("To extend the retention period, visit:\n%s\n", dashboardURL))
 	}
+
+	return buf.String(), sb.String(), nil
+}
+
+// RenderOrganizerRSVPNotification renders the organizer RSVP notification email
+// and returns the HTML body and a plain text fallback.
+func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEmail, guestPhone string, plusOnes int, dashboardURL string) (html, plain string, err error) {
+	data := organizerRSVPNotificationData{
+		EventTitle:   eventTitle,
+		GuestName:    guestName,
+		RSVPStatus:   rsvpStatus,
+		GuestEmail:   guestEmail,
+		GuestPhone:   guestPhone,
+		PlusOnes:     plusOnes,
+		DashboardURL: dashboardURL,
+	}
+
+	var buf bytes.Buffer
+	if err := organizerRSVPNotifyTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render organizer rsvp notification template: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("New RSVP Received\n\n")
+	sb.WriteString(fmt.Sprintf("Event: %s\n", eventTitle))
+	sb.WriteString(fmt.Sprintf("Guest: %s\n", guestName))
+	sb.WriteString(fmt.Sprintf("Response: %s\n", rsvpStatus))
+	if guestEmail != "" {
+		sb.WriteString(fmt.Sprintf("Email: %s\n", guestEmail))
+	}
+	if guestPhone != "" {
+		sb.WriteString(fmt.Sprintf("Phone: %s\n", guestPhone))
+	}
+	if plusOnes > 0 {
+		sb.WriteString(fmt.Sprintf("Additional Guests: +%d\n", plusOnes))
+	}
+	sb.WriteString(fmt.Sprintf("\nView your event dashboard:\n%s\n", dashboardURL))
 
 	return buf.String(), sb.String(), nil
 }

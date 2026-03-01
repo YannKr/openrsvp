@@ -98,9 +98,6 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	if req.ContactMethod != "email" && req.ContactMethod != "sms" {
 		return nil, fmt.Errorf("invalid contactMethod: must be email or sms")
 	}
-	if req.Email == nil && req.Phone == nil {
-		return nil, fmt.Errorf("email or phone is required")
-	}
 
 	// Look up the event by share token.
 	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
@@ -109,6 +106,31 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 	if ev.Status != "published" {
 		return nil, fmt.Errorf("event is not accepting RSVPs")
+	}
+
+	// Validate contact info based on the event's contact requirement.
+	hasEmail := req.Email != nil && *req.Email != ""
+	hasPhone := req.Phone != nil && *req.Phone != ""
+	switch ev.ContactRequirement {
+	case "email":
+		if !hasEmail {
+			return nil, fmt.Errorf("email is required")
+		}
+	case "phone":
+		if !hasPhone {
+			return nil, fmt.Errorf("phone is required")
+		}
+	case "email_and_phone":
+		if !hasEmail {
+			return nil, fmt.Errorf("email is required")
+		}
+		if !hasPhone {
+			return nil, fmt.Errorf("phone is required")
+		}
+	default: // "email_or_phone"
+		if !hasEmail && !hasPhone {
+			return nil, fmt.Errorf("email or phone is required")
+		}
 	}
 
 	// Check for existing attendee (deduplicate by email or phone).

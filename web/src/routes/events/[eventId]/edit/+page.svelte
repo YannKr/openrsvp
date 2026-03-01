@@ -27,8 +27,16 @@
 	let location = $state('');
 	let timezone = $state('');
 	let description = $state('');
+	let contactRequirement = $state('email_or_phone');
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
+
+	const contactRequirementOptions = [
+		{ value: 'email_or_phone', label: 'Email or Phone (at least one)' },
+		{ value: 'email', label: 'Email only' },
+		{ value: 'phone', label: 'Phone only' },
+		{ value: 'email_and_phone', label: 'Email and Phone (both required)' }
+	];
 
 	let errors: Record<string, string> = $state({});
 
@@ -45,6 +53,7 @@
 			timezone = e.timezone;
 			tzOptions = getTimezoneOptions(e.timezone);
 			description = e.description;
+			contactRequirement = e.contactRequirement || 'email_or_phone';
 			retentionDays = String(e.retentionDays);
 			showRetention = e.retentionDays !== 30;
 		} catch (err: unknown) {
@@ -80,6 +89,7 @@
 				location: location.trim(),
 				timezone,
 				description: description.trim(),
+				contactRequirement,
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
@@ -167,6 +177,13 @@
 						bind:value={description}
 						placeholder="Tell your guests what the event is about..."
 						rows={6}
+					/>
+
+					<Select
+						label="RSVP Contact Requirement"
+						name="contactRequirement"
+						bind:value={contactRequirement}
+						options={contactRequirementOptions}
 					/>
 
 					<div class="pt-2">

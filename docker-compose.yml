@@ -10,7 +10,19 @@ services:
     environment:
       - DB_DRIVER=sqlite
       - DB_DSN=/data/openrsvp.db
+      - UPLOADS_DIR=/data/uploads
+      - NOTIFICATION_EMAIL_PROVIDER=smtp
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=noreply@openrsvp.local
+      - BASE_URL=http://localhost:8091
+    networks:
+      - openrsvp-net
     restart: unless-stopped
 
 volumes:
   openrsvp-data:
+
+networks:
+  openrsvp-net:
+    external: true

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,6 +42,7 @@ type Server struct {
 	notifService    *notification.Service
 	scheduler       *scheduler.Scheduler
 	securityMw      *security.Middleware
+	uploadsDir      string
 }
 
 // New creates a new Server instance.
@@ -62,10 +66,16 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	eventService := event.NewService(eventStore, cfg.DefaultRetentionDays)
 	eventHandler := event.NewHandler(eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx))
 
+	// Ensure uploads directory exists.
+	uploadsDir := cfg.UploadsDir
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+		logger.Error().Err(err).Str("dir", uploadsDir).Msg("failed to create uploads directory")
+	}
+
 	// Wire up invite layer (before RSVP since RSVP depends on it).
 	inviteStore := invite.NewStore(db)
-	inviteService := invite.NewService(inviteStore)
-	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx))
+	inviteService := invite.NewService(inviteStore, uploadsDir)
+	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx), uploadsDir)
 
 	// Wire up RSVP layer.
 	rsvpStore := rsvp.NewStore(db)
@@ -95,10 +105,6 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Wire RSVP confirmation emails into the RSVP service.
 	if notifRegistry.Has(notification.ChannelEmail) {
 		rsvpService.SetNotifyRSVP(func(ctx context.Context, eventID string, attendee *rsvp.Attendee) {
-			if attendee.Email == nil || *attendee.Email == "" {
-				return
-			}
-
 			ev, err := eventService.GetByID(ctx, eventID)
 			if err != nil {
 				logger.Error().Err(err).Str("event_id", eventID).Msg("rsvp notify: failed to get event")
@@ -110,22 +116,61 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if location == "" {
 				location = "TBD"
 			}
-			modifyURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
 
-			htmlBody, plainBody, err := templates.RenderRSVPConfirmation(ev.Title, eventDate, location, attendee.RSVPStatus, modifyURL)
+			// Send confirmation email to the attendee.
+			if attendee.Email != nil && *attendee.Email != "" {
+				modifyURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
+				htmlBody, plainBody, err := templates.RenderRSVPConfirmation(ev.Title, eventDate, location, attendee.RSVPStatus, modifyURL)
+				if err != nil {
+					logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("rsvp notify: failed to render attendee template")
+				} else {
+					if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
+						To:      *attendee.Email,
+						Subject: "RSVP Confirmation — " + ev.Title,
+						Body:    htmlBody,
+						Plain:   plainBody,
+					}); err != nil {
+						logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("rsvp notify: failed to send attendee email")
+					}
+				}
+			}
+
+			// Notify the organizer about the new RSVP.
+			organizer, err := authStore.FindOrganizerByID(ctx, ev.OrganizerID)
 			if err != nil {
-				logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("rsvp notify: failed to render template")
+				logger.Error().Err(err).Str("organizer_id", ev.OrganizerID).Msg("rsvp notify: failed to get organizer")
+				return
+			}
+			if organizer == nil || organizer.Email == "" {
 				return
 			}
 
-			subject := "RSVP Confirmation — " + ev.Title
+			guestEmail := ""
+			if attendee.Email != nil {
+				guestEmail = *attendee.Email
+			}
+			guestPhone := ""
+			if attendee.Phone != nil {
+				guestPhone = *attendee.Phone
+			}
+			dashboardURL := cfg.BaseURL + "/events/" + eventID
+
+			htmlBody, plainBody, err := templates.RenderOrganizerRSVPNotification(
+				ev.Title, attendee.Name, attendee.RSVPStatus,
+				guestEmail, guestPhone, attendee.PlusOnes, dashboardURL,
+			)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("rsvp notify: failed to render organizer template")
+				return
+			}
+
 			if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
-				To:      *attendee.Email,
-				Subject: subject,
+				To:      organizer.Email,
+				Subject: "New RSVP — " + attendee.Name + " — " + ev.Title,
 				Body:    htmlBody,
 				Plain:   plainBody,
 			}); err != nil {
-				logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("rsvp notify: failed to send email")
+				logger.Error().Err(err).Str("organizer_email", organizer.Email).Msg("rsvp notify: failed to send organizer email")
 			}
 		})
 	}
@@ -353,6 +398,21 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		})
 	}
 
+	// Clean up uploaded files when events are deleted by retention policy.
+	cleanupJob.SetOnDeleteEvent(func(eventID string) {
+		entries, err := os.ReadDir(uploadsDir)
+		if err != nil {
+			return
+		}
+		prefix := eventID + "_"
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) {
+				_ = os.Remove(filepath.Join(uploadsDir, entry.Name()))
+				logger.Debug().Str("file", entry.Name()).Msg("cleaned up uploaded file for deleted event")
+			}
+		}
+	})
+
 	sched.Register(reminderJob)
 	sched.Register(cleanupJob)
 
@@ -380,6 +440,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		notifService:    notifService,
 		scheduler:       sched,
 		securityMw:      secMw,
+		uploadsDir:      uploadsDir,
 	}
 
 	router := s.routes()

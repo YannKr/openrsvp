@@ -22,7 +22,7 @@ func setupRSVP(t *testing.T) (*Service, *event.Service, *auth.Store) {
 	eventStore := event.NewStore(db)
 	eventSvc := event.NewService(eventStore, cfg.DefaultRetentionDays)
 	inviteStore := invite.NewStore(db)
-	inviteSvc := invite.NewService(inviteStore)
+	inviteSvc := invite.NewService(inviteStore, t.TempDir())
 	rsvpStore := NewStore(db)
 	svc := NewService(rsvpStore, eventSvc, inviteSvc)
 
@@ -307,6 +307,118 @@ func TestRemoveAttendee(t *testing.T) {
 	attendees, err := svc.ListByEvent(ctx, ev.ID)
 	require.NoError(t, err)
 	assert.Empty(t, attendees)
+}
+
+func createPublishedEventWithContactReq(t *testing.T, eventSvc *event.Service, orgID, contactReq string) *event.Event {
+	t.Helper()
+	ctx := context.Background()
+	cr := contactReq
+	ev, err := eventSvc.Create(ctx, orgID, event.CreateEventRequest{
+		Title:              "Test Event",
+		EventDate:          "2026-06-15T14:00",
+		ContactRequirement: &cr,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, orgID)
+	require.NoError(t, err)
+	return published
+}
+
+func TestSubmitRSVPContactRequirementEmail(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEventWithContactReq(t, eventSvc, org.ID, "email")
+
+	// Email only — should succeed with email.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	assert.NoError(t, err)
+
+	// Phone only — should fail.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Phone: strPtr("+15551234567"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestSubmitRSVPContactRequirementPhone(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEventWithContactReq(t, eventSvc, org.ID, "phone")
+
+	// Phone only — should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Phone: strPtr("+15551234567"), RSVPStatus: "attending", ContactMethod: "sms",
+	})
+	assert.NoError(t, err)
+
+	// Email only — should fail.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "phone is required")
+}
+
+func TestSubmitRSVPContactRequirementBoth(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEventWithContactReq(t, eventSvc, org.ID, "email_and_phone")
+
+	// Both provided — should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), Phone: strPtr("+15551234567"), RSVPStatus: "attending",
+	})
+	assert.NoError(t, err)
+
+	// Email only — should fail.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "phone is required")
+
+	// Phone only — should fail.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", Phone: strPtr("+15559876543"), RSVPStatus: "attending", ContactMethod: "sms",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestSubmitRSVPContactRequirementEmailOrPhone(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEventWithContactReq(t, eventSvc, org.ID, "email_or_phone")
+
+	// Email only — should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	assert.NoError(t, err)
+
+	// Phone only — should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Phone: strPtr("+15551234567"), RSVPStatus: "attending", ContactMethod: "sms",
+	})
+	assert.NoError(t, err)
+
+	// Neither — should fail.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "email or phone is required")
 }
 
 func TestRemoveAttendeeWrongEvent(t *testing.T) {

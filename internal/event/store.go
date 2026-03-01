@@ -31,10 +31,10 @@ func (s *Store) Create(ctx context.Context, e *Event) error {
 	}
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.OrganizerID, e.Title, e.Description, eventDate, endDate,
-		e.Location, e.Timezone, e.RetentionDays, e.Status, e.ShareToken, now, now,
+		e.Location, e.Timezone, e.RetentionDays, e.Status, e.ShareToken, e.ContactRequirement, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("create event: %w", err)
@@ -51,7 +51,7 @@ func (s *Store) Create(ctx context.Context, e *Event) error {
 // FindByID retrieves an event by its ID.
 func (s *Store) FindByID(ctx context.Context, id string) (*Event, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, created_at, updated_at
+		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, created_at, updated_at
 		 FROM events WHERE id = ?`, id,
 	)
 	return scanEvent(row)
@@ -60,7 +60,7 @@ func (s *Store) FindByID(ctx context.Context, id string) (*Event, error) {
 // FindByShareToken retrieves an event by its share token.
 func (s *Store) FindByShareToken(ctx context.Context, shareToken string) (*Event, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, created_at, updated_at
+		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, created_at, updated_at
 		 FROM events WHERE share_token = ?`, shareToken,
 	)
 	return scanEvent(row)
@@ -70,7 +70,7 @@ func (s *Store) FindByShareToken(ctx context.Context, shareToken string) (*Event
 // archived events.
 func (s *Store) FindByOrganizerID(ctx context.Context, organizerID string) ([]*Event, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, created_at, updated_at
+		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, created_at, updated_at
 		 FROM events WHERE organizer_id = ? AND status != 'archived' ORDER BY event_date DESC`, organizerID,
 	)
 	if err != nil {
@@ -105,9 +105,9 @@ func (s *Store) Update(ctx context.Context, e *Event) error {
 	}
 
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, updated_at = ?
+		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, contact_requirement = ?, updated_at = ?
 		 WHERE id = ?`,
-		e.Title, e.Description, eventDate, endDate, e.Location, e.Timezone, e.RetentionDays, e.Status, now, e.ID,
+		e.Title, e.Description, eventDate, endDate, e.Location, e.Timezone, e.RetentionDays, e.Status, e.ContactRequirement, now, e.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update event: %w", err)
@@ -135,7 +135,7 @@ func scanEvent(row *sql.Row) (*Event, error) {
 	err := row.Scan(
 		&e.ID, &e.OrganizerID, &e.Title, &e.Description,
 		&eventDate, &endDate, &e.Location, &e.Timezone,
-		&e.RetentionDays, &e.Status, &e.ShareToken,
+		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -157,7 +157,7 @@ func scanEventRow(rows *sql.Rows) (*Event, error) {
 	err := rows.Scan(
 		&e.ID, &e.OrganizerID, &e.Title, &e.Description,
 		&eventDate, &endDate, &e.Location, &e.Timezone,
-		&e.RetentionDays, &e.Status, &e.ShareToken,
+		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {

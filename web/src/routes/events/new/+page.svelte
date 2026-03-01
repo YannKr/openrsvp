@@ -31,8 +31,16 @@
 
 	// Step 2 fields
 	let description = $state('');
+	let contactRequirement = $state('email_or_phone');
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
+
+	const contactRequirementOptions = [
+		{ value: 'email_or_phone', label: 'Email or Phone (at least one)' },
+		{ value: 'email', label: 'Email only' },
+		{ value: 'phone', label: 'Phone only' },
+		{ value: 'email_and_phone', label: 'Email and Phone (both required)' }
+	];
 
 	// Validation errors
 	let errors: Record<string, string> = $state({});
@@ -81,6 +89,7 @@
 				location: location.trim(),
 				timezone,
 				description: description.trim(),
+				contactRequirement,
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
@@ -193,6 +202,13 @@
 						rows={6}
 					/>
 
+					<Select
+						label="RSVP Contact Requirement"
+						name="contactRequirement"
+						bind:value={contactRequirement}
+						options={contactRequirementOptions}
+					/>
+
 					<div class="pt-2">
 						{#if showRetention}
 							<Input
@@ -249,6 +265,12 @@
 							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
 								<dt class="text-sm font-medium text-slate-500">Description</dt>
 								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0 whitespace-pre-wrap">{description}</dd>
+							</div>
+						{/if}
+						{#if contactRequirement !== 'email_or_phone'}
+							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
+								<dt class="text-sm font-medium text-slate-500">Contact Requirement</dt>
+								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{contactRequirementOptions.find(o => o.value === contactRequirement)?.label}</dd>
 							</div>
 						{/if}
 						{#if retentionDays !== '30'}

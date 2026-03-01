@@ -17,6 +17,7 @@ export interface Event {
 	location: string;
 	timezone: string;
 	retentionDays: number;
+	contactRequirement: 'email' | 'phone' | 'email_or_phone' | 'email_and_phone';
 	status: 'draft' | 'published' | 'cancelled' | 'archived';
 	shareToken: string;
 	createdAt: string;

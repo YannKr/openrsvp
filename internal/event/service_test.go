@@ -159,6 +159,27 @@ func TestPublishEvent(t *testing.T) {
 	assert.Equal(t, "published", published.Status)
 }
 
+func TestPublishEventCallsOnPublish(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{Title: "Draft Event", EventDate: "2026-06-15T14:00"})
+	require.NoError(t, err)
+
+	var callbackEvent *Event
+	svc.SetOnPublish(func(_ context.Context, e *Event) {
+		callbackEvent = e
+	})
+
+	_, err = svc.Publish(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+
+	require.NotNil(t, callbackEvent, "OnPublish callback should have been called")
+	assert.Equal(t, created.ID, callbackEvent.ID)
+	assert.Equal(t, "published", callbackEvent.Status)
+}
+
 func TestPublishNonDraftEvent(t *testing.T) {
 	svc, authStore := setupEvent(t)
 	org := createOrganizer(t, authStore)
@@ -190,6 +211,93 @@ func TestCancelEvent(t *testing.T) {
 	cancelled, err := svc.Cancel(ctx, created.ID, org.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "cancelled", cancelled.Status)
+}
+
+func TestCreateEventDefaultContactRequirement(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "email_or_phone", ev.ContactRequirement)
+}
+
+func TestCreateEventCustomContactRequirement(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	cr := "email_and_phone"
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:              "Party",
+		EventDate:          "2026-06-15T14:00",
+		ContactRequirement: &cr,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "email_and_phone", ev.ContactRequirement)
+
+	// Verify it persists across a read.
+	found, err := svc.GetByID(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "email_and_phone", found.ContactRequirement)
+}
+
+func TestCreateEventInvalidContactRequirement(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	cr := "invalid"
+	_, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:              "Party",
+		EventDate:          "2026-06-15T14:00",
+		ContactRequirement: &cr,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid contactRequirement")
+}
+
+func TestUpdateEventContactRequirement(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "email_or_phone", ev.ContactRequirement)
+
+	cr := "phone"
+	updated, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		ContactRequirement: &cr,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "phone", updated.ContactRequirement)
+}
+
+func TestUpdateEventInvalidContactRequirement(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+
+	cr := "none"
+	_, err = svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		ContactRequirement: &cr,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid contactRequirement")
 }
 
 func TestDeleteEvent(t *testing.T) {

@@ -14,29 +14,32 @@ type Event struct {
 	Timezone      string     `json:"timezone"`
 	RetentionDays int        `json:"retentionDays"`
 	Status        string     `json:"status"`
-	ShareToken    string     `json:"shareToken"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	ShareToken         string     `json:"shareToken"`
+	ContactRequirement string     `json:"contactRequirement"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 // CreateEventRequest is the request body for creating a new event.
 type CreateEventRequest struct {
-	Title         string  `json:"title"`
-	Description   string  `json:"description"`
-	EventDate     string  `json:"eventDate"`
-	EndDate       *string `json:"endDate,omitempty"`
-	Location      string  `json:"location"`
-	Timezone      string  `json:"timezone"`
-	RetentionDays *int    `json:"retentionDays,omitempty"`
+	Title              string  `json:"title"`
+	Description        string  `json:"description"`
+	EventDate          string  `json:"eventDate"`
+	EndDate            *string `json:"endDate,omitempty"`
+	Location           string  `json:"location"`
+	Timezone           string  `json:"timezone"`
+	RetentionDays      *int    `json:"retentionDays,omitempty"`
+	ContactRequirement *string `json:"contactRequirement,omitempty"`
 }
 
 // UpdateEventRequest is the request body for updating an existing event.
 type UpdateEventRequest struct {
-	Title         *string `json:"title,omitempty"`
-	Description   *string `json:"description,omitempty"`
-	EventDate     *string `json:"eventDate,omitempty"`
-	EndDate       *string `json:"endDate,omitempty"`
-	Location      *string `json:"location,omitempty"`
-	Timezone      *string `json:"timezone,omitempty"`
-	RetentionDays *int    `json:"retentionDays,omitempty"`
+	Title              *string `json:"title,omitempty"`
+	Description        *string `json:"description,omitempty"`
+	EventDate          *string `json:"eventDate,omitempty"`
+	EndDate            *string `json:"endDate,omitempty"`
+	Location           *string `json:"location,omitempty"`
+	Timezone           *string `json:"timezone,omitempty"`
+	RetentionDays      *int    `json:"retentionDays,omitempty"`
+	ContactRequirement *string `json:"contactRequirement,omitempty"`
 }

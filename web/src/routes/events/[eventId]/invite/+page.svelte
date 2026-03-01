@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
 	import type { InviteCard, Event } from '$lib/types';
@@ -10,6 +11,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
 	import { onMount } from 'svelte';
 
 	const eventId = $derived($page.params.eventId);
@@ -30,46 +32,70 @@
 	let secondaryColor = $state('#EC4899');
 	let font = $state('Inter');
 
+	// Background image
+	let backgroundImageUrl = $state('');
+	let uploading = $state(false);
+
 	const templates = [
 		{
 			id: 'balloon-party',
 			name: 'Balloon Party',
 			description: 'Colorful balloons and confetti',
-			emoji: '🎈',
-			bgClass: 'from-yellow-100 via-pink-100 to-blue-100',
-			accentClass: 'text-pink-600'
+			emoji: '\u{1F388}'
 		},
 		{
 			id: 'confetti',
 			name: 'Confetti',
 			description: 'Colorful and celebratory',
-			emoji: '🎊',
-			bgClass: 'from-purple-100 via-pink-100 to-orange-100',
-			accentClass: 'text-purple-600'
+			emoji: '\u{1F38A}'
 		},
 		{
 			id: 'unicorn-magic',
 			name: 'Unicorn Magic',
 			description: 'Purple and pink dreamscape',
-			emoji: '🦄',
-			bgClass: 'from-purple-200 via-pink-200 to-indigo-200',
-			accentClass: 'text-purple-700'
+			emoji: '\u{1F984}'
 		},
 		{
 			id: 'superhero',
 			name: 'Superhero',
 			description: 'Bold and action-packed',
-			emoji: '⚡',
-			bgClass: 'from-red-100 via-yellow-100 to-blue-100',
-			accentClass: 'text-red-600'
+			emoji: '\u{26A1}'
 		},
 		{
 			id: 'garden-picnic',
 			name: 'Garden Picnic',
 			description: 'Green and floral',
-			emoji: '🌿',
-			bgClass: 'from-green-100 via-emerald-50 to-lime-100',
-			accentClass: 'text-green-700'
+			emoji: '\u{1F33F}'
+		},
+		{
+			id: 'elegant-affair',
+			name: 'Elegant Affair',
+			description: 'Refined and sophisticated',
+			emoji: '\u{1F48E}'
+		},
+		{
+			id: 'clean-minimal',
+			name: 'Clean Minimal',
+			description: 'Simple and modern',
+			emoji: '\u{25FE}'
+		},
+		{
+			id: 'tropical-vibes',
+			name: 'Tropical Vibes',
+			description: 'Warm and beachy',
+			emoji: '\u{1F334}'
+		},
+		{
+			id: 'vintage-retro',
+			name: 'Vintage Retro',
+			description: 'Classic sepia tones',
+			emoji: '\u{1F4F7}'
+		},
+		{
+			id: 'chalkboard',
+			name: 'Chalkboard',
+			description: 'Dark and handwritten',
+			emoji: '\u{270D}'
 		}
 	];
 
@@ -81,7 +107,11 @@
 		{ value: 'Arial', label: 'Arial (Clean)' }
 	];
 
-	let currentTemplate = $derived(templates.find((t) => t.id === selectedTemplate) || templates[0]);
+	const customDataJSON = $derived(
+		backgroundImageUrl
+			? JSON.stringify({ backgroundImage: backgroundImageUrl })
+			: '{}'
+	);
 
 	onMount(async () => {
 		try {
@@ -100,6 +130,18 @@
 				primaryColor = invite.primaryColor || primaryColor;
 				secondaryColor = invite.secondaryColor || secondaryColor;
 				font = invite.font || font;
+
+				// Load existing background image from customData
+				try {
+					const cd = typeof invite.customData === 'string'
+						? JSON.parse(invite.customData || '{}')
+						: invite.customData || {};
+					if (cd.backgroundImage) {
+						backgroundImageUrl = cd.backgroundImage;
+					}
+				} catch {
+					// ignore parse errors
+				}
 			}
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
@@ -119,7 +161,8 @@
 				footer,
 				primaryColor,
 				secondaryColor,
-				font
+				font,
+				customData: customDataJSON
 			});
 			saved = true;
 			toast.success('Invite design saved!');
@@ -128,6 +171,70 @@
 			toast.error(apiErr.message || 'Failed to save invite design');
 		} finally {
 			saving = false;
+		}
+	}
+
+	async function handleImageUpload(e: Event & { currentTarget: HTMLInputElement }) {
+		const file = (e.currentTarget as HTMLInputElement).files?.[0];
+		if (!file) return;
+
+		if (file.size > 2 * 1024 * 1024) {
+			toast.error('Image must be under 2MB');
+			return;
+		}
+
+		uploading = true;
+		try {
+			const result = await api.upload<{ data: { url: string } }>(`/invite/event/${eventId}/image`, file);
+			backgroundImageUrl = result.data.url;
+			toast.success('Background image uploaded!');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to upload image');
+		} finally {
+			uploading = false;
+		}
+	}
+
+	let publishing = $state(false);
+
+	async function publishAndGo(destination: 'share' | 'dashboard') {
+		if (event && event.status === 'draft') {
+			publishing = true;
+			try {
+				const result = await api.post<{ data: Event }>(`/events/${eventId}/publish`);
+				event = result.data;
+				toast.success('Event published!');
+			} catch (err: unknown) {
+				const apiErr = err as { message?: string };
+				toast.error(apiErr.message || 'Failed to publish event');
+				publishing = false;
+				return;
+			}
+			publishing = false;
+		}
+		if (destination === 'share') {
+			goto(`/events/${eventId}/share`);
+		} else {
+			goto(`/events/${eventId}`);
+		}
+	}
+
+	function removeBackgroundImage() {
+		backgroundImageUrl = '';
+	}
+
+	function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		const file = e.dataTransfer?.files?.[0];
+		if (!file || !file.type.startsWith('image/')) return;
+		// Trigger the same upload flow
+		const dt = new DataTransfer();
+		dt.items.add(file);
+		const input = document.getElementById('bg-image-input') as HTMLInputElement;
+		if (input) {
+			input.files = dt.files;
+			input.dispatchEvent(new window.Event('change', { bubbles: true }));
 		}
 	}
 </script>
@@ -217,6 +324,55 @@
 						</div>
 
 						<Select label="Font" name="font" bind:value={font} options={fontOptions} />
+
+						<!-- Background Image Upload -->
+						<div class="space-y-2">
+							<label class="block text-sm font-medium text-slate-700">Background Image</label>
+							{#if backgroundImageUrl}
+								<div class="relative rounded-lg border border-slate-200 overflow-hidden">
+									<img src={backgroundImageUrl} alt="Background preview" class="w-full h-24 object-cover" />
+									<button
+										type="button"
+										onclick={removeBackgroundImage}
+										class="absolute top-1 right-1 rounded-full bg-white/90 p-1 text-slate-500 hover:text-red-500 shadow-sm transition-colors"
+										aria-label="Remove background image"
+									>
+										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+							{:else}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center hover:border-indigo-400 transition-colors cursor-pointer"
+									ondragover={(e) => e.preventDefault()}
+									ondrop={handleDrop}
+								>
+									<input
+										id="bg-image-input"
+										type="file"
+										accept="image/jpeg,image/png,image/webp"
+										class="hidden"
+										onchange={handleImageUpload}
+									/>
+									<label for="bg-image-input" class="cursor-pointer">
+										{#if uploading}
+											<div class="flex items-center justify-center gap-2 text-indigo-500">
+												<Spinner size="sm" />
+												<span class="text-sm">Uploading...</span>
+											</div>
+										{:else}
+											<svg class="w-8 h-8 mx-auto text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+											</svg>
+											<p class="text-xs text-slate-500">Drop an image or click to upload</p>
+											<p class="text-xs text-slate-400 mt-0.5">JPEG, PNG, or WebP (max 2MB)</p>
+										{/if}
+									</label>
+								</div>
+							{/if}
+						</div>
 					</div>
 				</Card>
 
@@ -234,10 +390,12 @@
 							<p class="text-xs text-slate-500">What would you like to do next?</p>
 							<div class="flex flex-col gap-2">
 								{#if event && event.status === 'draft'}
-									<Button href="/events/{eventId}" variant="primary" size="sm" class="w-full">Publish Event</Button>
+									<Button onclick={() => publishAndGo('share')} loading={publishing} variant="primary" size="sm" class="w-full">Publish & Share</Button>
+									<Button onclick={() => publishAndGo('dashboard')} variant="outline" size="sm" class="w-full">Publish & View Dashboard</Button>
+								{:else}
+									<Button href="/events/{eventId}/share" variant="primary" size="sm" class="w-full">Share & Get QR Code</Button>
+									<Button href="/events/{eventId}" variant="outline" size="sm" class="w-full">View Event Dashboard</Button>
 								{/if}
-								<Button href="/events/{eventId}/share" variant="outline" size="sm" class="w-full">Share & Get QR Code</Button>
-								<Button href="/events/{eventId}" variant="outline" size="sm" class="w-full">View Event Dashboard</Button>
 							</div>
 						</div>
 					</Card>
@@ -248,47 +406,19 @@
 			<div>
 				<div class="sticky top-8">
 					<h2 class="text-lg font-semibold text-slate-900 mb-4">Preview</h2>
-					<div
-						class="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-gradient-to-br {currentTemplate.bgClass}"
-						style="font-family: {font}, sans-serif;"
-					>
-						<div class="p-8 text-center">
-							<!-- Template emoji decoration -->
-							<div class="text-4xl mb-4">{currentTemplate.emoji}{currentTemplate.emoji}{currentTemplate.emoji}</div>
-
-							<!-- Heading -->
-							<h3 class="text-2xl font-bold mb-4" style="color: {primaryColor};">
-								{heading || 'Your Heading'}
-							</h3>
-
-							<!-- Event details -->
-							{#if event}
-								<p class="text-lg font-semibold text-slate-800 mb-2">{event.title}</p>
-								{#if event.location}
-									<p class="text-sm text-slate-600 mb-1">{event.location}</p>
-								{/if}
-							{/if}
-
-							<!-- Divider -->
-							<div class="my-6 mx-auto w-16 h-0.5" style="background-color: {secondaryColor};"></div>
-
-							<!-- Body -->
-							<p class="text-slate-700 whitespace-pre-wrap mb-6">{body || 'Your message here...'}</p>
-
-							<!-- RSVP Button mock -->
-							<div
-								class="inline-block rounded-full px-8 py-3 text-white font-medium text-sm shadow-md"
-								style="background-color: {primaryColor};"
-							>
-								RSVP Now
-							</div>
-
-							<!-- Footer -->
-							<p class="mt-6 text-xs" style="color: {secondaryColor};">
-								{footer || 'Footer text'}
-							</p>
-						</div>
-					</div>
+					<InviteCardPreview
+						templateId={selectedTemplate}
+						{heading}
+						{body}
+						{footer}
+						{primaryColor}
+						{secondaryColor}
+						{font}
+						eventTitle={event?.title || ''}
+						eventDate={event?.eventDate || ''}
+						eventLocation={event?.location || ''}
+						customData={customDataJSON}
+					/>
 				</div>
 			</div>
 		</div>
