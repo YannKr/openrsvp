@@ -36,6 +36,8 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc
       - run: go mod download
+      - name: Create frontend placeholder for go:embed
+        run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - run: go vet ./...
       - run: go test -race -v ./...
       - run: go build -o /dev/null ./cmd/openrsvp

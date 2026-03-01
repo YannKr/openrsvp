@@ -174,7 +174,7 @@
 		}
 	}
 
-	async function handleImageUpload(e: Event & { currentTarget: HTMLInputElement }) {
+	async function handleImageUpload(e: globalThis.Event & { currentTarget: HTMLInputElement }) {
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
 

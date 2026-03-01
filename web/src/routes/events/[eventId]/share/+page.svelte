@@ -15,7 +15,7 @@
 
 	let loading = $state(true);
 	let event: Event | null = $state(null);
-	let stats: RSVPStats = $state({ attending: 0, maybe: 0, declined: 0, pending: 0, total: 0 });
+	let stats: RSVPStats = $state({ attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 });
 	let copied = $state(false);
 	let qrDataUrl = $state('');
 	let shareUrl = $state('');
@@ -25,7 +25,7 @@
 			const [eventResult, statsResult] = await Promise.all([
 				api.get<{ data: Event }>(`/events/${eventId}`),
 				api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
-					data: { attending: 0, maybe: 0, declined: 0, pending: 0, total: 0 }
+					data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
 				}))
 			]);
 			event = eventResult.data;

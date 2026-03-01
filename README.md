@@ -17,7 +17,15 @@ A self-hosted, privacy-first alternative to Evite. Create beautiful event invita
 
 ## Quick Start
 
-### Docker (recommended)
+### Docker One-Liner
+
+```bash
+docker run -d -p 8080:8080 -v openrsvp-data:/data -e BASE_URL=http://localhost:8080 ghcr.io/openrsvp/openrsvp:latest
+```
+
+Visit http://localhost:8080
+
+### Docker Compose
 
 ```bash
 git clone https://github.com/openrsvp/openrsvp.git
@@ -25,8 +33,6 @@ cd openrsvp
 cp .env.example .env
 docker compose up -d
 ```
-
-Visit http://localhost:8080
 
 ### With PostgreSQL
 
@@ -133,6 +139,8 @@ All API endpoints are under `/api/v1`. The server also provides:
 | PUT | `/api/v1/events/:id` | Update event |
 | POST | `/api/v1/events/:id/publish` | Publish event |
 | POST | `/api/v1/events/:id/cancel` | Cancel event |
+| POST | `/api/v1/events/:id/reopen` | Re-open cancelled event as draft |
+| POST | `/api/v1/events/:id/duplicate` | Duplicate event |
 | DELETE | `/api/v1/events/:id` | Delete event |
 
 ### RSVPs
@@ -217,6 +225,28 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Auth | Magic links (passwordless) |
 | Notifications | SMTP, SendGrid, SES, Twilio, Vonage |
 | Deployment | Docker (multi-stage, single binary) |
+
+## Changelog
+
+### v1.0.0 (2026-02-28)
+
+- Event management: cancel confirmation modal, re-open cancelled events as draft, duplicate events (copies invite card design)
+- Confirmation modals for removing attendees and cancelling reminders
+- Inline editing for attendees (name, email, phone, status, dietary notes, plus-ones) and reminders
+- Configurable RSVP contact requirements (email, phone, both, or either)
+- Organizer email notifications on new RSVPs
+- Two-way organizer-attendee messaging with email delivery
+- Scheduled reminders with automatic defaults on publish (1 week + 3 days before)
+- Feedback system with GitHub Issues integration and email fallback
+- RSVP confirmation emails to attendees
+- Pluggable notification providers: SMTP, SendGrid, SES (email); Twilio, Vonage (SMS)
+- Security middleware: rate limiting, honeypot bot protection, CSRF tokens, HTML sanitization
+- Data retention policy with warning emails and automatic cleanup
+- Invite card designer with 5 templates, custom colors/fonts, background image uploads
+- Magic link passwordless authentication
+- SQLite (default) and PostgreSQL support
+- Single-container Docker deployment with health checks
+- Docker one-liner quick start
 
 ## Contributing
 
