@@ -286,6 +286,10 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ### v1.0.1
 
+- SMS enable/disable controlled by `NOTIFICATION_SMS_PROVIDER` env var; email always required when SMS is off
+- Public config endpoint (`GET /api/v1/config`) exposes feature flags to frontend
+- Backend rejects phone-only contact requirement and sms contact method when SMS is disabled
+- Frontend hides "Phone only" option and enforces email-required on RSVP forms when SMS is off
 - Add Amazon SNS as an SMS notification provider
 - Fix CORS to restrict allowed origins to configured BASE_URL
 - Add request body size limit (1MB) to prevent DoS via large payloads
