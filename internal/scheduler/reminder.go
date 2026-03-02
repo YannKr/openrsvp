@@ -9,6 +9,7 @@ import (
 
 	"github.com/openrsvp/openrsvp/internal/database"
 	"github.com/openrsvp/openrsvp/internal/notification"
+	"github.com/openrsvp/openrsvp/internal/notification/templates"
 )
 
 // ReminderJob polls for due reminders and sends notifications to the
@@ -17,15 +18,17 @@ type ReminderJob struct {
 	store        *ReminderStore
 	db           database.DB
 	notifService *notification.Service
+	baseURL      string
 	logger       zerolog.Logger
 }
 
 // NewReminderJob creates a new ReminderJob.
-func NewReminderJob(store *ReminderStore, db database.DB, notifService *notification.Service, logger zerolog.Logger) *ReminderJob {
+func NewReminderJob(store *ReminderStore, db database.DB, notifService *notification.Service, baseURL string, logger zerolog.Logger) *ReminderJob {
 	return &ReminderJob{
 		store:        store,
 		db:           db,
 		notifService: notifService,
+		baseURL:      baseURL,
 		logger:       logger,
 	}
 }
@@ -97,10 +100,19 @@ func (j *ReminderJob) processReminder(ctx context.Context, reminder *Reminder) e
 		return j.store.SetStatus(ctx, reminder.ID, "sent")
 	}
 
+	// Look up event details for the email template.
+	ev, err := j.lookupEvent(ctx, reminder.EventID)
+	if err != nil {
+		if setErr := j.store.SetStatus(ctx, reminder.ID, "failed"); setErr != nil {
+			j.logger.Error().Err(setErr).Str("reminder_id", reminder.ID).Msg("failed to set reminder status to failed")
+		}
+		return fmt.Errorf("lookup event for reminder: %w", err)
+	}
+
 	// Send notifications to each attendee.
 	var sendErrors int
 	for _, attendee := range attendees {
-		if err := j.sendToAttendee(ctx, reminder, attendee); err != nil {
+		if err := j.sendToAttendee(ctx, reminder, attendee, ev); err != nil {
 			sendErrors++
 			j.logger.Error().
 				Err(err).
@@ -163,21 +175,56 @@ func (j *ReminderJob) findTargetAttendees(ctx context.Context, eventID, targetGr
 	return attendees, nil
 }
 
+// eventInfo holds the minimal event data needed to render reminder emails.
+type eventInfo struct {
+	title      string
+	eventDate  time.Time
+	location   string
+	shareToken string
+}
+
+// lookupEvent fetches event details needed for rendering the reminder template.
+func (j *ReminderJob) lookupEvent(ctx context.Context, eventID string) (*eventInfo, error) {
+	var info eventInfo
+	err := j.db.QueryRowContext(ctx,
+		`SELECT title, event_date, location, share_token FROM events WHERE id = ?`,
+		eventID,
+	).Scan(&info.title, &info.eventDate, &info.location, &info.shareToken)
+	if err != nil {
+		return nil, fmt.Errorf("lookup event %s: %w", eventID, err)
+	}
+	return &info, nil
+}
+
 // sendToAttendee sends a reminder notification to a single attendee via their
 // preferred channel (email if available, then SMS).
-func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, attendee attendeeTarget) error {
-	body := reminder.Message
-	if body == "" {
-		body = "You have an upcoming event. Don't forget!"
+func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, attendee attendeeTarget, ev *eventInfo) error {
+	message := reminder.Message
+	if message == "" {
+		message = "You have an upcoming event. Don't forget!"
 	}
 
 	// Try email first.
 	if attendee.email != nil && *attendee.email != "" {
+		eventDate := ev.eventDate.Format("January 2, 2006 at 3:04 PM")
+		location := ev.location
+		if location == "" {
+			location = "TBD"
+		}
+		inviteURL := j.baseURL + "/i/" + ev.shareToken
+
+		htmlBody, plainBody, err := templates.RenderEventReminder(ev.title, eventDate, location, message, inviteURL)
+		if err != nil {
+			j.logger.Error().Err(err).Str("reminder_id", reminder.ID).Msg("failed to render reminder template, falling back to plain text")
+			htmlBody = message
+			plainBody = message
+		}
+
 		msg := &notification.Message{
 			To:      *attendee.email,
-			Subject: "Event Reminder",
-			Body:    body,
-			Plain:   body,
+			Subject: "Event Reminder — " + ev.title,
+			Body:    htmlBody,
+			Plain:   plainBody,
 		}
 		return j.notifService.Send(ctx, reminder.EventID, attendee.id, notification.ChannelEmail, msg)
 	}
@@ -186,7 +233,7 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 	if attendee.phone != nil && *attendee.phone != "" {
 		msg := &notification.Message{
 			To:   *attendee.phone,
-			Body: body,
+			Body: message,
 		}
 		return j.notifService.Send(ctx, reminder.EventID, attendee.id, notification.ChannelSMS, msg)
 	}

@@ -407,7 +407,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	})
 
 	sched := scheduler.New(logger)
-	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, logger)
+	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, cfg.BaseURL, logger)
 	cleanupJob := scheduler.NewCleanupJob(db, logger)
 
 	// Wire retention warning notifications into the cleanup job.
