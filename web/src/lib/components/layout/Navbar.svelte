@@ -10,7 +10,7 @@
 		<div class="flex items-center justify-between h-16">
 			<!-- Logo + Nav Links -->
 			<div class="flex items-center gap-8">
-				<a href="/events" class="text-xl font-bold text-indigo-600">OpenRSVP</a>
+				<a href="/" class="text-xl font-bold text-indigo-600">OpenRSVP</a>
 				<div class="hidden md:flex items-center gap-1">
 					<a
 						href="/events"

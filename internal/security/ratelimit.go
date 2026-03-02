@@ -3,6 +3,7 @@ package security
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ type RateLimiter struct {
 	windows map[string]*window
 	limit   int
 	window  time.Duration
+	stop    chan struct{}
 }
 
 type window struct {
@@ -21,13 +23,40 @@ type window struct {
 }
 
 // NewRateLimiter creates a new rate limiter that allows limit requests per
-// windowDuration using a sliding window algorithm.
+// windowDuration using a sliding window algorithm. It starts a background
+// goroutine that periodically cleans up stale entries every 5 minutes.
+// Call Stop() to terminate the cleanup goroutine.
 func NewRateLimiter(limit int, windowDuration time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		windows: make(map[string]*window),
 		limit:   limit,
 		window:  windowDuration,
+		stop:    make(chan struct{}),
 	}
+
+	go rl.cleanupLoop()
+
+	return rl
+}
+
+// cleanupLoop periodically removes stale entries from the rate limiter.
+func (rl *RateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			rl.Cleanup()
+		case <-rl.stop:
+			return
+		}
+	}
+}
+
+// Stop terminates the background cleanup goroutine.
+func (rl *RateLimiter) Stop() {
+	close(rl.stop)
 }
 
 // Allow checks whether a request identified by key is allowed under the
@@ -100,6 +129,9 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.RemoteAddr
+			if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+				key = host
+			}
 
 			if !limiter.Allow(key) {
 				retryAfter := int(limiter.window.Seconds())

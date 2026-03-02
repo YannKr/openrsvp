@@ -27,13 +27,15 @@ type CleanupJob struct {
 	logger          zerolog.Logger
 	retentionNotify RetentionNotifyFunc
 	onDeleteEvent   OnDeleteEventFunc
+	warnedEvents    map[string]struct{} // tracks event IDs that have already received a retention warning
 }
 
 // NewCleanupJob creates a new CleanupJob.
 func NewCleanupJob(db database.DB, logger zerolog.Logger) *CleanupJob {
 	return &CleanupJob{
-		db:     db,
-		logger: logger,
+		db:           db,
+		logger:       logger,
+		warnedEvents: make(map[string]struct{}),
 	}
 }
 
@@ -77,8 +79,9 @@ func (j *CleanupJob) Run(ctx context.Context) error {
 
 // warnExpiring finds events where event_date + retention_days - 7 days < now
 // and logs a warning. It only warns for events that haven't been warned yet
-// (status is not 'warned'). If a retention notification callback is set,
-// it also sends an email to the organizer.
+// (tracked in memory). If a retention notification callback is set, it also
+// sends an email to the organizer. The event status is NOT changed, so
+// published events remain fully functional for RSVPs.
 func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 	now := time.Now().UTC()
 
@@ -87,8 +90,7 @@ func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 		`SELECT e.id, e.title, e.event_date, e.retention_days, o.email
 		 FROM events e
 		 JOIN organizers o ON o.id = e.organizer_id
-		 WHERE e.status != 'retention_warning'
-		   AND e.status != 'archived'`,
+		 WHERE e.status != 'archived'`,
 	)
 	if err != nil {
 		return fmt.Errorf("query expiring events: %w", err)
@@ -140,6 +142,11 @@ func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 
 	// Process warnings after closing the cursor (important for single-conn DBs).
 	for _, ev := range toWarn {
+		// Skip events we've already warned about.
+		if _, warned := j.warnedEvents[ev.id]; warned {
+			continue
+		}
+
 		j.logger.Warn().
 			Str("event_id", ev.id).
 			Str("title", ev.title).
@@ -151,12 +158,8 @@ func (j *CleanupJob) warnExpiring(ctx context.Context) error {
 			j.retentionNotify(ctx, ev.organizerEmail, ev.title, ev.expiresAt)
 		}
 
-		// Mark event as warned so we don't re-notify.
-		_, markErr := j.db.ExecContext(ctx,
-			`UPDATE events SET status = 'retention_warning' WHERE id = ?`, ev.id)
-		if markErr != nil {
-			j.logger.Error().Err(markErr).Str("event_id", ev.id).Msg("failed to mark retention warning")
-		}
+		// Track in memory so we don't re-notify on subsequent runs.
+		j.warnedEvents[ev.id] = struct{}{}
 	}
 
 	return nil

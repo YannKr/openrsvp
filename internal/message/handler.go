@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 // AttendeeInfo holds the resolved attendee data needed by the message handler.
@@ -20,12 +21,18 @@ type AttendeeFromToken func(ctx context.Context, rsvpToken string) (*AttendeeInf
 // OrganizerFromCtx extracts the organizer ID from the request context.
 type OrganizerFromCtx func(ctx context.Context) (id string, ok bool)
 
+// EventOwnershipChecker verifies that the given organizer owns the event.
+// Returns nil if ownership is confirmed; a non-nil error otherwise.
+type EventOwnershipChecker func(ctx context.Context, eventID, organizerID string) error
+
 // Handler holds HTTP handlers for message endpoints.
 type Handler struct {
 	service           *Service
 	authMiddleware    func(http.Handler) http.Handler
 	organizerFrom     OrganizerFromCtx
 	attendeeFromToken AttendeeFromToken
+	checkEventOwner   EventOwnershipChecker
+	logger            zerolog.Logger
 }
 
 // NewHandler creates a new message Handler.
@@ -34,12 +41,16 @@ func NewHandler(
 	authMiddleware func(http.Handler) http.Handler,
 	organizerFrom OrganizerFromCtx,
 	attendeeFromToken AttendeeFromToken,
+	checkEventOwner EventOwnershipChecker,
+	logger zerolog.Logger,
 ) *Handler {
 	return &Handler{
 		service:           service,
 		authMiddleware:    authMiddleware,
 		organizerFrom:     organizerFrom,
 		attendeeFromToken: attendeeFromToken,
+		checkEventOwner:   checkEventOwner,
+		logger:            logger,
 	}
 }
 
@@ -71,6 +82,11 @@ func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	var req SendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
@@ -83,7 +99,8 @@ func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to send organizer message")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -92,7 +109,7 @@ func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 // handleListMessages handles GET /event/{eventId} for organizers.
 func (h *Handler) handleListMessages(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -100,9 +117,15 @@ func (h *Handler) handleListMessages(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	msgs, err := h.service.ListByEvent(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list messages by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -135,7 +158,8 @@ func (h *Handler) handleAttendeeSend(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to send attendee message")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -154,7 +178,8 @@ func (h *Handler) handleAttendeeList(w http.ResponseWriter, r *http.Request) {
 
 	msgs, err := h.service.ListForAttendee(r.Context(), attendee.EventID, attendee.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to list attendee messages")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 

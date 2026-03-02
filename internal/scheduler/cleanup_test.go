@@ -58,12 +58,12 @@ func TestCleanupJobWarnExpiringNotifiesOrganizer(t *testing.T) {
 	assert.Equal(t, "Expiring Party", notifiedTitle)
 	assert.False(t, notifiedExpiresAt.IsZero(), "expiry time should be set")
 
-	// Verify event is marked as retention_warning.
+	// Verify event status remains published (warnExpiring no longer changes status).
 	var status string
 	err = db.QueryRowContext(context.Background(),
 		`SELECT status FROM events WHERE id = ?`, eventID).Scan(&status)
 	require.NoError(t, err)
-	assert.Equal(t, "retention_warning", status)
+	assert.Equal(t, "published", status)
 }
 
 func TestCleanupJobWarnExpiringSkipsAlreadyWarned(t *testing.T) {
@@ -76,23 +76,29 @@ func TestCleanupJobWarnExpiringSkipsAlreadyWarned(t *testing.T) {
 		 VALUES (?, 'org2@test.com', 'Test Org 2', datetime('now'), datetime('now'))`, orgID)
 	require.NoError(t, err)
 
-	// Create an event already marked as retention_warning.
+	// Create an event within the warning window.
 	eventDate := time.Now().UTC().AddDate(0, 0, -25).Format(time.RFC3339)
 	_, err = db.ExecContext(context.Background(),
 		`INSERT INTO events (id, organizer_id, title, event_date, retention_days, status, share_token, created_at, updated_at)
-		 VALUES ('evt-already-warned', ?, 'Already Warned', ?, 30, 'retention_warning', 'xyz12345', datetime('now'), datetime('now'))`,
+		 VALUES ('evt-already-warned', ?, 'Already Warned', ?, 30, 'published', 'xyz12345', datetime('now'), datetime('now'))`,
 		orgID, eventDate)
 	require.NoError(t, err)
 
-	notifyCalled := false
+	notifyCount := 0
 	job := NewCleanupJob(db, logger)
 	job.SetRetentionNotify(func(ctx context.Context, email, title string, expiresAt time.Time) {
-		notifyCalled = true
+		notifyCount++
 	})
 
+	// First run should warn.
 	err = job.Run(context.Background())
 	require.NoError(t, err)
-	assert.False(t, notifyCalled, "already-warned event should not trigger notification")
+	assert.Equal(t, 1, notifyCount, "first run should trigger notification")
+
+	// Second run on same job instance should skip (in-memory dedup).
+	err = job.Run(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, notifyCount, "second run should not trigger notification again")
 }
 
 func TestCleanupJobWarnExpiringSkipsNotYetExpiring(t *testing.T) {

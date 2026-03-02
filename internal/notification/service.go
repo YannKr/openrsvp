@@ -56,8 +56,27 @@ func (s *Service) Send(ctx context.Context, eventID, attendeeID string, ch Chann
 		s.logger.Error().Err(err).Msg("failed to insert notification log")
 	}
 
-	// Attempt delivery.
-	sendErr := provider.Send(ctx, msg)
+	// Attempt delivery with retry on transient errors.
+	const maxAttempts = 3
+	var sendErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		sendErr = provider.Send(ctx, msg)
+		if sendErr == nil {
+			break
+		}
+
+		if attempt < maxAttempts {
+			// Check if context is already cancelled before retrying.
+			if ctx.Err() != nil {
+				s.logger.Warn().Err(ctx.Err()).Int("attempt", attempt).Msg("context cancelled, skipping retry")
+				break
+			}
+
+			backoff := time.Duration(1<<(attempt-1)) * time.Second // 1s, 2s, 4s
+			s.logger.Warn().Err(sendErr).Int("attempt", attempt).Dur("backoff", backoff).Msg("notification send failed, retrying")
+			time.Sleep(backoff)
+		}
+	}
 
 	if sendErr != nil {
 		// Update log to failed.

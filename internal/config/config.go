@@ -44,6 +44,9 @@ type Config struct {
 	VonageAPIKey              string
 	VonageAPISecret           string
 	VonageFrom                string
+	SNSRegion                 string
+	SNSAccessKeyID            string
+	SNSSecretAccessKey        string
 
 	// Feedback
 	FeedbackGitHubToken string
@@ -89,9 +92,21 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid SMTP_PORT: %w", err)
 	}
 
+	if env != "development" && env != "production" {
+		return nil, fmt.Errorf("invalid ENV: %s (must be development or production)", env)
+	}
+
+	portInt, err := strconv.Atoi(port)
+	if err != nil || portInt < 1 || portInt > 65535 {
+		return nil, fmt.Errorf("invalid PORT: %s (must be an integer between 1 and 65535)", port)
+	}
+
 	retentionDays, err := strconv.Atoi(getEnv("DEFAULT_RETENTION_DAYS", "30"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid DEFAULT_RETENTION_DAYS: %w", err)
+	}
+	if retentionDays <= 0 {
+		return nil, fmt.Errorf("invalid DEFAULT_RETENTION_DAYS: %d (must be greater than 0)", retentionDays)
 	}
 
 	cfg := &Config{
@@ -124,6 +139,9 @@ func Load() (*Config, error) {
 		VonageAPIKey:              getEnv("VONAGE_API_KEY", ""),
 		VonageAPISecret:           getEnv("VONAGE_API_SECRET", ""),
 		VonageFrom:                getEnv("VONAGE_FROM", ""),
+		SNSRegion:                 getEnv("SNS_SMS_REGION", ""),
+		SNSAccessKeyID:            getEnv("SNS_SMS_ACCESS_KEY_ID", ""),
+		SNSSecretAccessKey:        getEnv("SNS_SMS_SECRET_ACCESS_KEY", ""),
 
 		FeedbackGitHubToken: getEnv("FEEDBACK_GITHUB_TOKEN", ""),
 		FeedbackGitHubRepo:  getEnv("FEEDBACK_GITHUB_REPO", ""),

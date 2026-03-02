@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ func (s *Server) routes() *chi.Mux {
 
 	// --- Middleware ---
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{s.cfg.BaseURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -42,6 +43,8 @@ func (s *Server) routes() *chi.Mux {
 
 	// --- API v1 ---
 	r.Route("/api/v1", func(api chi.Router) {
+		// Limit request body size to 1 MB for API routes.
+		api.Use(security.BodyLimitMiddleware(1 << 20))
 		// Sanitize all incoming JSON request bodies.
 		api.Use(s.securityMw.Sanitize)
 
@@ -67,9 +70,10 @@ func (s *Server) routes() *chi.Mux {
 		// Serve uploaded files (public, for shared invite pages).
 		uploadsPrefix := "/uploads/"
 		api.Get(uploadsPrefix+"*", func(w http.ResponseWriter, r *http.Request) {
-			// Strip prefix to get filename, serve from uploads dir.
-			name := strings.TrimPrefix(r.URL.Path, "/api/v1"+uploadsPrefix)
-			http.ServeFile(w, r, s.uploadsDir+"/"+name)
+			// Strip prefix to get filename, then take only the base name
+			// to prevent path traversal attacks (e.g. ../../etc/passwd).
+			name := filepath.Base(strings.TrimPrefix(r.URL.Path, "/api/v1"+uploadsPrefix))
+			http.ServeFile(w, r, filepath.Join(s.uploadsDir, name))
 		})
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())

@@ -2,6 +2,18 @@ import type { ApiError } from '$lib/types';
 
 const BASE_URL = '/api/v1';
 const TOKEN_KEY = 'openrsvp_session';
+const CSRF_COOKIE = 'csrf_token';
+const CSRF_HEADER = 'X-CSRF-Token';
+
+/** Read a cookie value by name. Returns empty string if not found. */
+function getCookie(name: string): string {
+	if (typeof document === 'undefined') return '';
+	const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+	return match ? decodeURIComponent(match[1]) : '';
+}
+
+/** Methods that mutate state and require CSRF protection. */
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 class ApiClient {
 	private token: string = '';
@@ -29,6 +41,7 @@ class ApiClient {
 
 	async request<T>(path: string, options: RequestInit = {}): Promise<T> {
 		const url = `${BASE_URL}${path}`;
+		const method = (options.method || 'GET').toUpperCase();
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 			...((options.headers as Record<string, string>) || {})
@@ -36,6 +49,13 @@ class ApiClient {
 
 		if (this.token) {
 			headers['Authorization'] = `Bearer ${this.token}`;
+		}
+
+		if (MUTATION_METHODS.has(method)) {
+			const csrfToken = getCookie(CSRF_COOKIE);
+			if (csrfToken) {
+				headers[CSRF_HEADER] = csrfToken;
+			}
 		}
 
 		const response = await fetch(url, {
@@ -98,6 +118,12 @@ class ApiClient {
 			headers['Authorization'] = `Bearer ${this.token}`;
 		}
 		// Do NOT set Content-Type — browser sets multipart boundary automatically.
+
+		// Upload is always a POST (mutation) — include CSRF token.
+		const csrfToken = getCookie(CSRF_COOKIE);
+		if (csrfToken) {
+			headers[CSRF_HEADER] = csrfToken;
+		}
 
 		const response = await fetch(url, {
 			method: 'POST',

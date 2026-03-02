@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 
@@ -168,7 +169,14 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			return nil, err
 		}
 		if s.notifyRSVP != nil {
-			go s.notifyRSVP(context.Background(), ev.ID, existing)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("recovered from panic in RSVP notification goroutine: %v", r)
+					}
+				}()
+				s.notifyRSVP(context.Background(), ev.ID, existing)
+			}()
 		}
 		return existing, nil
 	}
@@ -197,7 +205,14 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 
 	if s.notifyRSVP != nil {
-		go s.notifyRSVP(context.Background(), ev.ID, attendee)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("recovered from panic in RSVP notification goroutine: %v", r)
+				}
+			}()
+			s.notifyRSVP(context.Background(), ev.ID, attendee)
+		}()
 	}
 
 	return attendee, nil

@@ -2,9 +2,11 @@ package rsvp_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,6 +27,20 @@ func rsvpOrgFromCtx() rsvp.OrganizerFromCtx {
 			return "", false
 		}
 		return org.ID, true
+	}
+}
+
+// makeCheckEventOwner returns an EventOwnershipChecker backed by the given event service.
+func makeCheckEventOwner(eventSvc *event.Service) rsvp.EventOwnershipChecker {
+	return func(ctx context.Context, eventID, organizerID string) error {
+		ev, err := eventSvc.GetByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if ev.OrganizerID != organizerID {
+			return fmt.Errorf("event not found")
+		}
+		return nil
 	}
 }
 
@@ -50,7 +66,7 @@ func setupRSVPHandler(t *testing.T) (http.Handler, *rsvp.Service, *event.Service
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := rsvp.NewHandler(rsvpSvc, authMW, rsvpOrgFromCtx())
+	handler := rsvp.NewHandler(rsvpSvc, authMW, rsvpOrgFromCtx(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), rsvpSvc, eventSvc, org
 }
 
@@ -73,7 +89,7 @@ func setupRSVPHandlerNoAuth(t *testing.T) (http.Handler, *event.Service, *auth.O
 	rsvpStore := rsvp.NewStore(db)
 	rsvpSvc := rsvp.NewService(rsvpStore, eventSvc, inviteSvc)
 
-	handler := rsvp.NewHandler(rsvpSvc, testutil.NoAuthMiddleware(), rsvpOrgFromCtx())
+	handler := rsvp.NewHandler(rsvpSvc, testutil.NoAuthMiddleware(), rsvpOrgFromCtx(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), eventSvc, org
 }
 

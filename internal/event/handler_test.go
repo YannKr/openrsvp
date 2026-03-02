@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,7 +39,7 @@ func setupEventHandler(t *testing.T) (http.Handler, *Service, *auth.Organizer) {
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, organizerFromCtx())
+	handler := NewHandler(svc, authMW, organizerFromCtx(), zerolog.Nop())
 	return handler.Routes(), svc, org
 }
 
@@ -50,7 +51,7 @@ func setupEventHandlerNoAuth(t *testing.T) http.Handler {
 	store := NewStore(db)
 	svc := NewService(store, cfg.DefaultRetentionDays)
 
-	handler := NewHandler(svc, testutil.NoAuthMiddleware(), organizerFromCtx())
+	handler := NewHandler(svc, testutil.NoAuthMiddleware(), organizerFromCtx(), zerolog.Nop())
 	return handler.Routes()
 }
 
@@ -189,12 +190,12 @@ func TestHandleGetEvent_Forbidden(t *testing.T) {
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org2)
 	})
-	handler := NewHandler(svc, authMW, organizerFromCtx())
+	handler := NewHandler(svc, authMW, organizerFromCtx(), zerolog.Nop())
 	rr := testutil.DoRequest(t, handler.Routes(), "GET", "/"+ev.ID, nil)
 
-	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 	body := testutil.ParseJSON(t, rr)
-	assert.Equal(t, "forbidden", body["error"])
+	assert.Equal(t, "not_found", body["error"])
 }
 
 // --- Update Event ---

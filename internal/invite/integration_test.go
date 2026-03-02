@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -57,7 +58,7 @@ func TestIntegration_AllTemplatesRenderableE2E(t *testing.T) {
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, inviteOrgFromCtx(), uploadsDir)
+	handler := NewHandler(svc, authMW, inviteOrgFromCtx(), uploadsDir, makeCheckEventOwner(eventSvc), zerolog.Nop())
 	router := handler.Routes()
 
 	// ── Step 1: Verify all 10 templates are listed ──

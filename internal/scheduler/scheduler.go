@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -90,7 +91,17 @@ func (s *Scheduler) runJob(ctx context.Context, job Job) {
 }
 
 // executeJob runs a single iteration of a job, logging any errors.
+// It recovers from panics so that the ticker loop in runJob continues.
 func (s *Scheduler) executeJob(ctx context.Context, job Job) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error().
+				Str("job", job.Name()).
+				Str("panic", fmt.Sprintf("%v", r)).
+				Msg("job panicked; recovering")
+		}
+	}()
+
 	if err := job.Run(ctx); err != nil {
 		s.logger.Error().
 			Err(err).

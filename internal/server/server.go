@@ -64,7 +64,20 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Wire up event layer.
 	eventStore := event.NewStore(db)
 	eventService := event.NewService(eventStore, cfg.DefaultRetentionDays)
-	eventHandler := event.NewHandler(eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx))
+	eventHandler := event.NewHandler(eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx), logger)
+
+	// checkEventOwner verifies that the given organizer owns the event.
+	// Returns nil if the organizer owns the event; a non-nil error otherwise.
+	checkEventOwner := func(ctx context.Context, eventID, organizerID string) error {
+		ev, err := eventService.GetByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if ev.OrganizerID != organizerID {
+			return fmt.Errorf("event not found")
+		}
+		return nil
+	}
 
 	// Ensure uploads directory exists.
 	uploadsDir := cfg.UploadsDir
@@ -75,12 +88,12 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Wire up invite layer (before RSVP since RSVP depends on it).
 	inviteStore := invite.NewStore(db)
 	inviteService := invite.NewService(inviteStore, uploadsDir)
-	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx), uploadsDir)
+	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx), uploadsDir, invite.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire up RSVP layer.
 	rsvpStore := rsvp.NewStore(db)
 	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService)
-	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx))
+	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx), rsvp.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire up notification layer.
 	notifRegistry := buildNotificationRegistry(cfg, logger)
@@ -210,7 +223,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		}
 		return &message.AttendeeInfo{ID: attendee.ID, EventID: attendee.EventID}, nil
 	}
-	messageHandler := message.NewHandler(messageService, authMiddleware, message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken)
+	messageHandler := message.NewHandler(messageService, authMiddleware, message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken, message.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire email dispatch into message service so organizer messages are
 	// delivered to attendees via email.
@@ -318,7 +331,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Wire up scheduler and reminder layer.
 	reminderStore := scheduler.NewReminderStore(db)
-	reminderHandler := scheduler.NewHandler(reminderStore, authMiddleware, scheduler.OrganizerFromCtx(organizerFromCtx))
+	reminderHandler := scheduler.NewHandler(reminderStore, authMiddleware, scheduler.OrganizerFromCtx(organizerFromCtx), scheduler.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Copy invite card design when an event is duplicated.
 	eventService.SetOnDuplicate(func(ctx context.Context, srcEventID, newEventID string) {
@@ -505,6 +518,11 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Stop scheduler first.
 	s.scheduler.Stop()
+
+	// Stop rate limiter cleanup goroutines.
+	s.securityMw.AuthRateLimiter.Stop()
+	s.securityMw.RSVPRateLimiter.Stop()
+	s.securityMw.GeneralRateLimiter.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

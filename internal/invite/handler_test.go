@@ -3,6 +3,7 @@ package invite
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +30,20 @@ func inviteOrgFromCtx() OrganizerFromCtx {
 			return "", false
 		}
 		return org.ID, true
+	}
+}
+
+// makeCheckEventOwner returns an EventOwnershipChecker backed by the given event service.
+func makeCheckEventOwner(eventSvc *event.Service) EventOwnershipChecker {
+	return func(ctx context.Context, eventID, organizerID string) error {
+		ev, err := eventSvc.GetByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if ev.OrganizerID != organizerID {
+			return fmt.Errorf("event not found")
+		}
+		return nil
 	}
 }
 
@@ -56,7 +72,7 @@ func setupInviteHandler(t *testing.T) (http.Handler, *Service, *auth.Organizer, 
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, inviteOrgFromCtx(), uploadsDir)
+	handler := NewHandler(svc, authMW, inviteOrgFromCtx(), uploadsDir, makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), svc, org, ev.ID
 }
 
@@ -81,7 +97,7 @@ func setupInviteHandlerNoAuth(t *testing.T) (http.Handler, string) {
 	inviteStore := NewStore(db)
 	svc := NewService(inviteStore, t.TempDir())
 
-	handler := NewHandler(svc, testutil.NoAuthMiddleware(), inviteOrgFromCtx(), t.TempDir())
+	handler := NewHandler(svc, testutil.NoAuthMiddleware(), inviteOrgFromCtx(), t.TempDir(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), ev.ID
 }
 

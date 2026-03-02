@@ -41,6 +41,20 @@ func stubAttendeeFromToken(eventID string) AttendeeFromToken {
 	}
 }
 
+// makeCheckEventOwner returns an EventOwnershipChecker backed by the given event service.
+func makeCheckEventOwner(eventSvc *event.Service) EventOwnershipChecker {
+	return func(ctx context.Context, eventID, organizerID string) error {
+		ev, err := eventSvc.GetByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if ev.OrganizerID != organizerID {
+			return fmt.Errorf("event not found")
+		}
+		return nil
+	}
+}
+
 // setupMessageHandler creates a message handler with fake auth and a real
 // event in the DB (required for FK constraint on messages.event_id).
 func setupMessageHandler(t *testing.T) (http.Handler, *Service, *auth.Organizer, string) {
@@ -67,7 +81,7 @@ func setupMessageHandler(t *testing.T) (http.Handler, *Service, *auth.Organizer,
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, msgOrgFromCtx(), stubAttendeeFromToken(ev.ID))
+	handler := NewHandler(svc, authMW, msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), svc, org, ev.ID
 }
 
@@ -92,7 +106,7 @@ func setupMessageHandlerNoAuth(t *testing.T) (http.Handler, string) {
 	msgStore := NewStore(db)
 	svc := NewService(msgStore, zerolog.Nop())
 
-	handler := NewHandler(svc, testutil.NoAuthMiddleware(), msgOrgFromCtx(), stubAttendeeFromToken(ev.ID))
+	handler := NewHandler(svc, testutil.NoAuthMiddleware(), msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), ev.ID
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -18,14 +19,16 @@ type Handler struct {
 	service        *Service
 	authMiddleware func(http.Handler) http.Handler
 	organizerFrom  OrganizerFromCtx
+	logger         zerolog.Logger
 }
 
 // NewHandler creates a new event Handler.
-func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx) *Handler {
+func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, logger zerolog.Logger) *Handler {
 	return &Handler{
 		service:        service,
 		authMiddleware: authMiddleware,
 		organizerFrom:  organizerFrom,
+		logger:         logger,
 	}
 }
 
@@ -80,7 +83,8 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.service.ListByOrganizer(r.Context(), organizerID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("organizer_id", organizerID).Msg("failed to list events by organizer")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -102,7 +106,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ev.OrganizerID != organizerID {
-		writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
 		return
 	}
 
@@ -264,7 +268,8 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "forbidden", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to delete event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 

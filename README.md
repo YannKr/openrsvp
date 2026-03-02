@@ -7,7 +7,7 @@ A self-hosted, privacy-first alternative to Evite. Create beautiful event invita
 - **Beautiful Invitation Templates** — 5 customizable themes (Balloon Party, Confetti, Unicorn Magic, Superhero, Garden Picnic) with custom colors, fonts, and text
 - **Passwordless Auth** — Magic link sign-in, no passwords to manage
 - **Easy RSVPs** — Guests respond with one click, no account needed. Track dietary needs and plus-ones
-- **Notifications** — Pluggable email (SMTP, SendGrid, SES) and SMS (Twilio, Vonage) providers
+- **Notifications** — Pluggable email (SMTP, SendGrid, SES) and SMS (Twilio, Vonage, SNS) providers
 - **Messaging** — Two-way communication between organizers and attendees
 - **Scheduled Reminders** — Automatic event reminders to guests
 - **Privacy by Design** — Data auto-deletes after a configurable retention period (default 30 days post-event)
@@ -161,6 +161,14 @@ Set `NOTIFICATION_SMS_PROVIDER` to enable SMS notifications for reminders.
 | `VONAGE_API_SECRET` | Vonage API secret |
 | `VONAGE_FROM` | Sender name or number |
 
+**Amazon SNS** (`NOTIFICATION_SMS_PROVIDER=sns`):
+
+| Variable | Description |
+|----------|-------------|
+| `SNS_SMS_REGION` | AWS region (e.g. `us-east-1`) |
+| `SNS_SMS_ACCESS_KEY_ID` | AWS access key ID |
+| `SNS_SMS_SECRET_ACCESS_KEY` | AWS secret access key |
+
 ## API
 
 All API endpoints are under `/api/v1`. The server also provides:
@@ -271,10 +279,31 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Frontend | SvelteKit + Tailwind CSS |
 | Database | SQLite (default) / PostgreSQL |
 | Auth | Magic links (passwordless) |
-| Notifications | SMTP, SendGrid, SES, Twilio, Vonage |
+| Notifications | SMTP, SendGrid, SES, Twilio, Vonage, SNS |
 | Deployment | Docker (multi-stage, single binary) |
 
 ## Changelog
+
+### v1.0.1
+
+- Add Amazon SNS as an SMS notification provider
+- Fix CORS to restrict allowed origins to configured BASE_URL
+- Add request body size limit (1MB) to prevent DoS via large payloads
+- Fix path traversal vulnerability in uploads endpoint
+- Add event ownership checks on RSVP, message, reminder, and invite endpoints
+- Sanitize internal error messages in HTTP responses
+- Fix reminder CHECK constraint to allow 'processing' status
+- Add unique indexes on attendees(event_id, email) and (event_id, phone)
+- Fix warnExpiring to preserve event 'published' status for active RSVPs
+- Add panic recovery in scheduler jobs and notification goroutines
+- Fix rate limiter to key on IP address (strip port) with periodic cleanup
+- Add notification send retry with exponential backoff
+- Add CSRF token handling in frontend API client
+- Wrap VerifyMagicLink in a database transaction
+- Add PostgreSQL connection pool lifetime settings
+- Add timeout to GitHub feedback API client
+- Validate ENV, PORT, and DEFAULT_RETENTION_DAYS in config loading
+- Return error from SNS provider constructor on AWS config failure
 
 ### v1.0.0 (2026-02-28)
 

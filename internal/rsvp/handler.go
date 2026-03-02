@@ -6,24 +6,33 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
 type OrganizerFromCtx func(ctx context.Context) (id string, ok bool)
 
+// EventOwnershipChecker verifies that the given organizer owns the event.
+// Returns nil if ownership is confirmed; a non-nil error otherwise.
+type EventOwnershipChecker func(ctx context.Context, eventID, organizerID string) error
+
 // Handler holds HTTP handlers for RSVP endpoints.
 type Handler struct {
-	service        *Service
-	authMiddleware func(http.Handler) http.Handler
-	organizerFrom  OrganizerFromCtx
+	service         *Service
+	authMiddleware  func(http.Handler) http.Handler
+	organizerFrom   OrganizerFromCtx
+	checkEventOwner EventOwnershipChecker
+	logger          zerolog.Logger
 }
 
 // NewHandler creates a new RSVP Handler.
-func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx) *Handler {
+func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, checkEventOwner EventOwnershipChecker, logger zerolog.Logger) *Handler {
 	return &Handler{
-		service:        service,
-		authMiddleware: authMiddleware,
-		organizerFrom:  organizerFrom,
+		service:         service,
+		authMiddleware:  authMiddleware,
+		organizerFrom:   organizerFrom,
+		checkEventOwner: checkEventOwner,
+		logger:          logger,
 	}
 }
 
@@ -146,7 +155,7 @@ func (h *Handler) handleLookupRSVP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -154,6 +163,11 @@ func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 	attendeeID := chi.URLParam(r, "attendeeId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
 
 	var req OrganizerUpdateAttendeeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -175,7 +189,7 @@ func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -183,9 +197,15 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	attendees, err := h.service.ListByEvent(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list attendees by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -193,7 +213,7 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -201,9 +221,15 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	stats, err := h.service.GetStats(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get RSVP stats")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -211,7 +237,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleRemoveAttendee(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -220,13 +246,19 @@ func (h *Handler) handleRemoveAttendee(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventId")
 	attendeeID := chi.URLParam(r, "attendeeId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	err := h.service.RemoveAttendee(r.Context(), eventID, attendeeID)
 	if err != nil {
 		if err.Error() == "attendee not found" || err.Error() == "attendee does not belong to this event" {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Str("attendee_id", attendeeID).Msg("failed to remove attendee")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 

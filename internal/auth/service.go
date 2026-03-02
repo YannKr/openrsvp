@@ -146,11 +146,6 @@ func (s *Service) VerifyMagicLink(ctx context.Context, rawToken string) (*AuthRe
 		return nil, ErrInvalidToken
 	}
 
-	// Mark the magic link as used.
-	if err := s.store.MarkMagicLinkUsed(ctx, ml.ID); err != nil {
-		return nil, fmt.Errorf("mark magic link used: %w", err)
-	}
-
 	// Generate a new session token.
 	sessionTokenBytes := make([]byte, 32)
 	if _, err := rand.Read(sessionTokenBytes); err != nil {
@@ -162,14 +157,30 @@ func (s *Service) VerifyMagicLink(ctx context.Context, rawToken string) (*AuthRe
 
 	expiresAt := time.Now().UTC().Add(s.cfg.SessionExpiry)
 
-	_, err = s.store.CreateSession(ctx, sessionHash, ml.OrganizerID, expiresAt)
+	// Wrap the critical operations in a transaction so that marking the magic
+	// link as used, creating the session, and fetching the organizer are atomic.
+	tx, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := s.store.MarkMagicLinkUsedTx(ctx, tx, ml.ID); err != nil {
+		return nil, fmt.Errorf("mark magic link used: %w", err)
+	}
+
+	_, err = s.store.CreateSessionTx(ctx, tx, sessionHash, ml.OrganizerID, expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 
-	organizer, err := s.store.FindOrganizerByID(ctx, ml.OrganizerID)
+	organizer, err := s.store.FindOrganizerByIDTx(ctx, tx, ml.OrganizerID)
 	if err != nil {
 		return nil, fmt.Errorf("find organizer: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return &AuthResponse{

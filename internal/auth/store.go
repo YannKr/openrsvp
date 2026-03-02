@@ -11,6 +11,13 @@ import (
 	"github.com/openrsvp/openrsvp/internal/database"
 )
 
+// executor is a minimal interface satisfied by both database.DB and *sql.Tx,
+// allowing store methods to run inside or outside a transaction.
+type executor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // Store handles database operations for authentication.
 type Store struct {
 	db database.DB
@@ -19,6 +26,11 @@ type Store struct {
 // NewStore creates a new auth Store.
 func NewStore(db database.DB) *Store {
 	return &Store{db: db}
+}
+
+// BeginTx starts a new database transaction.
+func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return s.db.BeginTx(ctx, nil)
 }
 
 // FindOrganizerByEmail retrieves an organizer by their email address.
@@ -33,7 +45,16 @@ func (s *Store) FindOrganizerByEmail(ctx context.Context, email string) (*Organi
 
 // FindOrganizerByID retrieves an organizer by their ID.
 func (s *Store) FindOrganizerByID(ctx context.Context, id string) (*Organizer, error) {
-	row := s.db.QueryRowContext(ctx,
+	return findOrganizerByID(ctx, s.db, id)
+}
+
+// FindOrganizerByIDTx retrieves an organizer by their ID within a transaction.
+func (s *Store) FindOrganizerByIDTx(ctx context.Context, tx *sql.Tx, id string) (*Organizer, error) {
+	return findOrganizerByID(ctx, tx, id)
+}
+
+func findOrganizerByID(ctx context.Context, exec executor, id string) (*Organizer, error) {
+	row := exec.QueryRowContext(ctx,
 		"SELECT id, email, name, timezone, created_at, updated_at FROM organizers WHERE id = ?",
 		id,
 	)
@@ -132,9 +153,18 @@ func (s *Store) FindMagicLinkByHash(ctx context.Context, tokenHash string) (*Mag
 
 // MarkMagicLinkUsed sets the used_at timestamp for a magic link.
 func (s *Store) MarkMagicLinkUsed(ctx context.Context, id string) error {
+	return markMagicLinkUsed(ctx, s.db, id)
+}
+
+// MarkMagicLinkUsedTx sets the used_at timestamp for a magic link within a transaction.
+func (s *Store) MarkMagicLinkUsedTx(ctx context.Context, tx *sql.Tx, id string) error {
+	return markMagicLinkUsed(ctx, tx, id)
+}
+
+func markMagicLinkUsed(ctx context.Context, exec executor, id string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := exec.ExecContext(ctx,
 		"UPDATE magic_links SET used_at = ? WHERE id = ?",
 		now, id,
 	)
@@ -147,11 +177,20 @@ func (s *Store) MarkMagicLinkUsed(ctx context.Context, id string) error {
 
 // CreateSession creates a new session and returns it.
 func (s *Store) CreateSession(ctx context.Context, tokenHash, organizerID string, expiresAt time.Time) (*Session, error) {
+	return createSession(ctx, s.db, tokenHash, organizerID, expiresAt)
+}
+
+// CreateSessionTx creates a new session within a transaction and returns it.
+func (s *Store) CreateSessionTx(ctx context.Context, tx *sql.Tx, tokenHash, organizerID string, expiresAt time.Time) (*Session, error) {
+	return createSession(ctx, tx, tokenHash, organizerID, expiresAt)
+}
+
+func createSession(ctx context.Context, exec executor, tokenHash, organizerID string, expiresAt time.Time) (*Session, error) {
 	id := uuid.Must(uuid.NewV7()).String()
 	now := time.Now().UTC().Format(time.RFC3339)
 	exp := expiresAt.UTC().Format(time.RFC3339)
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := exec.ExecContext(ctx,
 		"INSERT INTO sessions (id, token_hash, organizer_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
 		id, tokenHash, organizerID, exp, now,
 	)

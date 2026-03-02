@@ -83,7 +83,14 @@ func (s *Service) SendFromOrganizer(ctx context.Context, eventID, organizerID st
 
 	// Dispatch email notifications asynchronously.
 	if s.notifyAttendees != nil && req.RecipientType == "group" {
-		go s.notifyAttendees(context.Background(), eventID, req.RecipientID, req.Subject, req.Body)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Error().Interface("panic", r).Msg("recovered from panic in attendee notification goroutine")
+				}
+			}()
+			s.notifyAttendees(context.Background(), eventID, req.RecipientID, req.Subject, req.Body)
+		}()
 	}
 
 	return msg, nil
@@ -119,7 +126,14 @@ func (s *Service) SendFromAttendee(ctx context.Context, eventID, attendeeID stri
 		Msg("attendee message sent")
 
 	if s.notifyOrganizer != nil {
-		go s.notifyOrganizer(context.Background(), eventID, attendeeID, req.Subject, req.Body)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Error().Interface("panic", r).Msg("recovered from panic in organizer notification goroutine")
+				}
+			}()
+			s.notifyOrganizer(context.Background(), eventID, attendeeID, req.Subject, req.Body)
+		}()
 	}
 
 	return msg, nil

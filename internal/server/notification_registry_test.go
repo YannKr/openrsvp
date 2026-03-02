@@ -99,6 +99,22 @@ func TestBuildNotificationRegistryVonageSMS(t *testing.T) {
 	assert.False(t, r.Has(notification.ChannelEmail))
 }
 
+func TestBuildNotificationRegistrySNSSMS(t *testing.T) {
+	cfg := &config.Config{
+		NotificationSMSProvider: "sns",
+		SNSRegion:               "us-east-1",
+		SNSAccessKeyID:          "AKIAIOSFODNN7EXAMPLE",
+		SNSSecretAccessKey:      "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+	}
+
+	r := buildNotificationRegistry(cfg, zerolog.Nop())
+
+	smsProvider, err := r.Get(notification.ChannelSMS)
+	require.NoError(t, err)
+	assert.Equal(t, "sns", smsProvider.Name())
+	assert.False(t, r.Has(notification.ChannelEmail))
+}
+
 func TestBuildNotificationRegistryMissingConfigSkipsProvider(t *testing.T) {
 	cfg := &config.Config{
 		NotificationEmailProvider: "sendgrid",

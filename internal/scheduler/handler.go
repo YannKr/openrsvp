@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -27,19 +28,27 @@ type UpdateReminderRequest struct {
 	Message     *string `json:"message,omitempty"`
 }
 
+// EventOwnershipChecker verifies that the given organizer owns the event.
+// Returns nil if ownership is confirmed; a non-nil error otherwise.
+type EventOwnershipChecker func(ctx context.Context, eventID, organizerID string) error
+
 // Handler provides HTTP handlers for reminder endpoints.
 type Handler struct {
-	store          *ReminderStore
-	authMiddleware func(http.Handler) http.Handler
-	organizerFrom  OrganizerFromCtx
+	store           *ReminderStore
+	authMiddleware  func(http.Handler) http.Handler
+	organizerFrom   OrganizerFromCtx
+	checkEventOwner EventOwnershipChecker
+	logger          zerolog.Logger
 }
 
 // NewHandler creates a new reminder Handler.
-func NewHandler(store *ReminderStore, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx) *Handler {
+func NewHandler(store *ReminderStore, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, checkEventOwner EventOwnershipChecker, logger zerolog.Logger) *Handler {
 	return &Handler{
-		store:          store,
-		authMiddleware: authMiddleware,
-		organizerFrom:  organizerFrom,
+		store:           store,
+		authMiddleware:  authMiddleware,
+		organizerFrom:   organizerFrom,
+		checkEventOwner: checkEventOwner,
+		logger:          logger,
 	}
 }
 
@@ -59,13 +68,18 @@ func (h *Handler) Routes() chi.Router {
 }
 
 func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
 	}
 
 	eventID := chi.URLParam(r, "eventId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
 
 	var req CreateReminderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -112,7 +126,8 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Create(r.Context(), reminder); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to create reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -120,7 +135,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -128,9 +143,15 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	reminders, err := h.store.FindByEventID(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list reminders by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -142,7 +163,7 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -158,10 +179,16 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	reminder, err := h.store.FindByID(r.Context(), reminderID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to find reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 	if reminder == nil {
+		writeError(w, http.StatusNotFound, "not_found", "reminder not found")
+		return
+	}
+
+	if err := h.checkEventOwner(r.Context(), reminder.EventID, organizerID); err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "reminder not found")
 		return
 	}
@@ -200,7 +227,8 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Update(r.Context(), reminder); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to update reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -208,7 +236,7 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -216,12 +244,30 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 
 	reminderID := chi.URLParam(r, "reminderId")
 
+	// Fetch reminder to verify event ownership before cancelling.
+	reminder, err := h.store.FindByID(r.Context(), reminderID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to find reminder for cancel")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		return
+	}
+	if reminder == nil {
+		writeError(w, http.StatusNotFound, "not_found", "reminder not found or not in scheduled status")
+		return
+	}
+
+	if err := h.checkEventOwner(r.Context(), reminder.EventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "reminder not found or not in scheduled status")
+		return
+	}
+
 	if err := h.store.Cancel(r.Context(), reminderID); err != nil {
 		if err.Error() == "reminder not found or not in scheduled status" {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to cancel reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 

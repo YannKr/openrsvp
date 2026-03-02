@@ -12,26 +12,35 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
 type OrganizerFromCtx func(ctx context.Context) (id string, ok bool)
 
+// EventOwnershipChecker verifies that the given organizer owns the event.
+// Returns nil if ownership is confirmed; a non-nil error otherwise.
+type EventOwnershipChecker func(ctx context.Context, eventID, organizerID string) error
+
 // Handler holds HTTP handlers for invite card endpoints.
 type Handler struct {
-	service        *Service
-	authMiddleware func(http.Handler) http.Handler
-	organizerFrom  OrganizerFromCtx
-	uploadsDir     string
+	service         *Service
+	authMiddleware  func(http.Handler) http.Handler
+	organizerFrom   OrganizerFromCtx
+	uploadsDir      string
+	checkEventOwner EventOwnershipChecker
+	logger          zerolog.Logger
 }
 
 // NewHandler creates a new invite Handler.
-func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, uploadsDir string) *Handler {
+func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, uploadsDir string, checkEventOwner EventOwnershipChecker, logger zerolog.Logger) *Handler {
 	return &Handler{
-		service:        service,
-		authMiddleware: authMiddleware,
-		organizerFrom:  organizerFrom,
-		uploadsDir:     uploadsDir,
+		service:         service,
+		authMiddleware:  authMiddleware,
+		organizerFrom:   organizerFrom,
+		uploadsDir:      uploadsDir,
+		checkEventOwner: checkEventOwner,
+		logger:          logger,
 	}
 }
 
@@ -60,13 +69,18 @@ func (h *Handler) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetByEvent(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
 	}
 
 	eventID := chi.URLParam(r, "eventId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
 
 	card, err := h.service.GetByEventID(r.Context(), eventID)
 	if err != nil {
@@ -78,13 +92,18 @@ func (h *Handler) handleGetByEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleSave(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
 	}
 
 	eventID := chi.URLParam(r, "eventId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
 
 	var req SaveInviteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -102,7 +121,7 @@ func (h *Handler) handleSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handlePreview(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -110,9 +129,15 @@ func (h *Handler) handlePreview(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
 	card, err := h.service.GetPreview(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get invite preview")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
@@ -120,13 +145,18 @@ func (h *Handler) handlePreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUploadImage(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.organizerFrom(r.Context())
+	organizerID, ok := h.organizerFrom(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
 	}
 
 	eventID := chi.URLParam(r, "eventId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
 
 	// Limit request body to maxUploadSize.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)

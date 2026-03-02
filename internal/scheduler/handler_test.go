@@ -2,11 +2,13 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,6 +25,20 @@ func schedOrgFromCtx() OrganizerFromCtx {
 			return "", false
 		}
 		return org.ID, true
+	}
+}
+
+// makeCheckEventOwner returns an EventOwnershipChecker backed by the given event service.
+func makeCheckEventOwner(eventSvc *event.Service) EventOwnershipChecker {
+	return func(ctx context.Context, eventID, organizerID string) error {
+		ev, err := eventSvc.GetByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if ev.OrganizerID != organizerID {
+			return fmt.Errorf("event not found")
+		}
+		return nil
 	}
 }
 
@@ -50,7 +66,7 @@ func setupSchedulerHandler(t *testing.T) (http.Handler, *ReminderStore, *auth.Or
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(store, authMW, schedOrgFromCtx())
+	handler := NewHandler(store, authMW, schedOrgFromCtx(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 
 	return handler.Routes(), store, org, ev.ID
 }
@@ -74,7 +90,7 @@ func setupSchedulerHandlerNoAuth(t *testing.T) (http.Handler, string) {
 	require.NoError(t, err)
 
 	store := NewReminderStore(db)
-	handler := NewHandler(store, testutil.NoAuthMiddleware(), schedOrgFromCtx())
+	handler := NewHandler(store, testutil.NoAuthMiddleware(), schedOrgFromCtx(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), ev.ID
 }
 

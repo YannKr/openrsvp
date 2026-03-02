@@ -61,6 +61,17 @@ func buildNotificationRegistry(cfg *config.Config, logger zerolog.Logger) *notif
 			break
 		}
 		registry.Register(sms.NewVonageProvider(cfg.VonageAPIKey, cfg.VonageAPISecret, cfg.VonageFrom))
+	case "sns":
+		if cfg.SNSRegion == "" || cfg.SNSAccessKeyID == "" || cfg.SNSSecretAccessKey == "" {
+			logger.Warn().Msg("sms provider sns selected but SNS_SMS_REGION/SNS_SMS_ACCESS_KEY_ID/SNS_SMS_SECRET_ACCESS_KEY is missing")
+			break
+		}
+		snsProvider, err := sms.NewSNSProvider(cfg.SNSRegion, cfg.SNSAccessKeyID, cfg.SNSSecretAccessKey)
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to initialize sns provider")
+			break
+		}
+		registry.Register(snsProvider)
 	default:
 		logger.Warn().Str("provider", cfg.NotificationSMSProvider).Msg("unknown sms provider; no sms provider registered")
 	}
