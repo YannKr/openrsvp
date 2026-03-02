@@ -16,6 +16,7 @@ const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 type Service struct {
 	store            *Store
 	defaultRetention int
+	smsEnabled       bool
 	onPublish        func(ctx context.Context, e *Event)
 	onDuplicate      func(ctx context.Context, srcEventID, newEventID string)
 }
@@ -38,6 +39,12 @@ func (s *Service) SetOnPublish(fn func(ctx context.Context, e *Event)) {
 // successfully duplicated. This is used to copy the invite card design.
 func (s *Service) SetOnDuplicate(fn func(ctx context.Context, srcEventID, newEventID string)) {
 	s.onDuplicate = fn
+}
+
+// SetSMSEnabled sets whether SMS notifications are available. When disabled,
+// phone-only contact requirement is rejected.
+func (s *Service) SetSMSEnabled(enabled bool) {
+	s.smsEnabled = enabled
 }
 
 // Create validates the request and creates a new event for the given organizer.
@@ -78,6 +85,10 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 			return nil, fmt.Errorf("invalid contactRequirement: must be email, phone, email_or_phone, or email_and_phone")
 		}
 		contactRequirement = *req.ContactRequirement
+	}
+
+	if !s.smsEnabled && contactRequirement == "phone" {
+		return nil, fmt.Errorf("phone-only contact requirement is not available when SMS is disabled")
 	}
 
 	shareToken, err := generateBase62Token(8)
@@ -196,6 +207,10 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 		e.ContactRequirement = *req.ContactRequirement
 	}
 
+	if !s.smsEnabled && e.ContactRequirement == "phone" {
+		return nil, fmt.Errorf("phone-only contact requirement is not available when SMS is disabled")
+	}
+
 	if err := s.store.Update(ctx, e); err != nil {
 		return nil, err
 	}
@@ -298,6 +313,11 @@ func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*
 		return nil, fmt.Errorf("generate share token: %w", err)
 	}
 
+	contactReq := e.ContactRequirement
+	if !s.smsEnabled && contactReq == "phone" {
+		contactReq = "email_or_phone"
+	}
+
 	newEvent := &Event{
 		ID:                 uuid.Must(uuid.NewV7()).String(),
 		OrganizerID:        organizerID,
@@ -308,7 +328,7 @@ func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*
 		Location:           e.Location,
 		Timezone:           e.Timezone,
 		RetentionDays:      e.RetentionDays,
-		ContactRequirement: e.ContactRequirement,
+		ContactRequirement: contactReq,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}

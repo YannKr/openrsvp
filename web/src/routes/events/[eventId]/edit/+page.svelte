@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
+	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import { toISOLocal } from '$lib/utils/dates';
 	import { getTimezoneOptions } from '$lib/utils/timezones';
 	import type { Event } from '$lib/types';
@@ -38,11 +39,18 @@
 		{ value: 'email_and_phone', label: 'Email and Phone (both required)' }
 	];
 
+	const filteredContactOptions = $derived(
+		$smsEnabled
+			? contactRequirementOptions
+			: contactRequirementOptions.filter(o => o.value !== 'phone')
+	);
+
 	let errors: Record<string, string> = $state({});
 
 	let tzOptions = getTimezoneOptions();
 
 	onMount(async () => {
+		loadAppConfig();
 		try {
 			const result = await api.get<{ data: Event }>(`/events/${eventId}`);
 			const e = result.data;
@@ -183,7 +191,7 @@
 						label="RSVP Contact Requirement"
 						name="contactRequirement"
 						bind:value={contactRequirement}
-						options={contactRequirementOptions}
+						options={filteredContactOptions}
 					/>
 
 					<div class="pt-2">

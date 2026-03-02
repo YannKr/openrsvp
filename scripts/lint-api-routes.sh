@@ -44,6 +44,15 @@ extract_routes() {
   extract_routes message   /messages
   extract_routes scheduler /reminders
   extract_routes feedback  /feedback
+
+  # Inline routes defined directly in router.go (not via handler.go).
+  grep -E 'api\.(Get|Post|Put|Patch|Delete)\("/' "$ROOT/internal/server/router.go" 2>/dev/null | while IFS= read -r line; do
+    method=$(echo "$line" | sed -E 's/.*api\.(Get|Post|Put|Patch|Delete)\(.*/\1/' | tr '[:upper:]' '[:lower:]')
+    route=$(echo "$line" | sed -E 's/.*api\.(Get|Post|Put|Patch|Delete)\("([^"]+)".*/\2/')
+    [ -z "$method" ] || [ -z "$route" ] && continue
+    norm=$(echo "$route" | sed -E 's/\{[^}]+\}/:p/g')
+    echo "${method} ${norm}"
+  done
 } | sort -u > "$BACKEND_FILE"
 
 backend_count=$(wc -l < "$BACKEND_FILE" | tr -d ' ')

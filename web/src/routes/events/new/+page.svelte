@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { currentUser } from '$lib/stores/auth';
 	import { toast } from '$lib/stores/toast';
+	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import { toISOLocal } from '$lib/utils/dates';
 	import { getTimezoneOptions, getTimezoneLabel } from '$lib/utils/timezones';
 	import type { Event } from '$lib/types';
@@ -41,6 +43,16 @@
 		{ value: 'phone', label: 'Phone only' },
 		{ value: 'email_and_phone', label: 'Email and Phone (both required)' }
 	];
+
+	const filteredContactOptions = $derived(
+		$smsEnabled
+			? contactRequirementOptions
+			: contactRequirementOptions.filter(o => o.value !== 'phone')
+	);
+
+	onMount(() => {
+		loadAppConfig();
+	});
 
 	// Validation errors
 	let errors: Record<string, string> = $state({});
@@ -206,7 +218,7 @@
 						label="RSVP Contact Requirement"
 						name="contactRequirement"
 						bind:value={contactRequirement}
-						options={contactRequirementOptions}
+						options={filteredContactOptions}
 					/>
 
 					<div class="pt-2">

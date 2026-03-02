@@ -90,9 +90,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	inviteService := invite.NewService(inviteStore, uploadsDir)
 	inviteHandler := invite.NewHandler(inviteService, authMiddleware, invite.OrganizerFromCtx(organizerFromCtx), uploadsDir, invite.EventOwnershipChecker(checkEventOwner), logger)
 
+	// Configure SMS availability on event service.
+	eventService.SetSMSEnabled(cfg.SMSEnabled())
+
 	// Wire up RSVP layer.
 	rsvpStore := rsvp.NewStore(db)
 	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService)
+	rsvpService.SetSMSEnabled(cfg.SMSEnabled())
 	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx), rsvp.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire up notification layer.

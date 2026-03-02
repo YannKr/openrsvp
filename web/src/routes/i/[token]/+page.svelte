@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
+	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import type { Event, InviteCard, ApiError } from '$lib/types';
 	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
 
@@ -31,6 +32,7 @@
 	const token = $derived($page.params.token);
 
 	onMount(async () => {
+		await loadAppConfig();
 		try {
 			const result = await api.get<{ data: PublicInviteData }>(`/rsvp/public/${token}`);
 			eventData = result.data.event;
@@ -48,8 +50,12 @@
 	});
 
 	const contactReq = $derived(eventData?.contactRequirement ?? 'email_or_phone');
-	const emailRequired = $derived(contactReq === 'email' || contactReq === 'email_and_phone');
-	const phoneRequired = $derived(contactReq === 'phone' || contactReq === 'email_and_phone');
+	const emailRequired = $derived(
+		!$smsEnabled || contactReq === 'email' || contactReq === 'email_and_phone' || contactReq === 'email_or_phone'
+	);
+	const phoneRequired = $derived(
+		$smsEnabled && (contactReq === 'phone' || contactReq === 'email_and_phone')
+	);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -64,6 +70,12 @@
 
 		const hasEmail = !!email.trim();
 		const hasPhone = !!phone.trim();
+
+		// When SMS is disabled, email is always required.
+		if (!$smsEnabled && !hasEmail) {
+			submitError = 'Email is required.';
+			return;
+		}
 
 		if (contactReq === 'email' && !hasEmail) {
 			submitError = 'Email is required.';
@@ -260,8 +272,6 @@
 								Email Address
 								{#if emailRequired}
 									<span class="text-red-500">*</span>
-								{:else if contactReq === 'email_or_phone'}
-									<span class="text-slate-400 font-normal">(email or phone required)</span>
 								{:else}
 									<span class="text-slate-400 font-normal">(optional)</span>
 								{/if}
@@ -282,8 +292,6 @@
 								Phone Number
 								{#if phoneRequired}
 									<span class="text-red-500">*</span>
-								{:else if contactReq === 'email_or_phone'}
-									<span class="text-slate-400 font-normal">(email or phone required)</span>
 								{:else}
 									<span class="text-slate-400 font-normal">(optional)</span>
 								{/if}

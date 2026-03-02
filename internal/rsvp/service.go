@@ -25,6 +25,7 @@ type Service struct {
 	eventService  *event.Service
 	inviteService *invite.Service
 	notifyRSVP    NotifyRSVPFunc
+	smsEnabled    bool
 }
 
 // NewService creates a new RSVP Service.
@@ -39,6 +40,12 @@ func NewService(store *Store, eventService *event.Service, inviteService *invite
 // SetNotifyRSVP registers the function that sends RSVP confirmation emails.
 func (s *Service) SetNotifyRSVP(fn NotifyRSVPFunc) {
 	s.notifyRSVP = fn
+}
+
+// SetSMSEnabled sets whether SMS notifications are available. When disabled,
+// email is always required on RSVP submissions.
+func (s *Service) SetSMSEnabled(enabled bool) {
+	s.smsEnabled = enabled
 }
 
 // PublicInviteData holds the combined event and invite data for the public invite page.
@@ -99,6 +106,9 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	if req.ContactMethod != "email" && req.ContactMethod != "sms" {
 		return nil, fmt.Errorf("invalid contactMethod: must be email or sms")
 	}
+	if !s.smsEnabled && req.ContactMethod == "sms" {
+		return nil, fmt.Errorf("sms contact method is not available when SMS is disabled")
+	}
 	if req.RSVPStatus == "declined" {
 		req.PlusOnes = 0
 	}
@@ -135,6 +145,11 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		if !hasEmail && !hasPhone {
 			return nil, fmt.Errorf("email or phone is required")
 		}
+	}
+
+	// When SMS is disabled, email is always required regardless of contact requirement.
+	if !s.smsEnabled && !hasEmail {
+		return nil, fmt.Errorf("email is required")
 	}
 
 	// Check for existing attendee (deduplicate by email or phone).

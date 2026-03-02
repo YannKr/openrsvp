@@ -263,6 +263,7 @@ func TestCreateEventInvalidContactRequirement(t *testing.T) {
 
 func TestUpdateEventContactRequirement(t *testing.T) {
 	svc, authStore := setupEvent(t)
+	svc.SetSMSEnabled(true)
 	org := createOrganizer(t, authStore)
 	ctx := context.Background()
 

@@ -88,6 +88,7 @@ func TestSubmitRSVPDuplicateEmail(t *testing.T) {
 
 func TestSubmitRSVPDuplicatePhone(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
+	svc.SetSMSEnabled(true)
 	ctx := context.Background()
 
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
@@ -359,6 +360,8 @@ func TestSubmitRSVPContactRequirementEmail(t *testing.T) {
 
 func TestSubmitRSVPContactRequirementPhone(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
+	svc.SetSMSEnabled(true)
+	eventSvc.SetSMSEnabled(true)
 	ctx := context.Background()
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
 	require.NoError(t, err)
@@ -380,6 +383,7 @@ func TestSubmitRSVPContactRequirementPhone(t *testing.T) {
 
 func TestSubmitRSVPContactRequirementBoth(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
+	svc.SetSMSEnabled(true)
 	ctx := context.Background()
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
 	require.NoError(t, err)
@@ -408,6 +412,7 @@ func TestSubmitRSVPContactRequirementBoth(t *testing.T) {
 
 func TestSubmitRSVPContactRequirementEmailOrPhone(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
+	svc.SetSMSEnabled(true)
 	ctx := context.Background()
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
 	require.NoError(t, err)

@@ -50,6 +50,16 @@ func (s *Server) routes() *chi.Mux {
 
 		api.Get("/health", s.handleHealth)
 
+		// Public app config (non-sensitive feature flags).
+		api.Get("/config", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"smsEnabled": s.cfg.SMSEnabled(),
+				},
+			})
+		})
+
 		// Auth routes with stricter rate limiting (10/min).
 		api.Route("/auth", func(auth chi.Router) {
 			auth.Use(security.RateLimitMiddleware(s.securityMw.AuthRateLimiter))

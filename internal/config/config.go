@@ -160,6 +160,11 @@ func (c *Config) IsDevelopment() bool {
 	return c.Env == "development"
 }
 
+// SMSEnabled returns true if an SMS notification provider is configured.
+func (c *Config) SMSEnabled() bool {
+	return c.NotificationSMSProvider != ""
+}
+
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok && value != "" {
 		return value
