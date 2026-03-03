@@ -69,7 +69,7 @@ func Load() (*Config, error) {
 	env := getEnv("ENV", "development")
 
 	dbDriver := getEnv("DB_DRIVER", "sqlite")
-	dbDSN := getEnv("DB_DSN", "openrsvp.db")
+	dbDSN := getEnv("DB_DSN", "/data/openrsvp.db")
 
 	if dbDriver != "sqlite" && dbDriver != "postgres" {
 		return nil, fmt.Errorf("unsupported DB_DRIVER: %s (must be sqlite or postgres)", dbDriver)
@@ -147,7 +147,7 @@ func Load() (*Config, error) {
 		FeedbackGitHubRepo:  getEnv("FEEDBACK_GITHUB_REPO", ""),
 		FeedbackEmail:       getEnv("FEEDBACK_EMAIL", ""),
 
-		UploadsDir: getEnv("UPLOADS_DIR", "./uploads"),
+		UploadsDir: getEnv("UPLOADS_DIR", "/data/uploads"),
 
 		DefaultRetentionDays: retentionDays,
 	}

@@ -108,7 +108,8 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `PORT` | `8080` | Server port |
 | `ENV` | `development` | Environment (`development` or `production`) |
 | `DB_DRIVER` | `sqlite` | Database driver (`sqlite` or `postgres`) |
-| `DB_DSN` | `openrsvp.db` | Database connection string |
+| `DB_DSN` | `/data/openrsvp.db` | Database connection string |
+| `UPLOADS_DIR` | `/data/uploads` | Directory for uploaded files |
 | `BASE_URL` | `http://localhost:8080` | Public URL for magic links and invites |
 | `NOTIFICATION_EMAIL_PROVIDER` | `smtp` | Email provider (`smtp`, `sendgrid`, `ses`) |
 | `DEFAULT_RETENTION_DAYS` | `30` | Days after event to auto-delete data |
