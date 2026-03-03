@@ -349,6 +349,27 @@
 					{/if}
 				</div>
 			</div>
+			{#if event.showHeadcount || event.showGuestList}
+				<div class="mt-4 pt-4 border-t border-slate-200">
+					<div class="flex items-center gap-2">
+						<svg class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+							<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+						</svg>
+						<p class="text-xs text-slate-500">
+							Public visibility:
+							{#if event.showHeadcount && event.showGuestList}
+								attendance count and guest names
+							{:else if event.showHeadcount}
+								attendance count
+							{:else}
+								guest names
+							{/if}
+							<a href="/events/{eventId}/edit" class="text-indigo-500 hover:text-indigo-600 underline underline-offset-2 ml-1">Edit</a>
+						</p>
+					</div>
+				</div>
+			{/if}
 			{#if event.shareToken}
 				<div class="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
 					<p class="text-xs text-slate-500">

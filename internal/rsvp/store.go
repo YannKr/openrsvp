@@ -169,6 +169,45 @@ func (s *Store) GetStats(ctx context.Context, eventID string) (*RSVPStats, error
 	return stats, nil
 }
 
+// GetPublicAttendance returns the headcount (attendees + plus_ones) and the
+// sorted list of names for attending guests. Only guests with rsvp_status =
+// 'attending' are included.
+func (s *Store) GetPublicAttendance(ctx context.Context, eventID string) (int, []string, error) {
+	// Headcount: count of attending attendees + sum of their plus_ones.
+	var headcount int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(1 + plus_ones), 0) FROM attendees WHERE event_id = ? AND rsvp_status = 'attending'`, eventID,
+	).Scan(&headcount)
+	if err != nil {
+		return 0, nil, fmt.Errorf("get public attendance headcount: %w", err)
+	}
+
+	// Names: sorted list of attending guest names.
+	// Cap the number of names returned to prevent excessively large responses.
+	const maxPublicNames = 500
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT name FROM attendees WHERE event_id = ? AND rsvp_status = 'attending' ORDER BY name ASC LIMIT ?`, eventID, maxPublicNames,
+	)
+	if err != nil {
+		return 0, nil, fmt.Errorf("get public attendance names: %w", err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return 0, nil, fmt.Errorf("scan attendance name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, nil, fmt.Errorf("iterate attendance names: %w", err)
+	}
+
+	return headcount, names, nil
+}
+
 // scanAttendee scans a single sql.Row into an Attendee.
 func scanAttendee(row *sql.Row) (*Attendee, error) {
 	var a Attendee

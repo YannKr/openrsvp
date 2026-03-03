@@ -167,7 +167,7 @@ func TestGetPublicInvite(t *testing.T) {
 
 	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
 	require.NoError(t, err)
-	assert.Equal(t, ev.ID, data.Event.ID)
+	assert.Equal(t, ev.Title, data.Event.Title)
 	assert.NotNil(t, data.Invite)
 	assert.Equal(t, "balloon-party", data.Invite.TemplateID)
 }
@@ -556,6 +556,180 @@ func TestLookupRSVPByEmailUnpublished(t *testing.T) {
 	_, err = svc.LookupRSVPByEmail(ctx, ev.ShareToken, "alice@example.com")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "event not found")
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestGetPublicAttendanceNoAttendees(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	require.NotNil(t, data.Attendance)
+	assert.Equal(t, 0, data.Attendance.Headcount)
+	assert.Empty(t, data.Attendance.Names)
+}
+
+func TestGetPublicAttendanceWithAttendees(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 2,
+	})
+	require.NoError(t, err)
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", Email: strPtr("carol@example.com"), RSVPStatus: "declined",
+	})
+	require.NoError(t, err)
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Dave", Email: strPtr("dave@example.com"), RSVPStatus: "maybe",
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	require.NotNil(t, data.Attendance)
+	// Headcount = Alice(1+2) + Bob(1+1) = 5 (only attending)
+	assert.Equal(t, 5, data.Attendance.Headcount)
+	// Names = only attending, sorted alphabetically
+	assert.Equal(t, []string{"Alice", "Bob"}, data.Attendance.Names)
+}
+
+func TestGetPublicAttendanceHeadcountOnly(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	require.NotNil(t, data.Attendance)
+	assert.Equal(t, 1, data.Attendance.Headcount)
+	assert.Nil(t, data.Attendance.Names)
+}
+
+func TestGetPublicAttendanceGuestListOnly(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	require.NotNil(t, data.Attendance)
+	assert.Equal(t, 0, data.Attendance.Headcount)
+	assert.Equal(t, []string{"Alice"}, data.Attendance.Names)
+}
+
+func TestGetPublicAttendanceDisabled(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Both visibility flags off (default).
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	assert.Nil(t, data.Attendance)
+}
+
+func TestGetByTokenWithEventIncludesAttendance(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+
+	result, err := svc.GetByTokenWithEvent(ctx, attendee.RSVPToken)
+	require.NoError(t, err)
+	require.NotNil(t, result.Attendance)
+	assert.Equal(t, 2, result.Attendance.Headcount) // 1 + 1 plus one
+	assert.Equal(t, []string{"Alice"}, result.Attendance.Names)
 }
 
 func TestRemoveAttendeeWrongEvent(t *testing.T) {

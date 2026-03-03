@@ -18,6 +18,8 @@ export interface Event {
 	timezone: string;
 	retentionDays: number;
 	contactRequirement: 'email' | 'phone' | 'email_or_phone' | 'email_and_phone';
+	showHeadcount: boolean;
+	showGuestList: boolean;
 	status: 'draft' | 'published' | 'cancelled' | 'archived';
 	shareToken: string;
 	createdAt: string;
@@ -87,6 +89,21 @@ export interface RSVPStats {
 	pending: number;
 	total: number;
 	totalHeadcount: number;
+}
+
+export interface PublicEvent {
+	title: string;
+	description: string;
+	eventDate: string;
+	endDate?: string;
+	location: string;
+	timezone: string;
+	contactRequirement: 'email' | 'phone' | 'email_or_phone' | 'email_and_phone';
+}
+
+export interface PublicAttendance {
+	headcount: number;
+	names?: string[];
 }
 
 export interface ApiError {

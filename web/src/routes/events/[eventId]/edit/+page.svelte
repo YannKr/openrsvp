@@ -29,6 +29,8 @@
 	let timezone = $state('');
 	let description = $state('');
 	let contactRequirement = $state('email_or_phone');
+	let showHeadcount = $state(false);
+	let showGuestList = $state(false);
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
 
@@ -62,6 +64,8 @@
 			tzOptions = getTimezoneOptions(e.timezone);
 			description = e.description;
 			contactRequirement = e.contactRequirement || 'email_or_phone';
+			showHeadcount = e.showHeadcount ?? false;
+			showGuestList = e.showGuestList ?? false;
 			retentionDays = String(e.retentionDays);
 			showRetention = e.retentionDays !== 30;
 		} catch (err: unknown) {
@@ -98,6 +102,8 @@
 				timezone,
 				description: description.trim(),
 				contactRequirement,
+				showHeadcount,
+				showGuestList,
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
@@ -193,6 +199,29 @@
 						bind:value={contactRequirement}
 						options={filteredContactOptions}
 					/>
+
+					<fieldset class="pt-2">
+						<legend class="text-sm font-medium text-slate-700 mb-3">Guest Visibility</legend>
+						<p class="text-xs text-slate-400 mb-3">Control what attendance info is shown on the public invite page.</p>
+						<div class="space-y-2">
+							<label class="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									bind:checked={showHeadcount}
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+								/>
+								<span class="text-sm text-slate-700">Show attendance count</span>
+							</label>
+							<label class="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									bind:checked={showGuestList}
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+								/>
+								<span class="text-sm text-slate-700">Show guest names</span>
+							</label>
+						</div>
+					</fieldset>
 
 					<div class="pt-2">
 						{#if showRetention}

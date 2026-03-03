@@ -3,18 +3,26 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
-	import type { Event, InviteCard, ApiError } from '$lib/types';
+	import type { PublicEvent, InviteCard, PublicAttendance, ApiError } from '$lib/types';
 	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
 
 	interface PublicInviteData {
-		event: Event;
+		event: PublicEvent;
 		invite: InviteCard;
+		attendance?: PublicAttendance;
 	}
 
 	let loading = $state(true);
 	let error = $state('');
-	let eventData = $state<Event | null>(null);
+	let eventData = $state<PublicEvent | null>(null);
 	let inviteData = $state<InviteCard | null>(null);
+	let attendance = $state<PublicAttendance | null>(null);
+	let showAllNames = $state(false);
+	const displayNames = $derived(
+		attendance?.names
+			? (showAllNames ? attendance.names : attendance.names.slice(0, 50))
+			: []
+	);
 
 	// RSVP form state
 	let name = $state('');
@@ -37,6 +45,7 @@
 			const result = await api.get<{ data: PublicInviteData }>(`/rsvp/public/${token}`);
 			eventData = result.data.event;
 			inviteData = result.data.invite;
+			attendance = result.data.attendance ?? null;
 		} catch (err) {
 			const apiErr = err as ApiError;
 			if (apiErr.status === 404) {
@@ -108,6 +117,14 @@
 			});
 			rsvpToken = result.data.rsvpToken;
 			submitted = true;
+
+			// Re-fetch invite data to update attendance display.
+			try {
+				const refreshed = await api.get<{ data: PublicInviteData }>(`/rsvp/public/${token}`);
+				attendance = refreshed.data.attendance ?? null;
+			} catch {
+				// Non-critical; attendance display will use previous data.
+			}
 		} catch (err) {
 			const apiErr = err as ApiError;
 			submitError = apiErr.message || 'Failed to submit RSVP. Please try again.';
@@ -196,6 +213,57 @@
 				customData={typeof inviteData.customData === 'string' ? inviteData.customData : JSON.stringify(inviteData.customData || {})}
 			/>
 		</div>
+
+		<!-- Attendance Display -->
+		{#if attendance && (attendance.headcount > 0 || (attendance.names && attendance.names.length > 0))}
+			{#if !(submitted && rsvpStatus === 'declined')}
+				<div class="w-full max-w-lg mb-8">
+					<div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow border border-slate-200/60 p-5">
+						{#if attendance.headcount > 0}
+							<div class="flex items-center gap-2 text-sm text-slate-700">
+								<svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+								</svg>
+								<span class="font-medium">{attendance.headcount} {attendance.headcount === 1 ? 'person' : 'people'} attending</span>
+							</div>
+						{/if}
+						{#if attendance.names && attendance.names.length > 0}
+							<div class="mt-3 flex flex-wrap gap-2">
+								{#each displayNames as guestName}
+									<span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 border border-indigo-100">
+										{guestName}
+									</span>
+								{/each}
+								{#if !showAllNames && attendance.names.length > 50}
+									<button
+										type="button"
+										class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 transition-colors"
+										onclick={() => (showAllNames = true)}
+									>
+										+{attendance.names.length - 50} more
+									</button>
+								{/if}
+								{#if showAllNames && attendance.names.length > 50}
+									<button
+										type="button"
+										class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 transition-colors"
+										onclick={() => (showAllNames = false)}
+									>
+										Show less
+									</button>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		{:else if attendance && attendance.headcount === 0 && !(submitted && rsvpStatus === 'declined')}
+			<div class="w-full max-w-lg mb-8">
+				<div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow border border-slate-200/60 p-5">
+					<p class="text-sm text-slate-500 text-center">Be the first to RSVP!</p>
+				</div>
+			</div>
+		{/if}
 
 		<!-- RSVP Form or Success -->
 		{#if submitted}

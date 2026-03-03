@@ -16,6 +16,8 @@ type Event struct {
 	Status        string     `json:"status"`
 	ShareToken         string     `json:"shareToken"`
 	ContactRequirement string     `json:"contactRequirement"`
+	ShowHeadcount      bool       `json:"showHeadcount"`
+	ShowGuestList      bool       `json:"showGuestList"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
@@ -30,6 +32,38 @@ type CreateEventRequest struct {
 	Timezone           string  `json:"timezone"`
 	RetentionDays      *int    `json:"retentionDays,omitempty"`
 	ContactRequirement *string `json:"contactRequirement,omitempty"`
+	ShowHeadcount      *bool   `json:"showHeadcount,omitempty"`
+	ShowGuestList      *bool   `json:"showGuestList,omitempty"`
+}
+
+// PublicEvent is a stripped-down event representation for unauthenticated
+// public endpoints. It omits internal fields (organizer ID, retention config,
+// share token, visibility toggles, status, timestamps) to avoid leaking
+// information to anonymous visitors.
+type PublicEvent struct {
+	Title              string  `json:"title"`
+	Description        string  `json:"description"`
+	EventDate          string  `json:"eventDate"`
+	EndDate            string  `json:"endDate,omitempty"`
+	Location           string  `json:"location"`
+	Timezone           string  `json:"timezone"`
+	ContactRequirement string  `json:"contactRequirement"`
+}
+
+// ToPublic converts an Event to a PublicEvent, stripping internal fields.
+func (e *Event) ToPublic() *PublicEvent {
+	p := &PublicEvent{
+		Title:              e.Title,
+		Description:        e.Description,
+		EventDate:          e.EventDate.Format("2006-01-02T15:04:05Z07:00"),
+		Location:           e.Location,
+		Timezone:           e.Timezone,
+		ContactRequirement: e.ContactRequirement,
+	}
+	if e.EndDate != nil {
+		p.EndDate = e.EndDate.Format("2006-01-02T15:04:05Z07:00")
+	}
+	return p
 }
 
 // UpdateEventRequest is the request body for updating an existing event.
@@ -42,4 +76,6 @@ type UpdateEventRequest struct {
 	Timezone           *string `json:"timezone,omitempty"`
 	RetentionDays      *int    `json:"retentionDays,omitempty"`
 	ContactRequirement *string `json:"contactRequirement,omitempty"`
+	ShowHeadcount      *bool   `json:"showHeadcount,omitempty"`
+	ShowGuestList      *bool   `json:"showGuestList,omitempty"`
 }

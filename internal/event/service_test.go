@@ -397,6 +397,90 @@ func TestDuplicateEventForbidden(t *testing.T) {
 	assert.Contains(t, err.Error(), "forbidden")
 }
 
+func boolPtr(b bool) *bool { return &b }
+
+func TestCreateEventDefaultVisibility(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.False(t, ev.ShowHeadcount)
+	assert.False(t, ev.ShowGuestList)
+}
+
+func TestCreateEventWithVisibility(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	assert.True(t, ev.ShowHeadcount)
+	assert.True(t, ev.ShowGuestList)
+
+	// Verify persistence.
+	found, err := svc.GetByID(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.True(t, found.ShowHeadcount)
+	assert.True(t, found.ShowGuestList)
+}
+
+func TestUpdateEventVisibility(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.False(t, ev.ShowHeadcount)
+
+	updated, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		ShowHeadcount: boolPtr(true),
+	})
+	require.NoError(t, err)
+	assert.True(t, updated.ShowHeadcount)
+	assert.False(t, updated.ShowGuestList)
+
+	updated2, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+	assert.True(t, updated2.ShowHeadcount)
+	assert.True(t, updated2.ShowGuestList)
+}
+
+func TestDuplicateEventCopiesVisibility(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: boolPtr(true),
+		ShowGuestList: boolPtr(true),
+	})
+	require.NoError(t, err)
+
+	dup, err := svc.Duplicate(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+	assert.True(t, dup.ShowHeadcount)
+	assert.True(t, dup.ShowGuestList)
+}
+
 func TestDeleteEvent(t *testing.T) {
 	svc, authStore := setupEvent(t)
 	org := createOrganizer(t, authStore)

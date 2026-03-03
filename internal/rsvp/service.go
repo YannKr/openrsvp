@@ -48,10 +48,19 @@ func (s *Service) SetSMSEnabled(enabled bool) {
 	s.smsEnabled = enabled
 }
 
+// PublicAttendance holds the attendance data visible on the public invite page.
+type PublicAttendance struct {
+	Headcount int      `json:"headcount"`
+	Names     []string `json:"names,omitempty"`
+}
+
 // PublicInviteData holds the combined event and invite data for the public invite page.
+// It uses PublicEvent to avoid leaking internal fields (organizer ID, retention
+// config, share token, visibility toggles, status, timestamps).
 type PublicInviteData struct {
-	Event  *event.Event       `json:"event"`
-	Invite *invite.InviteCard `json:"invite"`
+	Event      *event.PublicEvent `json:"event"`
+	Invite     *invite.InviteCard `json:"invite"`
+	Attendance *PublicAttendance   `json:"attendance,omitempty"`
 }
 
 // GetPublicInvite retrieves event and invite card data by share token for the
@@ -81,10 +90,27 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 		}
 	}
 
-	return &PublicInviteData{
-		Event:  ev,
+	data := &PublicInviteData{
+		Event:  ev.ToPublic(),
 		Invite: card,
-	}, nil
+	}
+
+	if ev.ShowHeadcount || ev.ShowGuestList {
+		headcount, names, err := s.store.GetPublicAttendance(ctx, ev.ID)
+		if err != nil {
+			return nil, fmt.Errorf("get public attendance: %w", err)
+		}
+		attendance := &PublicAttendance{}
+		if ev.ShowHeadcount {
+			attendance.Headcount = headcount
+		}
+		if ev.ShowGuestList {
+			attendance.Names = names
+		}
+		data.Attendance = attendance
+	}
+
+	return data, nil
 }
 
 // SubmitRSVP processes an RSVP submission for an event identified by its share
@@ -234,9 +260,11 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 }
 
 // RsvpWithEvent bundles an attendee with their event for the public RSVP page.
+// It uses PublicEvent to avoid leaking internal fields to unauthenticated users.
 type RsvpWithEvent struct {
-	Attendee *Attendee    `json:"attendee"`
-	Event    *event.Event `json:"event"`
+	Attendee   *Attendee            `json:"attendee"`
+	Event      *event.PublicEvent   `json:"event"`
+	Attendance *PublicAttendance     `json:"attendance,omitempty"`
 }
 
 // GetByToken retrieves an attendee by their RSVP token.
@@ -266,10 +294,27 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 		return nil, fmt.Errorf("event not found")
 	}
 
-	return &RsvpWithEvent{
+	result := &RsvpWithEvent{
 		Attendee: a,
-		Event:    ev,
-	}, nil
+		Event:    ev.ToPublic(),
+	}
+
+	if ev.ShowHeadcount || ev.ShowGuestList {
+		headcount, names, err := s.store.GetPublicAttendance(ctx, a.EventID)
+		if err != nil {
+			return nil, fmt.Errorf("get public attendance: %w", err)
+		}
+		attendance := &PublicAttendance{}
+		if ev.ShowHeadcount {
+			attendance.Headcount = headcount
+		}
+		if ev.ShowGuestList {
+			attendance.Names = names
+		}
+		result.Attendance = attendance
+	}
+
+	return result, nil
 }
 
 // UpdateByToken applies partial updates to an RSVP identified by its token.

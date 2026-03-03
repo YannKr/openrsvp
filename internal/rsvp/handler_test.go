@@ -149,6 +149,141 @@ func TestHandleGetPublicInvite_NotFound(t *testing.T) {
 	assert.Equal(t, "not_found", body["error"])
 }
 
+func TestHandleGetPublicInvite_NoSensitiveFieldsLeaked(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/"+shareToken, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+
+	ev, ok := data["event"].(map[string]any)
+	require.True(t, ok, "event should be a map")
+
+	// Verify only public fields are present.
+	assert.NotEmpty(t, ev["title"])
+	assert.NotEmpty(t, ev["eventDate"])
+	assert.NotEmpty(t, ev["contactRequirement"])
+
+	// Verify internal fields are NOT present.
+	sensitiveFields := []string{
+		"id", "organizerId", "retentionDays", "shareToken",
+		"showHeadcount", "showGuestList", "status",
+		"createdAt", "updatedAt",
+	}
+	for _, field := range sensitiveFields {
+		_, exists := ev[field]
+		assert.False(t, exists, "public event response must not contain field %q", field)
+	}
+}
+
+func TestHandleGetByToken_NoSensitiveFieldsLeaked(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+	attendee := doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/token/"+attendee.RSVPToken, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+
+	ev, ok := data["event"].(map[string]any)
+	require.True(t, ok, "event should be a map")
+
+	// Verify internal fields are NOT present.
+	sensitiveFields := []string{
+		"id", "organizerId", "retentionDays", "shareToken",
+		"showHeadcount", "showGuestList", "status",
+		"createdAt", "updatedAt",
+	}
+	for _, field := range sensitiveFields {
+		_, exists := ev[field]
+		assert.False(t, exists, "public event response must not contain field %q", field)
+	}
+}
+
+func TestHandleGetPublicInvite_WithAttendance(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	ctx := context.Background()
+
+	showHeadcount := true
+	showGuestList := true
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Test Event",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: &showHeadcount,
+		ShowGuestList: &showGuestList,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	// Add an attending guest.
+	_, err = svc.SubmitRSVP(ctx, published.ShareToken, rsvp.RSVPRequest{
+		Name: "Alice", Email: sp("alice@example.com"), RSVPStatus: "attending", ContactMethod: "email", PlusOnes: 2,
+	})
+	require.NoError(t, err)
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/"+published.ShareToken, nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+
+	attendance, ok := data["attendance"].(map[string]any)
+	require.True(t, ok, "attendance should be present")
+	assert.Equal(t, float64(3), attendance["headcount"]) // 1 + 2 plus ones
+	names, ok := attendance["names"].([]any)
+	require.True(t, ok)
+	assert.Equal(t, "Alice", names[0])
+}
+
+func TestHandleGetPublicInvite_NoAttendanceWhenDisabled(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/"+shareToken, nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+
+	_, hasAttendance := data["attendance"]
+	assert.False(t, hasAttendance, "attendance should not be present when both flags are off")
+}
+
+func TestHandleGetByToken_WithAttendance(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	ctx := context.Background()
+
+	showHeadcount := true
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00",
+		ShowHeadcount: &showHeadcount,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	attendee := doRSVP(t, svc, published.ShareToken, "Bob", "bob@example.com")
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/token/"+attendee.RSVPToken, nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+
+	attendance, ok := data["attendance"].(map[string]any)
+	require.True(t, ok, "attendance should be present")
+	assert.Equal(t, float64(1), attendance["headcount"])
+}
+
 // --- Submit RSVP ---
 
 func TestHandleSubmitRSVP_Success(t *testing.T) {
