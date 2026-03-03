@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/openrsvp/openrsvp/internal/notification/templates"
 )
 
 var (
@@ -100,18 +101,11 @@ func (s *Service) RequestMagicLink(ctx context.Context, email string) error {
 	// Send the magic link email if an email sender is configured.
 	if s.sendEmail != nil {
 		expiryMinutes := int(s.cfg.MagicLinkExpiry.Minutes())
-		htmlBody := fmt.Sprintf(
-			`<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-			<h2 style="color:#6366f1">OpenRSVP</h2>
-			<p>Click the button below to sign in to your account:</p>
-			<p style="text-align:center;margin:32px 0">
-				<a href="%s" style="background:#6366f1;color:#fff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600">Sign In</a>
-			</p>
-			<p style="color:#64748b;font-size:14px">Or copy this link: %s</p>
-			<p style="color:#94a3b8;font-size:12px">This link expires in %d minutes. If you didn't request this, you can safely ignore this email.</p>
-			</div>`, verifyURL, verifyURL, expiryMinutes)
-
-		plainBody := fmt.Sprintf("Sign in to OpenRSVP:\n\n%s\n\nThis link expires in %d minutes.", verifyURL, expiryMinutes)
+		htmlBody, plainBody, err := templates.RenderMagicLink(s.cfg.BaseURL, tokenHex, expiryMinutes)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("failed to render magic link email template")
+			return nil
+		}
 
 		if err := s.sendEmail(ctx, email, "Sign in to OpenRSVP", htmlBody, plainBody); err != nil {
 			s.logger.Error().Err(err).Str("email", email).Msg("failed to send magic link email")
