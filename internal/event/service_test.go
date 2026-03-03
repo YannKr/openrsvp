@@ -223,7 +223,7 @@ func TestCreateEventDefaultContactRequirement(t *testing.T) {
 		EventDate: "2026-06-15T14:00",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "email_or_phone", ev.ContactRequirement)
+	assert.Equal(t, "email", ev.ContactRequirement)
 }
 
 func TestCreateEventCustomContactRequirement(t *testing.T) {
@@ -272,7 +272,7 @@ func TestUpdateEventContactRequirement(t *testing.T) {
 		EventDate: "2026-06-15T14:00",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "email_or_phone", ev.ContactRequirement)
+	assert.Equal(t, "email", ev.ContactRequirement)
 
 	cr := "phone"
 	updated, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{

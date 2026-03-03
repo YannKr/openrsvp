@@ -93,7 +93,13 @@ func TestSubmitRSVPDuplicatePhone(t *testing.T) {
 
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
 	require.NoError(t, err)
-	ev := createPublishedEvent(t, eventSvc, org.ID)
+	cr := "email_or_phone"
+	raw, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title: "Test Event", EventDate: "2026-06-15T14:00", ContactRequirement: &cr,
+	})
+	require.NoError(t, err)
+	ev, err := eventSvc.Publish(ctx, raw.ID, org.ID)
+	require.NoError(t, err)
 
 	first, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
 		Name: "Bob", Phone: strPtr("+15551234567"), RSVPStatus: "attending", ContactMethod: "sms",
