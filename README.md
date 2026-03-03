@@ -113,6 +113,9 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `BASE_URL` | `http://localhost:8080` | Public URL for magic links and invites |
 | `NOTIFICATION_EMAIL_PROVIDER` | `smtp` | Email provider (`smtp`, `sendgrid`, `ses`) |
 | `DEFAULT_RETENTION_DAYS` | `30` | Days after event to auto-delete data |
+| `FEEDBACK_GITHUB_TOKEN` | _(empty)_ | GitHub PAT for posting feedback as Issues |
+| `FEEDBACK_GITHUB_REPO` | _(empty)_ | Target repo for Issues, e.g. `owner/repo` |
+| `FEEDBACK_EMAIL` | _(empty)_ | Email address to receive feedback (fallback) |
 
 ### 📧 Email Providers
 
@@ -299,6 +302,31 @@ server {
     }
 }
 ```
+
+### 💬 Feedback
+
+The in-app feedback button requires at least one delivery channel. **If neither is configured, submissions return 200 OK but are silently discarded** — a warning is logged at startup.
+
+**Option 1 — GitHub Issues (recommended)**
+
+Create a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope (classic) or Issues write permission (fine-grained):
+
+```
+FEEDBACK_GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+FEEDBACK_GITHUB_REPO=yourorg/yourrepo
+```
+
+Each submission opens an Issue titled `[Feedback - bug] …` with labels `feedback` and the feedback type.
+
+**Option 2 — Email fallback**
+
+Requires `SMTP_*` (or another email provider) to be configured:
+
+```
+FEEDBACK_EMAIL=feedback@yourdomain.com
+```
+
+GitHub Issues takes priority if both are set. Email is used as fallback when only `FEEDBACK_EMAIL` is provided.
 
 ### 💾 Backups
 

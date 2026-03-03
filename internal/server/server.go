@@ -194,6 +194,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Wire up feedback layer.
 	feedbackSvc := feedback.NewService(cfg.FeedbackGitHubToken, cfg.FeedbackGitHubRepo, cfg.FeedbackEmail)
+	if cfg.FeedbackGitHubToken == "" && cfg.FeedbackEmail == "" {
+		logger.Warn().Msg("feedback: no channel configured (set FEEDBACK_GITHUB_TOKEN+FEEDBACK_GITHUB_REPO or FEEDBACK_EMAIL) — submissions will be silently discarded")
+	}
 	if notifRegistry.Has(notification.ChannelEmail) {
 		feedbackSvc.SetEmailSender(func(ctx context.Context, to, subject, body, plain string) error {
 			provider, err := notifRegistry.Get(notification.ChannelEmail)
