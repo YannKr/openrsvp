@@ -240,6 +240,46 @@ All API endpoints are under `/api/v1`. The server also provides:
 
 ## 🏠 Self-Hosting Guide
 
+### 🐳 Docker (recommended)
+
+The fastest way to get a production instance running:
+
+```yaml
+# docker-compose.yml
+services:
+  openrsvp:
+    image: ghcr.io/yannkr/openrsvp:latest
+    restart: unless-stopped
+    expose:
+      - 8080
+    environment:
+      ENV: production
+      BASE_URL: https://rsvp.yourdomain.com
+      DB_DSN: /data/openrsvp.db
+      UPLOADS_DIR: /data/uploads
+      SMTP_HOST: smtp.yourdomain.com
+      SMTP_PORT: 587
+      SMTP_USERNAME: noreply@yourdomain.com
+      SMTP_PASSWORD: yourpassword
+      SMTP_FROM: noreply@yourdomain.com
+    volumes:
+      - ./data:/data
+```
+
+```bash
+docker compose up -d
+```
+
+**Required variables for production:**
+
+| Variable | Why it's required |
+|----------|-------------------|
+| `ENV=production` | Switches to JSON structured logging |
+| `BASE_URL` | Used in magic links and invite emails — must be the public HTTPS URL |
+| `SMTP_*` | Email delivery is required for magic link login |
+
+> **Data persistence:** all state lives under `/data` (SQLite DB + uploads). Mount a volume there — losing it means losing all events and RSVPs.
+
 ### Reverse Proxy (Nginx)
 
 ```nginx
