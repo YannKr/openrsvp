@@ -6,6 +6,7 @@
 	let open = $state(false);
 	let feedbackType = $state('bug');
 	let message = $state('');
+	let allowFollowUp = $state(true);
 	let submitting = $state(false);
 
 	async function handleSubmit() {
@@ -13,10 +14,11 @@
 
 		submitting = true;
 		try {
-			await api.post('/feedback', { type: feedbackType, message: message.trim() });
-			toast.success('Feedback submitted — thank you!');
+			await api.post('/feedback', { type: feedbackType, message: message.trim(), allowFollowUp });
+			toast.success('Feedback submitted — thank you!' + (allowFollowUp ? ' A confirmation has been sent to your email.' : ''));
 			message = '';
 			feedbackType = 'bug';
+			allowFollowUp = true;
 			open = false;
 		} catch {
 			toast.error('Failed to submit feedback. Please try again.');
@@ -67,6 +69,15 @@
 				></textarea>
 				<p class="mt-1 text-xs text-slate-500">{message.length}/2000</p>
 			</div>
+
+			<label class="flex items-start gap-3 cursor-pointer">
+				<input
+					type="checkbox"
+					bind:checked={allowFollowUp}
+					class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+				/>
+				<span class="text-sm text-slate-600">You can follow up with me about this feedback</span>
+			</label>
 		</div>
 
 		<div class="mt-4 flex justify-end gap-3">

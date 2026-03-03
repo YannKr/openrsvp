@@ -36,8 +36,9 @@ func (h *Handler) Routes() chi.Router {
 }
 
 type submitRequest struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Type          string `json:"type"`
+	Message       string `json:"message"`
+	AllowFollowUp bool   `json:"allowFollowUp"`
 }
 
 func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +73,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Submit(r.Context(), email, req.Type, req.Message); err != nil {
+	if err := h.service.Submit(r.Context(), email, req.Type, req.Message, req.AllowFollowUp); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to submit feedback")
 		return
 	}

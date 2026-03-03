@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/openrsvp/openrsvp/internal/notification/templates"
 )
 
 // Service orchestrates feedback submission via GitHub Issues or email fallback.
@@ -30,20 +32,38 @@ func (s *Service) SetEmailSender(fn func(ctx context.Context, to, subject, body,
 }
 
 // Submit sends feedback via GitHub Issues (preferred) or email (fallback).
-func (s *Service) Submit(ctx context.Context, organizerEmail, feedbackType, message string) error {
+// If allowFollowUp is true and sendEmail is configured, a confirmation is sent
+// to organizerEmail.
+func (s *Service) Submit(ctx context.Context, organizerEmail, feedbackType, message string, allowFollowUp bool) error {
+	var submitErr error
 	if s.githubToken != "" && s.githubRepo != "" {
-		return s.submitGitHub(ctx, organizerEmail, feedbackType, message)
+		submitErr = s.submitGitHub(ctx, organizerEmail, feedbackType, message)
+	} else if s.sendEmail != nil && s.feedbackEmail != "" {
+		submitErr = s.submitEmail(ctx, organizerEmail, feedbackType, message)
+	} else {
+		log.Info().
+			Str("from", organizerEmail).
+			Str("type", feedbackType).
+			Str("message", message).
+			Msg("feedback received (no external channel configured)")
 	}
 
-	if s.sendEmail != nil && s.feedbackEmail != "" {
-		return s.submitEmail(ctx, organizerEmail, feedbackType, message)
+	if submitErr != nil {
+		return submitErr
 	}
 
-	log.Info().
-		Str("from", organizerEmail).
-		Str("type", feedbackType).
-		Str("message", message).
-		Msg("feedback received (no external channel configured)")
+	// Send confirmation to the submitter if they opted in and email is available.
+	if allowFollowUp && s.sendEmail != nil && organizerEmail != "" {
+		htmlBody, plain, err := templates.RenderFeedbackConfirmation(feedbackType, true)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to render feedback confirmation template")
+			return nil
+		}
+		if err := s.sendEmail(ctx, organizerEmail, "We received your feedback — OpenRSVP", htmlBody, plain); err != nil {
+			log.Error().Err(err).Str("email", organizerEmail).Msg("failed to send feedback confirmation email")
+		}
+	}
+
 	return nil
 }
 

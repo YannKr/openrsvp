@@ -8,15 +8,16 @@ import (
 	"strings"
 )
 
-//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html
+//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html feedback_confirmation.html
 var templateFS embed.FS
 
 var (
-	magicLinkTmpl             *template.Template
-	rsvpConfirmationTmpl      *template.Template
-	eventReminderTmpl         *template.Template
-	retentionWarningTmpl      *template.Template
-	organizerRSVPNotifyTmpl   *template.Template
+	magicLinkTmpl               *template.Template
+	rsvpConfirmationTmpl        *template.Template
+	eventReminderTmpl           *template.Template
+	retentionWarningTmpl        *template.Template
+	organizerRSVPNotifyTmpl     *template.Template
+	feedbackConfirmationTmpl    *template.Template
 )
 
 func init() {
@@ -25,6 +26,7 @@ func init() {
 	eventReminderTmpl = template.Must(template.ParseFS(templateFS, "event_reminder.html"))
 	retentionWarningTmpl = template.Must(template.ParseFS(templateFS, "retention_warning.html"))
 	organizerRSVPNotifyTmpl = template.Must(template.ParseFS(templateFS, "organizer_rsvp_notification.html"))
+	feedbackConfirmationTmpl = template.Must(template.ParseFS(templateFS, "feedback_confirmation.html"))
 }
 
 // magicLinkData holds the template data for a magic link email.
@@ -225,6 +227,36 @@ func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEma
 		sb.WriteString(fmt.Sprintf("Additional Guests: +%d\n", plusOnes))
 	}
 	sb.WriteString(fmt.Sprintf("\nView your event dashboard:\n%s\n", dashboardURL))
+
+	return buf.String(), sb.String(), nil
+}
+
+// feedbackConfirmationData holds the template data for a feedback confirmation email.
+type feedbackConfirmationData struct {
+	FeedbackType  string
+	AllowFollowUp bool
+}
+
+// RenderFeedbackConfirmation renders the feedback confirmation email template
+// and returns the HTML body and a plain text fallback.
+func RenderFeedbackConfirmation(feedbackType string, allowFollowUp bool) (htmlBody, plain string, err error) {
+	data := feedbackConfirmationData{
+		FeedbackType:  feedbackType,
+		AllowFollowUp: allowFollowUp,
+	}
+
+	var buf bytes.Buffer
+	if err := feedbackConfirmationTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render feedback confirmation template: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Thanks for your feedback!\n\n")
+	sb.WriteString(fmt.Sprintf("We received your %s submission and appreciate you taking the time to share it with us.\n\n", feedbackType))
+	if allowFollowUp {
+		sb.WriteString("Since you opted in to follow-up contact, we may reach out to you if we have questions or updates related to your feedback.\n\n")
+	}
+	sb.WriteString("Your feedback helps make OpenRSVP better for everyone.\n")
 
 	return buf.String(), sb.String(), nil
 }

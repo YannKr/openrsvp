@@ -169,7 +169,7 @@ func TestSubmitEmail_Fallback(t *testing.T) {
 		return nil
 	})
 
-	err := svc.Submit(context.Background(), "user@test.com", "feature", "Add dark mode")
+	err := svc.Submit(context.Background(), "user@test.com", "feature", "Add dark mode", false)
 	assert.NoError(t, err)
 	assert.Equal(t, "feedback@example.com", sentTo)
 	assert.Contains(t, sentSubject, "feature")
@@ -182,14 +182,31 @@ func TestSubmitEmail_Error(t *testing.T) {
 		return fmt.Errorf("smtp error")
 	})
 
-	err := svc.Submit(context.Background(), "user@test.com", "bug", "broken")
+	err := svc.Submit(context.Background(), "user@test.com", "bug", "broken", false)
 	assert.Error(t, err)
 }
 
 func TestSubmit_NoChannel(t *testing.T) {
 	svc := NewService("", "", "")
-	err := svc.Submit(context.Background(), "user@test.com", "bug", "broken")
+	err := svc.Submit(context.Background(), "user@test.com", "bug", "broken", false)
 	assert.NoError(t, err)
+}
+
+func TestSubmit_AllowFollowUp_SendsConfirmation(t *testing.T) {
+	var emails []string
+	svc := NewService("", "", "feedback@example.com")
+	svc.SetEmailSender(func(ctx context.Context, to, subject, body, plain string) error {
+		emails = append(emails, to+"|"+subject)
+		return nil
+	})
+
+	err := svc.Submit(context.Background(), "user@test.com", "feature", "Add dark mode", true)
+	assert.NoError(t, err)
+	// Two emails: one to the feedback address, one confirmation to the submitter.
+	assert.Len(t, emails, 2)
+	assert.Contains(t, emails[0], "feedback@example.com")
+	assert.Contains(t, emails[1], "user@test.com")
+	assert.Contains(t, emails[1], "received your feedback")
 }
 
 func TestTruncate(t *testing.T) {
