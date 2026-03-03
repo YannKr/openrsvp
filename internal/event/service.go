@@ -79,7 +79,7 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		retentionDays = *req.RetentionDays
 	}
 
-	contactRequirement := "email_or_phone"
+	contactRequirement := "email"
 	if req.ContactRequirement != nil && *req.ContactRequirement != "" {
 		if !isValidContactRequirement(*req.ContactRequirement) {
 			return nil, fmt.Errorf("invalid contactRequirement: must be email, phone, email_or_phone, or email_and_phone")
@@ -96,6 +96,15 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		return nil, fmt.Errorf("generate share token: %w", err)
 	}
 
+	showHeadcount := false
+	if req.ShowHeadcount != nil {
+		showHeadcount = *req.ShowHeadcount
+	}
+	showGuestList := false
+	if req.ShowGuestList != nil {
+		showGuestList = *req.ShowGuestList
+	}
+
 	e := &Event{
 		ID:                 uuid.Must(uuid.NewV7()).String(),
 		OrganizerID:        organizerID,
@@ -107,6 +116,8 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		Timezone:           req.Timezone,
 		RetentionDays:      retentionDays,
 		ContactRequirement: contactRequirement,
+		ShowHeadcount:      showHeadcount,
+		ShowGuestList:      showGuestList,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}
@@ -205,6 +216,12 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 			return nil, fmt.Errorf("invalid contactRequirement: must be email, phone, email_or_phone, or email_and_phone")
 		}
 		e.ContactRequirement = *req.ContactRequirement
+	}
+	if req.ShowHeadcount != nil {
+		e.ShowHeadcount = *req.ShowHeadcount
+	}
+	if req.ShowGuestList != nil {
+		e.ShowGuestList = *req.ShowGuestList
 	}
 
 	if !s.smsEnabled && e.ContactRequirement == "phone" {
@@ -329,6 +346,8 @@ func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*
 		Timezone:           e.Timezone,
 		RetentionDays:      e.RetentionDays,
 		ContactRequirement: contactReq,
+		ShowHeadcount:      e.ShowHeadcount,
+		ShowGuestList:      e.ShowGuestList,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}

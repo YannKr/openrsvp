@@ -33,7 +33,9 @@
 
 	// Step 2 fields
 	let description = $state('');
-	let contactRequirement = $state('email_or_phone');
+	let contactRequirement = $state('email');
+	let showHeadcount = $state(false);
+	let showGuestList = $state(false);
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
 
@@ -102,6 +104,8 @@
 				timezone,
 				description: description.trim(),
 				contactRequirement,
+				showHeadcount,
+				showGuestList,
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
@@ -221,6 +225,29 @@
 						options={filteredContactOptions}
 					/>
 
+					<fieldset class="pt-2">
+						<legend class="text-sm font-medium text-slate-700 mb-3">Guest Visibility</legend>
+						<p class="text-xs text-slate-400 mb-3">Control what attendance info is shown on the public invite page.</p>
+						<div class="space-y-2">
+							<label class="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									bind:checked={showHeadcount}
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+								/>
+								<span class="text-sm text-slate-700">Show attendance count</span>
+							</label>
+							<label class="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									bind:checked={showGuestList}
+									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+								/>
+								<span class="text-sm text-slate-700">Show guest names</span>
+							</label>
+						</div>
+					</fieldset>
+
 					<div class="pt-2">
 						{#if showRetention}
 							<Input
@@ -283,6 +310,20 @@
 							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
 								<dt class="text-sm font-medium text-slate-500">Contact Requirement</dt>
 								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{contactRequirementOptions.find(o => o.value === contactRequirement)?.label}</dd>
+							</div>
+						{/if}
+						{#if showHeadcount || showGuestList}
+							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
+								<dt class="text-sm font-medium text-slate-500">Guest Visibility</dt>
+								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">
+									{#if showHeadcount && showGuestList}
+										Attendance count and guest names visible
+									{:else if showHeadcount}
+										Attendance count visible
+									{:else}
+										Guest names visible
+									{/if}
+								</dd>
 							</div>
 						{/if}
 						{#if retentionDays !== '30'}
