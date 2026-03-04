@@ -209,7 +209,7 @@ func TestCancelEvent(t *testing.T) {
 	_, err = svc.Publish(ctx, created.ID, org.ID)
 	require.NoError(t, err)
 
-	cancelled, err := svc.Cancel(ctx, created.ID, org.ID)
+	cancelled, err := svc.Cancel(ctx, created.ID, org.ID, false)
 	require.NoError(t, err)
 	assert.Equal(t, "cancelled", cancelled.Status)
 }
@@ -313,7 +313,7 @@ func TestReopenEvent(t *testing.T) {
 	_, err = svc.Publish(ctx, created.ID, org.ID)
 	require.NoError(t, err)
 
-	_, err = svc.Cancel(ctx, created.ID, org.ID)
+	_, err = svc.Cancel(ctx, created.ID, org.ID, false)
 	require.NoError(t, err)
 
 	reopened, err := svc.Reopen(ctx, created.ID, org.ID)
@@ -349,7 +349,7 @@ func TestReopenEventForbidden(t *testing.T) {
 	_, err = svc.Publish(ctx, created.ID, org.ID)
 	require.NoError(t, err)
 
-	_, err = svc.Cancel(ctx, created.ID, org.ID)
+	_, err = svc.Cancel(ctx, created.ID, org.ID, false)
 	require.NoError(t, err)
 
 	other, err := authStore.CreateOrganizer(ctx, "other@example.com")

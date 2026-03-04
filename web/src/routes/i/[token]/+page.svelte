@@ -144,9 +144,10 @@
 			rsvpToken = result.data.rsvpToken;
 			submitted = true;
 
-			// Re-fetch invite data to update attendance display.
+			// Re-fetch invite data to update attendance and capacity display.
 			try {
 				const refreshed = await api.get<{ data: PublicInviteData }>(`/rsvp/public/${token}`);
+				eventData = refreshed.data.event;
 				attendance = refreshed.data.attendance ?? null;
 			} catch {
 				// Non-critical; attendance display will use previous data.
@@ -238,11 +239,6 @@
 				eventLocation={eventData.location}
 				customData={typeof inviteData.customData === 'string' ? inviteData.customData : JSON.stringify(inviteData.customData || {})}
 			/>
-		</div>
-
-		<!-- Add to Calendar -->
-		<div class="w-full max-w-lg mb-6 flex justify-center">
-			<AddToCalendar event={eventData} shareToken={token} />
 		</div>
 
 		<!-- Capacity Display -->

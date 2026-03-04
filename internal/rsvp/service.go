@@ -267,7 +267,7 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			}
 			newContribution := 1 + req.PlusOnes
 			if stats.AttendingHeadcount-currentContribution+newContribution > *ev.MaxCapacity {
-				return nil, fmt.Errorf("event is at capacity")
+				return nil, fmt.Errorf("Event is at capacity")
 			}
 		}
 
@@ -306,7 +306,7 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			return nil, fmt.Errorf("check capacity: %w", err)
 		}
 		if stats.AttendingHeadcount+1+req.PlusOnes > *ev.MaxCapacity {
-			return nil, fmt.Errorf("event is at capacity")
+			return nil, fmt.Errorf("Event is at capacity")
 		}
 	}
 
@@ -462,7 +462,7 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 				newPlusOnes = *req.PlusOnes
 			}
 			if stats.AttendingHeadcount+1+newPlusOnes > *ev.MaxCapacity {
-				return nil, fmt.Errorf("event is at capacity")
+				return nil, fmt.Errorf("Event is at capacity")
 			}
 		} else if req.PlusOnes != nil && *req.PlusOnes > a.PlusOnes {
 			// Already attending but increasing plus-ones.
@@ -472,7 +472,7 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 			}
 			additional := *req.PlusOnes - a.PlusOnes
 			if stats.AttendingHeadcount+additional > *ev.MaxCapacity {
-				return nil, fmt.Errorf("event is at capacity")
+				return nil, fmt.Errorf("Event is at capacity")
 			}
 		}
 	} else if req.PlusOnes != nil && a.RSVPStatus == "attending" && ev.MaxCapacity != nil && *req.PlusOnes > a.PlusOnes {
@@ -483,7 +483,7 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		}
 		additional := *req.PlusOnes - a.PlusOnes
 		if stats.AttendingHeadcount+additional > *ev.MaxCapacity {
-			return nil, fmt.Errorf("event is at capacity")
+			return nil, fmt.Errorf("Event is at capacity")
 		}
 	}
 

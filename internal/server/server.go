@@ -151,8 +151,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 					}
 
 					// Attach ICS calendar file for attending and maybe RSVPs.
+					// Use the RSVP management URL so the guest can manage their response.
 					if attendee.RSVPStatus == "attending" || attendee.RSVPStatus == "maybe" {
-						inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+						rsvpURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
 						icsData := calendar.GenerateICS(calendar.EventData{
 							ID:          ev.ID,
 							Title:       ev.Title,
@@ -161,7 +162,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 							EventDate:   ev.EventDate,
 							EndDate:     ev.EndDate,
 							Timezone:    ev.Timezone,
-							URL:         inviteURL,
+							URL:         rsvpURL,
 						})
 						confirmMsg.Attachments = []notification.Attachment{
 							{
@@ -434,6 +435,59 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				Msg("created default reminder")
 		}
 	})
+
+	// Send cancellation notifications to attending/maybe attendees when an event is cancelled.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		eventService.SetOnCancel(func(ctx context.Context, e *event.Event) {
+			attendees, err := rsvpService.ListByEvent(ctx, e.ID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", e.ID).Msg("cancel notify: failed to list attendees")
+				return
+			}
+
+			eventDate := e.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := e.Location
+			if location == "" {
+				location = "TBD"
+			}
+			cancelMessage := "This event has been cancelled by the organizer. We apologize for any inconvenience."
+
+			sent := 0
+			for _, a := range attendees {
+				if a.RSVPStatus != "attending" && a.RSVPStatus != "maybe" {
+					continue
+				}
+				if a.Email == nil || *a.Email == "" {
+					continue
+				}
+
+				htmlBody, plainBody, err := templates.RenderEventReminder(
+					e.Title, eventDate, location, cancelMessage,
+					cfg.BaseURL+"/i/"+e.ShareToken,
+				)
+				if err != nil {
+					logger.Error().Err(err).Str("attendee_id", a.ID).Msg("cancel notify: failed to render template")
+					continue
+				}
+
+				if err := notifService.Send(ctx, e.ID, a.ID, notification.ChannelEmail, &notification.Message{
+					To:      *a.Email,
+					Subject: "Event Cancelled -- " + e.Title,
+					Body:    htmlBody,
+					Plain:   plainBody,
+				}); err != nil {
+					logger.Error().Err(err).Str("attendee_email", *a.Email).Msg("cancel notify: failed to send email")
+					continue
+				}
+				sent++
+			}
+
+			logger.Info().
+				Str("event_id", e.ID).
+				Int("sent", sent).
+				Msg("cancel notify: cancellation emails dispatched")
+		})
+	}
 
 	sched := scheduler.New(logger)
 	reminderJob := scheduler.NewReminderJob(reminderStore, db, notifService, cfg.BaseURL, logger)

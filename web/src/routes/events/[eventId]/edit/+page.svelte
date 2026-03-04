@@ -115,7 +115,7 @@
 		try {
 			const body: Record<string, unknown> = {
 				title: title.trim(),
-				eventDate,
+				eventDate: eventDate ? new Date(eventDate).toISOString() : eventDate,
 				location: location.trim(),
 				timezone,
 				description: description.trim(),
@@ -124,8 +124,8 @@
 				showGuestList,
 				retentionDays: parseInt(retentionDays)
 			};
-			if (endDate) body.endDate = endDate;
-			if (rsvpDeadline) body.rsvpDeadline = rsvpDeadline;
+			if (endDate) body.endDate = new Date(endDate).toISOString();
+			if (rsvpDeadline) body.rsvpDeadline = new Date(rsvpDeadline).toISOString();
 			else body.rsvpDeadline = '';
 			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
 			else body.maxCapacity = 0;

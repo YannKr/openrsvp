@@ -133,9 +133,10 @@ func (j *ReminderJob) processReminder(ctx context.Context, reminder *Reminder) e
 
 // attendeeTarget holds the minimal info needed to send a notification.
 type attendeeTarget struct {
-	id    string
-	email *string
-	phone *string
+	id        string
+	email     *string
+	phone     *string
+	rsvpToken string
 }
 
 // findTargetAttendees queries for attendees matching the reminder's target
@@ -145,10 +146,10 @@ func (j *ReminderJob) findTargetAttendees(ctx context.Context, eventID, targetGr
 	var args []any
 
 	if targetGroup == "all" {
-		query = `SELECT id, email, phone FROM attendees WHERE event_id = ?`
+		query = `SELECT id, email, phone, rsvp_token FROM attendees WHERE event_id = ?`
 		args = []any{eventID}
 	} else {
-		query = `SELECT id, email, phone FROM attendees WHERE event_id = ? AND rsvp_status = ?`
+		query = `SELECT id, email, phone, rsvp_token FROM attendees WHERE event_id = ? AND rsvp_status = ?`
 		args = []any{eventID, targetGroup}
 	}
 
@@ -162,7 +163,7 @@ func (j *ReminderJob) findTargetAttendees(ctx context.Context, eventID, targetGr
 	for rows.Next() {
 		var a attendeeTarget
 		var email, phone *string
-		if err := rows.Scan(&a.id, &email, &phone); err != nil {
+		if err := rows.Scan(&a.id, &email, &phone, &a.rsvpToken); err != nil {
 			return nil, fmt.Errorf("scan attendee: %w", err)
 		}
 		a.email = email
@@ -244,6 +245,12 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 		// Attach ICS calendar file for attending and maybe attendees,
 		// or when the reminder targets all attendees.
 		if reminder.TargetGroup == "attending" || reminder.TargetGroup == "maybe" || reminder.TargetGroup == "all" {
+			// Use the RSVP management URL when available so the guest can manage
+			// their response; fall back to the public invite URL.
+			calURL := inviteURL
+			if attendee.rsvpToken != "" {
+				calURL = j.baseURL + "/r/" + attendee.rsvpToken
+			}
 			icsData := calendar.GenerateICS(calendar.EventData{
 				ID:          ev.id,
 				Title:       ev.title,
@@ -252,7 +259,7 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 				EventDate:   ev.eventDate,
 				EndDate:     ev.endDate,
 				Timezone:    ev.timezone,
-				URL:         inviteURL,
+				URL:         calURL,
 			})
 			msg.Attachments = []notification.Attachment{
 				{

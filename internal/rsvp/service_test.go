@@ -886,7 +886,7 @@ func TestSubmitRSVPCapacityEnforced(t *testing.T) {
 		Name: "Carol", Email: strPtr("carol@example.com"), RSVPStatus: "attending",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "event is at capacity")
+	assert.Contains(t, err.Error(), "Event is at capacity")
 }
 
 func TestSubmitRSVPCapacityIncludesPlusOnes(t *testing.T) {
@@ -910,7 +910,7 @@ func TestSubmitRSVPCapacityIncludesPlusOnes(t *testing.T) {
 		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "event is at capacity")
+	assert.Contains(t, err.Error(), "Event is at capacity")
 }
 
 func TestSubmitRSVPDeclinedDoesNotCountTowardCapacity(t *testing.T) {
@@ -984,7 +984,7 @@ func TestSubmitRSVPUpsertCapacityCheck(t *testing.T) {
 		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "event is at capacity")
+	assert.Contains(t, err.Error(), "Event is at capacity")
 }
 
 func TestUpdateByTokenCapacityEnforced(t *testing.T) {
@@ -1015,7 +1015,7 @@ func TestUpdateByTokenCapacityEnforced(t *testing.T) {
 		RSVPStatus: &attendingStatus,
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "event is at capacity")
+	assert.Contains(t, err.Error(), "Event is at capacity")
 }
 
 func TestUpdateByTokenPlusOneCapacityEnforced(t *testing.T) {
@@ -1046,7 +1046,7 @@ func TestUpdateByTokenPlusOneCapacityEnforced(t *testing.T) {
 		PlusOnes: &morePlusOnes,
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "event is at capacity")
+	assert.Contains(t, err.Error(), "Event is at capacity")
 }
 
 func TestGetPublicInviteShowsCapacityInfo(t *testing.T) {

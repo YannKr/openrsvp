@@ -18,6 +18,7 @@
 	import { onMount } from 'svelte';
 
 	let showCancelModal = $state(false);
+	let notifyOnCancel = $state(true);
 	let removeAttendeeTarget: Attendee | null = $state(null);
 	let showRemoveAttendeeModal = $state(false);
 	let cancelReminderTarget: Reminder | null = $state(null);
@@ -122,7 +123,9 @@
 	async function cancelEvent() {
 		if (!event) return;
 		try {
-			const result = await api.post<{ data: Event }>(`/events/${eventId}/cancel`);
+			const result = await api.post<{ data: Event }>(`/events/${eventId}/cancel`, {
+				notifyAttendees: notifyOnCancel
+			});
 			event = result.data;
 			$currentEvent = event;
 			showCancelModal = false;
@@ -599,7 +602,7 @@
 						<!-- CSV Export split-button -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div class="relative inline-flex" role="group" bind:this={exportDropdownRef} onkeydown={handleExportKeydown}>
-							<Button variant="outline" size="sm" onclick={() => exportCSV('all')}>
+							<Button variant="outline" size="sm" class="rounded-r-none border-r-0" onclick={() => exportCSV('all')}>
 								Export CSV
 							</Button>
 							<button
@@ -607,7 +610,7 @@
 								aria-expanded={exportMenuOpen}
 								aria-haspopup="true"
 								aria-label="Export options"
-								class="inline-flex items-center rounded-r-lg border border-l-0 border-slate-300 bg-white px-2 py-1.5 text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 -ml-px"
+								class="inline-flex items-center rounded-l-none rounded-r-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
 							>
 								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -734,6 +737,14 @@
 			<p class="text-sm text-slate-600">
 				Are you sure you want to cancel <strong>{event.title}</strong>? Attendees will no longer be able to RSVP.
 			</p>
+			<label class="flex items-center gap-3 mt-4 cursor-pointer">
+				<input
+					type="checkbox"
+					bind:checked={notifyOnCancel}
+					class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+				/>
+				<span class="text-sm text-slate-700">Notify attending and maybe attendees about cancellation</span>
+			</label>
 			{#snippet actions()}
 				<Button variant="outline" size="sm" onclick={() => showCancelModal = false}>Keep Event</Button>
 				<Button variant="danger" size="sm" onclick={cancelEvent}>Cancel Event</Button>

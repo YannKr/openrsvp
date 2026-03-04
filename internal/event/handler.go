@@ -180,7 +180,15 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 
 	eventID := chi.URLParam(r, "eventId")
 
-	ev, err := h.service.Cancel(r.Context(), eventID, organizerID)
+	// Parse optional request body for notifyAttendees flag.
+	var req struct {
+		NotifyAttendees *bool `json:"notifyAttendees"`
+	}
+	// Body is optional; ignore decode errors for empty bodies.
+	json.NewDecoder(r.Body).Decode(&req)
+	notifyAttendees := req.NotifyAttendees != nil && *req.NotifyAttendees
+
+	ev, err := h.service.Cancel(r.Context(), eventID, organizerID, notifyAttendees)
 	if err != nil {
 		if err.Error() == "event not found" {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())

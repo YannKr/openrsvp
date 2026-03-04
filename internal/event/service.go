@@ -19,6 +19,7 @@ type Service struct {
 	smsEnabled       bool
 	onPublish        func(ctx context.Context, e *Event)
 	onDuplicate      func(ctx context.Context, srcEventID, newEventID string)
+	onCancel         func(ctx context.Context, e *Event)
 }
 
 // NewService creates a new event Service.
@@ -39,6 +40,12 @@ func (s *Service) SetOnPublish(fn func(ctx context.Context, e *Event)) {
 // successfully duplicated. This is used to copy the invite card design.
 func (s *Service) SetOnDuplicate(fn func(ctx context.Context, srcEventID, newEventID string)) {
 	s.onDuplicate = fn
+}
+
+// SetOnCancel registers a callback that is invoked after an event is
+// cancelled when the organizer requests attendee notification.
+func (s *Service) SetOnCancel(fn func(ctx context.Context, e *Event)) {
+	s.onCancel = fn
 }
 
 // SetSMSEnabled sets whether SMS notifications are available. When disabled,
@@ -309,7 +316,9 @@ func (s *Service) Publish(ctx context.Context, eventID, organizerID string) (*Ev
 }
 
 // Cancel transitions an event from published to cancelled status.
-func (s *Service) Cancel(ctx context.Context, eventID, organizerID string) (*Event, error) {
+// When notifyAttendees is true, the onCancel callback is invoked to
+// send cancellation notifications.
+func (s *Service) Cancel(ctx context.Context, eventID, organizerID string, notifyAttendees bool) (*Event, error) {
 	e, err := s.store.FindByID(ctx, eventID)
 	if err != nil {
 		return nil, err
@@ -327,6 +336,10 @@ func (s *Service) Cancel(ctx context.Context, eventID, organizerID string) (*Eve
 	e.Status = "cancelled"
 	if err := s.store.Update(ctx, e); err != nil {
 		return nil, err
+	}
+
+	if notifyAttendees && s.onCancel != nil {
+		s.onCancel(ctx, e)
 	}
 
 	return e, nil
