@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/openrsvp/openrsvp/internal/calendar"
 	"github.com/openrsvp/openrsvp/internal/database"
 	"github.com/openrsvp/openrsvp/internal/notification"
 	"github.com/openrsvp/openrsvp/internal/notification/templates"
@@ -177,22 +178,35 @@ func (j *ReminderJob) findTargetAttendees(ctx context.Context, eventID, targetGr
 
 // eventInfo holds the minimal event data needed to render reminder emails.
 type eventInfo struct {
-	title      string
-	eventDate  time.Time
-	location   string
-	shareToken string
+	id          string
+	title       string
+	description string
+	eventDate   time.Time
+	endDate     *time.Time
+	location    string
+	timezone    string
+	shareToken  string
 }
 
 // lookupEvent fetches event details needed for rendering the reminder template.
 func (j *ReminderJob) lookupEvent(ctx context.Context, eventID string) (*eventInfo, error) {
 	var info eventInfo
+	var description, timezone *string
+	var endDate *time.Time
 	err := j.db.QueryRowContext(ctx,
-		`SELECT title, event_date, location, share_token FROM events WHERE id = ?`,
+		`SELECT id, title, description, event_date, end_date, location, timezone, share_token FROM events WHERE id = ?`,
 		eventID,
-	).Scan(&info.title, &info.eventDate, &info.location, &info.shareToken)
+	).Scan(&info.id, &info.title, &description, &info.eventDate, &endDate, &info.location, &timezone, &info.shareToken)
 	if err != nil {
 		return nil, fmt.Errorf("lookup event %s: %w", eventID, err)
 	}
+	if description != nil {
+		info.description = *description
+	}
+	if timezone != nil {
+		info.timezone = *timezone
+	}
+	info.endDate = endDate
 	return &info, nil
 }
 
@@ -226,6 +240,29 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 			Body:    htmlBody,
 			Plain:   plainBody,
 		}
+
+		// Attach ICS calendar file for attending and maybe attendees,
+		// or when the reminder targets all attendees.
+		if reminder.TargetGroup == "attending" || reminder.TargetGroup == "maybe" || reminder.TargetGroup == "all" {
+			icsData := calendar.GenerateICS(calendar.EventData{
+				ID:          ev.id,
+				Title:       ev.title,
+				Description: ev.description,
+				Location:    ev.location,
+				EventDate:   ev.eventDate,
+				EndDate:     ev.endDate,
+				Timezone:    ev.timezone,
+				URL:         inviteURL,
+			})
+			msg.Attachments = []notification.Attachment{
+				{
+					Filename:    "event.ics",
+					ContentType: "text/calendar; charset=utf-8; method=PUBLISH",
+					Data:        []byte(icsData),
+				},
+			}
+		}
+
 		return j.notifService.Send(ctx, reminder.EventID, attendee.id, notification.ChannelEmail, msg)
 	}
 

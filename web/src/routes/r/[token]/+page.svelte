@@ -3,11 +3,13 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { PublicEvent, Attendee, Message, PublicAttendance, ApiError } from '$lib/types';
+	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
 
 	interface RsvpData {
 		attendee: Attendee;
 		event: PublicEvent;
 		attendance?: PublicAttendance;
+		shareToken?: string;
 	}
 
 	let loading = $state(true);
@@ -15,6 +17,7 @@
 	let attendee = $state<Attendee | null>(null);
 	let eventData = $state<PublicEvent | null>(null);
 	let attendance = $state<PublicAttendance | null>(null);
+	let shareToken = $state('');
 	let showAllNames = $state(false);
 	const displayNames = $derived(
 		attendance?.names
@@ -46,6 +49,14 @@
 
 	const token = $derived($page.params.token);
 
+	// RSVP closed check
+	const rsvpsClosed = $derived(eventData?.rsvpsClosed === true);
+
+	// When at capacity and user is NOT already attending, disable the attending option.
+	const attendingDisabled = $derived(
+		eventData?.atCapacity === true && attendee?.rsvpStatus !== 'attending'
+	);
+
 	onMount(async () => {
 		await loadRsvp();
 		loadMessages();
@@ -57,6 +68,7 @@
 			attendee = result.data.attendee;
 			eventData = result.data.event;
 			attendance = result.data.attendance ?? null;
+			shareToken = result.data.shareToken ?? '';
 			populateEditForm();
 		} catch (err) {
 			const apiErr = err as ApiError;
@@ -244,6 +256,27 @@
 				{/if}
 			</div>
 
+			<!-- Add to Calendar (only for attending or maybe) -->
+			{#if shareToken && (attendee.rsvpStatus === 'attending' || attendee.rsvpStatus === 'maybe')}
+				<div class="mb-6 flex justify-center">
+					<AddToCalendar event={eventData} {shareToken} />
+				</div>
+			{/if}
+
+			<!-- Capacity Notice -->
+			{#if eventData.atCapacity && attendee.rsvpStatus !== 'attending'}
+				<div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 text-center">
+					This event is at capacity. You can still RSVP as "maybe" or "declined".
+				</div>
+			{/if}
+
+			<!-- RSVP Closed Notice -->
+			{#if rsvpsClosed}
+				<div class="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 text-center">
+					This RSVP can no longer be modified. The RSVP deadline has passed.
+				</div>
+			{/if}
+
 			<!-- Success Toast -->
 			{#if saveSuccess}
 				<div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 flex items-center gap-2">
@@ -258,7 +291,7 @@
 			<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8 mb-6">
 				<div class="flex items-center justify-between mb-6">
 					<h2 class="text-lg font-semibold text-slate-900">Your RSVP</h2>
-					{#if !editing}
+					{#if !editing && !rsvpsClosed}
 						<button
 							onclick={() => { populateEditForm(); editing = true; }}
 							class="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
@@ -293,12 +326,19 @@
 								Will you attend?
 							</legend>
 							<div class="grid grid-cols-3 gap-3">
-								<label class="rsvp-option" class:rsvp-option-selected={editStatus === 'attending'} class:rsvp-option-attending={editStatus === 'attending'}>
-									<input type="radio" name="editStatus" value="attending" bind:group={editStatus} class="sr-only" />
+								<label
+									class="rsvp-option {attendingDisabled ? 'rsvp-option-disabled' : ''}"
+									class:rsvp-option-selected={editStatus === 'attending'}
+									class:rsvp-option-attending={editStatus === 'attending'}
+								>
+									<input type="radio" name="editStatus" value="attending" bind:group={editStatus} class="sr-only" disabled={attendingDisabled} />
 									<svg class="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
 									<span class="text-xs sm:text-sm font-medium">Attending</span>
+									{#if attendingDisabled}
+										<span class="text-[10px] text-red-500 mt-0.5">Full</span>
+									{/if}
 								</label>
 								<label class="rsvp-option" class:rsvp-option-selected={editStatus === 'maybe'} class:rsvp-option-maybe={editStatus === 'maybe'}>
 									<input type="radio" name="editStatus" value="maybe" bind:group={editStatus} class="sr-only" />
@@ -620,5 +660,13 @@
 		border-color: #ef4444;
 		background-color: #fef2f2;
 		color: #dc2626;
+	}
+	.rsvp-option-disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.rsvp-option-disabled:hover {
+		border-color: #e2e8f0;
+		background-color: transparent;
 	}
 </style>

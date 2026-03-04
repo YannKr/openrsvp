@@ -105,6 +105,26 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		showGuestList = *req.ShowGuestList
 	}
 
+	var rsvpDeadline *time.Time
+	if req.RSVPDeadline != nil && *req.RSVPDeadline != "" {
+		deadline, err := parseFlexibleTime(*req.RSVPDeadline)
+		if err != nil {
+			return nil, fmt.Errorf("invalid rsvpDeadline format: %w", err)
+		}
+		if deadline.After(eventDate) {
+			return nil, fmt.Errorf("RSVP deadline must be on or before the event date")
+		}
+		rsvpDeadline = &deadline
+	}
+
+	var maxCapacity *int
+	if req.MaxCapacity != nil {
+		if *req.MaxCapacity < 1 {
+			return nil, fmt.Errorf("maxCapacity must be at least 1")
+		}
+		maxCapacity = req.MaxCapacity
+	}
+
 	e := &Event{
 		ID:                 uuid.Must(uuid.NewV7()).String(),
 		OrganizerID:        organizerID,
@@ -118,6 +138,8 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		ContactRequirement: contactRequirement,
 		ShowHeadcount:      showHeadcount,
 		ShowGuestList:      showGuestList,
+		RSVPDeadline:       rsvpDeadline,
+		MaxCapacity:        maxCapacity,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}
@@ -222,6 +244,29 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 	}
 	if req.ShowGuestList != nil {
 		e.ShowGuestList = *req.ShowGuestList
+	}
+	if req.RSVPDeadline != nil {
+		if *req.RSVPDeadline == "" {
+			e.RSVPDeadline = nil
+		} else {
+			deadline, err := parseFlexibleTime(*req.RSVPDeadline)
+			if err != nil {
+				return nil, fmt.Errorf("invalid rsvpDeadline format: %w", err)
+			}
+			if deadline.After(e.EventDate) {
+				return nil, fmt.Errorf("RSVP deadline must be on or before the event date")
+			}
+			e.RSVPDeadline = &deadline
+		}
+	}
+	if req.MaxCapacity != nil {
+		if *req.MaxCapacity == 0 {
+			e.MaxCapacity = nil
+		} else if *req.MaxCapacity < 0 {
+			return nil, fmt.Errorf("maxCapacity must be a positive number, or 0 to remove the limit")
+		} else {
+			e.MaxCapacity = req.MaxCapacity
+		}
 	}
 
 	if !s.smsEnabled && e.ContactRequirement == "phone" {
@@ -348,6 +393,8 @@ func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*
 		ContactRequirement: contactReq,
 		ShowHeadcount:      e.ShowHeadcount,
 		ShowGuestList:      e.ShowGuestList,
+		RSVPDeadline:       e.RSVPDeadline,
+		MaxCapacity:        e.MaxCapacity,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}

@@ -18,6 +18,8 @@ type Event struct {
 	ContactRequirement string     `json:"contactRequirement"`
 	ShowHeadcount      bool       `json:"showHeadcount"`
 	ShowGuestList      bool       `json:"showGuestList"`
+	RSVPDeadline       *time.Time `json:"rsvpDeadline,omitempty"`
+	MaxCapacity        *int       `json:"maxCapacity,omitempty"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
@@ -34,6 +36,8 @@ type CreateEventRequest struct {
 	ContactRequirement *string `json:"contactRequirement,omitempty"`
 	ShowHeadcount      *bool   `json:"showHeadcount,omitempty"`
 	ShowGuestList      *bool   `json:"showGuestList,omitempty"`
+	RSVPDeadline       *string `json:"rsvpDeadline,omitempty"`
+	MaxCapacity        *int    `json:"maxCapacity,omitempty"`
 }
 
 // PublicEvent is a stripped-down event representation for unauthenticated
@@ -41,13 +45,18 @@ type CreateEventRequest struct {
 // share token, visibility toggles, status, timestamps) to avoid leaking
 // information to anonymous visitors.
 type PublicEvent struct {
-	Title              string  `json:"title"`
-	Description        string  `json:"description"`
-	EventDate          string  `json:"eventDate"`
-	EndDate            string  `json:"endDate,omitempty"`
-	Location           string  `json:"location"`
-	Timezone           string  `json:"timezone"`
-	ContactRequirement string  `json:"contactRequirement"`
+	Title              string `json:"title"`
+	Description        string `json:"description"`
+	EventDate          string `json:"eventDate"`
+	EndDate            string `json:"endDate,omitempty"`
+	Location           string `json:"location"`
+	Timezone           string `json:"timezone"`
+	ContactRequirement string `json:"contactRequirement"`
+	RSVPDeadline       string `json:"rsvpDeadline,omitempty"`
+	RSVPsClosed        bool   `json:"rsvpsClosed"`
+	MaxCapacity        *int   `json:"maxCapacity,omitempty"`
+	SpotsLeft          *int   `json:"spotsLeft,omitempty"`
+	AtCapacity         bool   `json:"atCapacity"`
 }
 
 // ToPublic converts an Event to a PublicEvent, stripping internal fields.
@@ -62,6 +71,12 @@ func (e *Event) ToPublic() *PublicEvent {
 	}
 	if e.EndDate != nil {
 		p.EndDate = e.EndDate.Format("2006-01-02T15:04:05Z07:00")
+	}
+	if e.RSVPDeadline != nil {
+		p.RSVPDeadline = e.RSVPDeadline.Format("2006-01-02T15:04:05Z07:00")
+		if time.Now().UTC().After(*e.RSVPDeadline) {
+			p.RSVPsClosed = true
+		}
 	}
 	return p
 }
@@ -78,4 +93,6 @@ type UpdateEventRequest struct {
 	ContactRequirement *string `json:"contactRequirement,omitempty"`
 	ShowHeadcount      *bool   `json:"showHeadcount,omitempty"`
 	ShowGuestList      *bool   `json:"showGuestList,omitempty"`
+	RSVPDeadline       *string `json:"rsvpDeadline,omitempty"`
+	MaxCapacity        *int    `json:"maxCapacity,omitempty"`
 }

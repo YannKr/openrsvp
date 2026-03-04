@@ -5,9 +5,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/openrsvp/openrsvp/internal/calendar"
 	"github.com/openrsvp/openrsvp/internal/event"
 	"github.com/openrsvp/openrsvp/internal/invite"
 )
@@ -19,6 +22,28 @@ const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 // confirmation email to the attendee. It runs asynchronously.
 type NotifyRSVPFunc func(ctx context.Context, eventID string, attendee *Attendee)
 
+// capacityMutexes provides per-event locking for capacity checks to prevent
+// race conditions in the check-then-insert pattern. This works for
+// single-instance deployments. Multi-instance PostgreSQL deployments should
+// use advisory locks instead.
+// TODO: Add advisory lock support for multi-instance PostgreSQL deployments.
+var capacityMutexes = struct {
+	sync.Mutex
+	m map[string]*sync.Mutex
+}{m: make(map[string]*sync.Mutex)}
+
+// getEventMutex returns a mutex for the given event ID, creating one if needed.
+func getEventMutex(eventID string) *sync.Mutex {
+	capacityMutexes.Lock()
+	defer capacityMutexes.Unlock()
+	mu, ok := capacityMutexes.m[eventID]
+	if !ok {
+		mu = &sync.Mutex{}
+		capacityMutexes.m[eventID] = mu
+	}
+	return mu
+}
+
 // Service contains the business logic for the RSVP system.
 type Service struct {
 	store         *Store
@@ -26,6 +51,7 @@ type Service struct {
 	inviteService *invite.Service
 	notifyRSVP    NotifyRSVPFunc
 	smsEnabled    bool
+	baseURL       string
 }
 
 // NewService creates a new RSVP Service.
@@ -35,6 +61,11 @@ func NewService(store *Store, eventService *event.Service, inviteService *invite
 		eventService:  eventService,
 		inviteService: inviteService,
 	}
+}
+
+// SetBaseURL sets the base URL used for constructing public links (e.g., calendar URLs).
+func (s *Service) SetBaseURL(baseURL string) {
+	s.baseURL = baseURL
 }
 
 // SetNotifyRSVP registers the function that sends RSVP confirmation emails.
@@ -110,6 +141,23 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 		data.Attendance = attendance
 	}
 
+	// Populate capacity info on the public event.
+	if ev.MaxCapacity != nil {
+		headcount, _, err := s.store.GetPublicAttendance(ctx, ev.ID)
+		if err == nil {
+			spotsLeft := *ev.MaxCapacity - headcount
+			if spotsLeft < 0 {
+				spotsLeft = 0
+			}
+			// Only expose capacity details when headcount visibility is enabled.
+			if ev.ShowHeadcount {
+				data.Event.MaxCapacity = ev.MaxCapacity
+				data.Event.SpotsLeft = &spotsLeft
+			}
+			data.Event.AtCapacity = spotsLeft <= 0
+		}
+	}
+
 	return data, nil
 }
 
@@ -148,6 +196,11 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		return nil, fmt.Errorf("event is not accepting RSVPs")
 	}
 
+	// Check RSVP deadline.
+	if ev.RSVPDeadline != nil && time.Now().UTC().After(*ev.RSVPDeadline) {
+		return nil, fmt.Errorf("RSVPs are closed")
+	}
+
 	// Validate contact info based on the event's contact requirement.
 	hasEmail := req.Email != nil && *req.Email != ""
 	hasPhone := req.Phone != nil && *req.Phone != ""
@@ -178,6 +231,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		return nil, fmt.Errorf("email is required")
 	}
 
+	// Acquire per-event mutex for capacity checks.
+	if ev.MaxCapacity != nil {
+		mu := getEventMutex(ev.ID)
+		mu.Lock()
+		defer mu.Unlock()
+	}
+
 	// Check for existing attendee (deduplicate by email or phone).
 	var existing *Attendee
 	if req.Email != nil && *req.Email != "" {
@@ -194,6 +254,23 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 
 	if existing != nil {
+		// For existing attendee updates, check capacity if changing to attending.
+		if req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
+			stats, err := s.store.GetStats(ctx, ev.ID)
+			if err != nil {
+				return nil, fmt.Errorf("check capacity: %w", err)
+			}
+			// Subtract current attendee's contribution before checking.
+			currentContribution := 0
+			if existing.RSVPStatus == "attending" {
+				currentContribution = 1 + existing.PlusOnes
+			}
+			newContribution := 1 + req.PlusOnes
+			if stats.AttendingHeadcount-currentContribution+newContribution > *ev.MaxCapacity {
+				return nil, fmt.Errorf("event is at capacity")
+			}
+		}
+
 		// Update the existing RSVP.
 		existing.Name = req.Name
 		existing.RSVPStatus = req.RSVPStatus
@@ -220,6 +297,17 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			}()
 		}
 		return existing, nil
+	}
+
+	// Check capacity for new attendees.
+	if req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
+		stats, err := s.store.GetStats(ctx, ev.ID)
+		if err != nil {
+			return nil, fmt.Errorf("check capacity: %w", err)
+		}
+		if stats.AttendingHeadcount+1+req.PlusOnes > *ev.MaxCapacity {
+			return nil, fmt.Errorf("event is at capacity")
+		}
 	}
 
 	// Create a new attendee.
@@ -265,6 +353,7 @@ type RsvpWithEvent struct {
 	Attendee   *Attendee            `json:"attendee"`
 	Event      *event.PublicEvent   `json:"event"`
 	Attendance *PublicAttendance     `json:"attendance,omitempty"`
+	ShareToken string               `json:"shareToken,omitempty"`
 }
 
 // GetByToken retrieves an attendee by their RSVP token.
@@ -295,8 +384,9 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 	}
 
 	result := &RsvpWithEvent{
-		Attendee: a,
-		Event:    ev.ToPublic(),
+		Attendee:   a,
+		Event:      ev.ToPublic(),
+		ShareToken: ev.ShareToken,
 	}
 
 	if ev.ShowHeadcount || ev.ShowGuestList {
@@ -314,6 +404,23 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 		result.Attendance = attendance
 	}
 
+	// Populate capacity info on the public event.
+	if ev.MaxCapacity != nil {
+		headcount, _, err := s.store.GetPublicAttendance(ctx, a.EventID)
+		if err == nil {
+			spotsLeft := *ev.MaxCapacity - headcount
+			if spotsLeft < 0 {
+				spotsLeft = 0
+			}
+			// Only expose capacity details when headcount visibility is enabled.
+			if ev.ShowHeadcount {
+				result.Event.MaxCapacity = ev.MaxCapacity
+				result.Event.SpotsLeft = &spotsLeft
+			}
+			result.Event.AtCapacity = spotsLeft <= 0
+		}
+	}
+
 	return result, nil
 }
 
@@ -325,6 +432,59 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 	}
 	if a == nil {
 		return nil, fmt.Errorf("rsvp not found")
+	}
+
+	// Check if RSVPs are closed for this event (deadline enforcement).
+	ev, err := s.eventService.GetByID(ctx, a.EventID)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if ev.RSVPDeadline != nil && time.Now().UTC().After(*ev.RSVPDeadline) {
+		return nil, fmt.Errorf("RSVPs are closed")
+	}
+
+	// Capacity enforcement for UpdateByToken.
+	if ev.MaxCapacity != nil {
+		mu := getEventMutex(ev.ID)
+		mu.Lock()
+		defer mu.Unlock()
+	}
+
+	if req.RSVPStatus != nil && *req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
+		if a.RSVPStatus != "attending" {
+			// Changing TO attending from a non-attending status.
+			stats, err := s.store.GetStats(ctx, a.EventID)
+			if err != nil {
+				return nil, fmt.Errorf("check capacity: %w", err)
+			}
+			newPlusOnes := a.PlusOnes
+			if req.PlusOnes != nil {
+				newPlusOnes = *req.PlusOnes
+			}
+			if stats.AttendingHeadcount+1+newPlusOnes > *ev.MaxCapacity {
+				return nil, fmt.Errorf("event is at capacity")
+			}
+		} else if req.PlusOnes != nil && *req.PlusOnes > a.PlusOnes {
+			// Already attending but increasing plus-ones.
+			stats, err := s.store.GetStats(ctx, a.EventID)
+			if err != nil {
+				return nil, fmt.Errorf("check capacity: %w", err)
+			}
+			additional := *req.PlusOnes - a.PlusOnes
+			if stats.AttendingHeadcount+additional > *ev.MaxCapacity {
+				return nil, fmt.Errorf("event is at capacity")
+			}
+		}
+	} else if req.PlusOnes != nil && a.RSVPStatus == "attending" && ev.MaxCapacity != nil && *req.PlusOnes > a.PlusOnes {
+		// Status not changing but plus-ones increasing while already attending.
+		stats, err := s.store.GetStats(ctx, a.EventID)
+		if err != nil {
+			return nil, fmt.Errorf("check capacity: %w", err)
+		}
+		additional := *req.PlusOnes - a.PlusOnes
+		if stats.AttendingHeadcount+additional > *ev.MaxCapacity {
+			return nil, fmt.Errorf("event is at capacity")
+		}
 	}
 
 	if req.Name != nil {
@@ -368,6 +528,40 @@ func (s *Service) ListByEvent(ctx context.Context, eventID string) ([]*Attendee,
 // GetStats returns aggregate RSVP statistics for an event.
 func (s *Service) GetStats(ctx context.Context, eventID string) (*RSVPStats, error) {
 	return s.store.GetStats(ctx, eventID)
+}
+
+// GetEventForCalendar retrieves event data for calendar generation by share token.
+// Only published events are returned.
+func (s *Service) GetEventForCalendar(ctx context.Context, shareToken string) (*calendar.EventData, error) {
+	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+	if ev.Status != "published" {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	var inviteURL string
+	if s.baseURL != "" {
+		inviteURL = s.baseURL + "/i/" + shareToken
+	}
+
+	return &calendar.EventData{
+		ID:          ev.ID,
+		Title:       ev.Title,
+		Description: ev.Description,
+		Location:    ev.Location,
+		EventDate:   ev.EventDate,
+		EndDate:     ev.EndDate,
+		Timezone:    ev.Timezone,
+		URL:         inviteURL,
+	}, nil
+}
+
+// GetEventByID retrieves an event by its ID. This is used by the handler
+// for operations that need event data (e.g., CSV export filename).
+func (s *Service) GetEventByID(ctx context.Context, eventID string) (*event.Event, error) {
+	return s.eventService.GetByID(ctx, eventID)
 }
 
 // RemoveAttendee deletes an attendee from an event.

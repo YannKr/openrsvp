@@ -19,6 +19,9 @@ func NewStore(db database.DB) *Store {
 	return &Store{db: db}
 }
 
+// eventColumns is the standard column list for event queries.
+const eventColumns = `id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, created_at, updated_at`
+
 // Create inserts a new event into the database.
 func (s *Store) Create(ctx context.Context, e *Event) error {
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -30,11 +33,18 @@ func (s *Store) Create(ctx context.Context, e *Event) error {
 		endDate = &v
 	}
 
+	var rsvpDeadline *string
+	if e.RSVPDeadline != nil {
+		v := e.RSVPDeadline.UTC().Format(time.RFC3339)
+		rsvpDeadline = &v
+	}
+
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.OrganizerID, e.Title, e.Description, eventDate, endDate,
-		e.Location, e.Timezone, e.RetentionDays, e.Status, e.ShareToken, e.ContactRequirement, e.ShowHeadcount, e.ShowGuestList, now, now,
+		e.Location, e.Timezone, e.RetentionDays, e.Status, e.ShareToken, e.ContactRequirement,
+		e.ShowHeadcount, e.ShowGuestList, rsvpDeadline, e.MaxCapacity, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("create event: %w", err)
@@ -51,8 +61,7 @@ func (s *Store) Create(ctx context.Context, e *Event) error {
 // FindByID retrieves an event by its ID.
 func (s *Store) FindByID(ctx context.Context, id string) (*Event, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, created_at, updated_at
-		 FROM events WHERE id = ?`, id,
+		`SELECT `+eventColumns+` FROM events WHERE id = ?`, id,
 	)
 	return scanEvent(row)
 }
@@ -60,8 +69,7 @@ func (s *Store) FindByID(ctx context.Context, id string) (*Event, error) {
 // FindByShareToken retrieves an event by its share token.
 func (s *Store) FindByShareToken(ctx context.Context, shareToken string) (*Event, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, created_at, updated_at
-		 FROM events WHERE share_token = ?`, shareToken,
+		`SELECT `+eventColumns+` FROM events WHERE share_token = ?`, shareToken,
 	)
 	return scanEvent(row)
 }
@@ -70,8 +78,7 @@ func (s *Store) FindByShareToken(ctx context.Context, shareToken string) (*Event
 // archived events.
 func (s *Store) FindByOrganizerID(ctx context.Context, organizerID string) ([]*Event, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, created_at, updated_at
-		 FROM events WHERE organizer_id = ? AND status != 'archived' ORDER BY event_date DESC`, organizerID,
+		`SELECT `+eventColumns+` FROM events WHERE organizer_id = ? AND status != 'archived' ORDER BY event_date DESC`, organizerID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("find events by organizer: %w", err)
@@ -104,10 +111,18 @@ func (s *Store) Update(ctx context.Context, e *Event) error {
 		endDate = &v
 	}
 
+	var rsvpDeadline *string
+	if e.RSVPDeadline != nil {
+		v := e.RSVPDeadline.UTC().Format(time.RFC3339)
+		rsvpDeadline = &v
+	}
+
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, contact_requirement = ?, show_headcount = ?, show_guest_list = ?, updated_at = ?
+		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, contact_requirement = ?, show_headcount = ?, show_guest_list = ?, rsvp_deadline = ?, max_capacity = ?, updated_at = ?
 		 WHERE id = ?`,
-		e.Title, e.Description, eventDate, endDate, e.Location, e.Timezone, e.RetentionDays, e.Status, e.ContactRequirement, e.ShowHeadcount, e.ShowGuestList, now, e.ID,
+		e.Title, e.Description, eventDate, endDate, e.Location, e.Timezone,
+		e.RetentionDays, e.Status, e.ContactRequirement, e.ShowHeadcount, e.ShowGuestList,
+		rsvpDeadline, e.MaxCapacity, now, e.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update event: %w", err)
@@ -130,13 +145,15 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 func scanEvent(row *sql.Row) (*Event, error) {
 	var e Event
 	var eventDate, createdAt, updatedAt string
-	var endDate sql.NullString
+	var endDate, rsvpDeadline sql.NullString
+	var maxCapacity sql.NullInt64
 
 	err := row.Scan(
 		&e.ID, &e.OrganizerID, &e.Title, &e.Description,
 		&eventDate, &endDate, &e.Location, &e.Timezone,
 		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&e.ShowHeadcount, &e.ShowGuestList,
+		&rsvpDeadline, &maxCapacity,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -146,31 +163,33 @@ func scanEvent(row *sql.Row) (*Event, error) {
 		return nil, fmt.Errorf("scan event: %w", err)
 	}
 
-	return parseEventTimes(&e, eventDate, endDate, createdAt, updatedAt)
+	return parseEventTimes(&e, eventDate, endDate, rsvpDeadline, maxCapacity, createdAt, updatedAt)
 }
 
 // scanEventRow scans a single row from sql.Rows into an Event.
 func scanEventRow(rows *sql.Rows) (*Event, error) {
 	var e Event
 	var eventDate, createdAt, updatedAt string
-	var endDate sql.NullString
+	var endDate, rsvpDeadline sql.NullString
+	var maxCapacity sql.NullInt64
 
 	err := rows.Scan(
 		&e.ID, &e.OrganizerID, &e.Title, &e.Description,
 		&eventDate, &endDate, &e.Location, &e.Timezone,
 		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&e.ShowHeadcount, &e.ShowGuestList,
+		&rsvpDeadline, &maxCapacity,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan event row: %w", err)
 	}
 
-	return parseEventTimes(&e, eventDate, endDate, createdAt, updatedAt)
+	return parseEventTimes(&e, eventDate, endDate, rsvpDeadline, maxCapacity, createdAt, updatedAt)
 }
 
 // parseEventTimes parses the RFC3339 timestamp strings into time.Time fields.
-func parseEventTimes(e *Event, eventDate string, endDate sql.NullString, createdAt, updatedAt string) (*Event, error) {
+func parseEventTimes(e *Event, eventDate string, endDate, rsvpDeadline sql.NullString, maxCapacity sql.NullInt64, createdAt, updatedAt string) (*Event, error) {
 	var err error
 
 	e.EventDate, err = time.Parse(time.RFC3339, eventDate)
@@ -184,6 +203,19 @@ func parseEventTimes(e *Event, eventDate string, endDate sql.NullString, created
 			return nil, fmt.Errorf("parse end_date: %w", err)
 		}
 		e.EndDate = &t
+	}
+
+	if rsvpDeadline.Valid {
+		t, err := time.Parse(time.RFC3339, rsvpDeadline.String)
+		if err != nil {
+			return nil, fmt.Errorf("parse rsvp_deadline: %w", err)
+		}
+		e.RSVPDeadline = &t
+	}
+
+	if maxCapacity.Valid {
+		v := int(maxCapacity.Int64)
+		e.MaxCapacity = &v
 	}
 
 	e.CreatedAt, err = time.Parse(time.RFC3339, createdAt)

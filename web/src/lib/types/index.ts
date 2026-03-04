@@ -22,6 +22,8 @@ export interface Event {
 	showGuestList: boolean;
 	status: 'draft' | 'published' | 'cancelled' | 'archived';
 	shareToken: string;
+	rsvpDeadline?: string;
+	maxCapacity?: number;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -99,6 +101,11 @@ export interface PublicEvent {
 	location: string;
 	timezone: string;
 	contactRequirement: 'email' | 'phone' | 'email_or_phone' | 'email_and_phone';
+	rsvpDeadline?: string;
+	rsvpsClosed: boolean;
+	maxCapacity?: number;
+	spotsLeft?: number;
+	atCapacity: boolean;
 }
 
 export interface PublicAttendance {

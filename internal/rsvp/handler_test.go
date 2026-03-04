@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -520,4 +521,168 @@ func TestHandleRemoveAttendee_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 	body := testutil.ParseJSON(t, rr)
 	assert.Equal(t, "not_found", body["error"])
+}
+
+// --- Calendar Download ---
+
+func TestHandleCalendarDownload_Success(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/"+shareToken+"/calendar.ics", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/calendar")
+	assert.Contains(t, rr.Header().Get("Content-Disposition"), ".ics")
+	assert.Contains(t, rr.Body.String(), "BEGIN:VCALENDAR")
+	assert.Contains(t, rr.Body.String(), "END:VCALENDAR")
+	assert.Contains(t, rr.Body.String(), "SUMMARY:Test Event")
+}
+
+func TestHandleCalendarDownload_NotFound(t *testing.T) {
+	h, _, _, _ := setupRSVPHandler(t)
+
+	rr := testutil.DoRequest(t, h, "GET", "/public/nonexistent/calendar.ics", nil)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+// --- CSV Export ---
+
+func TestHandleExportCSV_Success(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+
+	doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+	doRSVP(t, svc, shareToken, "Bob", "bob@example.com")
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/csv")
+	assert.Contains(t, rr.Header().Get("Content-Disposition"), ".csv")
+	body := rr.Body.String()
+	assert.Contains(t, body, "Name,Email,Phone,RSVP Status,Dietary Notes,Plus Ones,RSVP Date")
+	assert.Contains(t, body, "Alice")
+	assert.Contains(t, body, "Bob")
+}
+
+func TestHandleExportCSV_FilterByStatus(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	ctx := context.Background()
+
+	doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+	_, err := svc.SubmitRSVP(ctx, shareToken, rsvp.RSVPRequest{
+		Name: "Bob", Email: sp("bob@example.com"), RSVPStatus: "declined", ContactMethod: "email",
+	})
+	require.NoError(t, err)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export?status=attending", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	assert.Contains(t, body, "Alice")
+	assert.NotContains(t, body, "Bob")
+}
+
+func TestHandleExportCSV_InvalidStatus(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	_, eventID := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export?status=invalid", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "bad_request", body["error"])
+}
+
+func TestHandleExportCSV_Unauthorized(t *testing.T) {
+	h, eventSvc, org := setupRSVPHandlerNoAuth(t)
+	_, eventID := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "unauthorized", body["error"])
+}
+
+func TestExportCSV_EmptyGuestList(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	_, eventID := publishEvent(t, eventSvc, org.ID)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/csv")
+	body := rr.Body.String()
+	// Should contain the BOM + header row and nothing else.
+	assert.Contains(t, body, "Name,Email,Phone,RSVP Status,Dietary Notes,Plus Ones,RSVP Date")
+	// Count the number of newlines: header row only means exactly 1 data line.
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	assert.Equal(t, 1, len(lines), "empty guest list should produce header row only")
+}
+
+func TestExportCSV_SpecialCharacters(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	ctx := context.Background()
+
+	// Submit RSVP with commas, quotes, and unicode in the name and dietary notes.
+	_, err := svc.SubmitRSVP(ctx, shareToken, rsvp.RSVPRequest{
+		Name:          `O'Brien, "Bob"`,
+		Email:         sp("bob@example.com"),
+		RSVPStatus:    "attending",
+		ContactMethod: "email",
+		DietaryNotes:  `No nuts, "strictly" vegan`,
+	})
+	require.NoError(t, err)
+
+	// Submit RSVP with unicode characters.
+	_, err = svc.SubmitRSVP(ctx, shareToken, rsvp.RSVPRequest{
+		Name:          "Marta Fernandez",
+		Email:         sp("marta@example.com"),
+		RSVPStatus:    "attending",
+		ContactMethod: "email",
+	})
+	require.NoError(t, err)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	// Go's encoding/csv properly quotes fields containing commas and double-quotes.
+	assert.Contains(t, body, `"O'Brien, ""Bob"""`)
+	assert.Contains(t, body, `"No nuts, ""strictly"" vegan"`)
+	assert.Contains(t, body, "Marta")
+}
+
+func TestExportCSV_NullEmailPhone(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	ctx := context.Background()
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+
+	// Submit RSVP with email but no phone (phone will be nil).
+	_, err := svc.SubmitRSVP(ctx, shareToken, rsvp.RSVPRequest{
+		Name:          "NoPhone User",
+		Email:         sp("nophone@example.com"),
+		RSVPStatus:    "attending",
+		ContactMethod: "email",
+		// Phone is intentionally omitted (nil).
+	})
+	require.NoError(t, err)
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	assert.Contains(t, body, "NoPhone User")
+	assert.Contains(t, body, "nophone@example.com")
+	// The phone column should be an empty string (not "null" or "<nil>").
+	// Parse CSV to verify the phone field is empty.
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	require.GreaterOrEqual(t, len(lines), 2)
+	// The data row should contain the attendee with empty phone field.
+	assert.Contains(t, lines[1], "nophone@example.com,,attending")
 }

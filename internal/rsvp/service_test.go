@@ -2,6 +2,7 @@ package rsvp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -759,4 +760,391 @@ func TestRemoveAttendeeWrongEvent(t *testing.T) {
 	err = svc.RemoveAttendee(ctx, ev2.ID, attendee.ID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "does not belong to this event")
+}
+
+// --- RSVP Deadline Enforcement Tests ---
+
+func createPublishedEventWithDeadline(t *testing.T, eventSvc *event.Service, orgID, deadline string) *event.Event {
+	t.Helper()
+	ctx := context.Background()
+	ev, err := eventSvc.Create(ctx, orgID, event.CreateEventRequest{
+		Title:        "Test Event",
+		EventDate:    "2026-06-15T14:00:00Z",
+		RSVPDeadline: &deadline,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, orgID)
+	require.NoError(t, err)
+	return published
+}
+
+func TestSubmitRSVPPastDeadline(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with a deadline in the past.
+	ev := createPublishedEventWithDeadline(t, eventSvc, org.ID, "2020-01-01T00:00:00Z")
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "RSVPs are closed")
+}
+
+func TestSubmitRSVPFutureDeadline(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with a future deadline.
+	ev := createPublishedEventWithDeadline(t, eventSvc, org.ID, "2026-06-14T23:59:00Z")
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Alice", attendee.Name)
+}
+
+func TestUpdateByTokenPastDeadline(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with a future deadline first so we can submit an RSVP.
+	ev := createPublishedEventWithDeadline(t, eventSvc, org.ID, "2026-06-14T23:59:00Z")
+
+	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Now set the deadline to the past.
+	pastDeadline := "2020-01-01T00:00:00Z"
+	_, err = eventSvc.Update(ctx, ev.ID, org.ID, event.UpdateEventRequest{
+		RSVPDeadline: &pastDeadline,
+	})
+	require.NoError(t, err)
+
+	// Trying to update should fail.
+	newStatus := "declined"
+	_, err = svc.UpdateByToken(ctx, attendee.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: &newStatus,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "RSVPs are closed")
+}
+
+// --- Capacity Enforcement Tests ---
+
+func createPublishedEventWithCapacity(t *testing.T, eventSvc *event.Service, orgID string, capacity int) *event.Event {
+	t.Helper()
+	ctx := context.Background()
+	ev, err := eventSvc.Create(ctx, orgID, event.CreateEventRequest{
+		Title:       "Test Event",
+		EventDate:   "2026-06-15T14:00:00Z",
+		MaxCapacity: &capacity,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, orgID)
+	require.NoError(t, err)
+	return published
+}
+
+func TestSubmitRSVPCapacityEnforced(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 2.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 2)
+
+	// First attendee should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Second attendee should succeed (capacity = 2).
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Third attendee should fail (over capacity).
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", Email: strPtr("carol@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event is at capacity")
+}
+
+func TestSubmitRSVPCapacityIncludesPlusOnes(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 3.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 3)
+
+	// First attendee with 2 plus-ones (total: 3). Should succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 2,
+	})
+	require.NoError(t, err)
+
+	// Second attendee should fail (capacity full: 1+2=3).
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event is at capacity")
+}
+
+func TestSubmitRSVPDeclinedDoesNotCountTowardCapacity(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 1.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 1)
+
+	// Declined RSVP should not count.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "declined",
+	})
+	require.NoError(t, err)
+
+	// This attending RSVP should still succeed.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+}
+
+func TestSubmitRSVPNoCapacityLimit(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event without capacity limit.
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	// Should accept many RSVPs without error.
+	for i := 0; i < 5; i++ {
+		_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+			Name:       fmt.Sprintf("Guest %d", i),
+			Email:      strPtr(fmt.Sprintf("guest%d@example.com", i)),
+			RSVPStatus: "attending",
+		})
+		require.NoError(t, err)
+	}
+}
+
+func TestSubmitRSVPUpsertCapacityCheck(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 2.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 2)
+
+	// Submit as "maybe" (does not count toward capacity).
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "maybe",
+	})
+	require.NoError(t, err)
+
+	// Fill capacity with another attendee.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+
+	// Alice's upsert to "attending" should fail (capacity is 2, Bob takes 2 spots).
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event is at capacity")
+}
+
+func TestUpdateByTokenCapacityEnforced(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 2.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 2)
+
+	// Submit Alice as "maybe".
+	alice, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "maybe",
+	})
+	require.NoError(t, err)
+
+	// Fill capacity.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+
+	// Alice trying to change to "attending" should fail.
+	attendingStatus := "attending"
+	_, err = svc.UpdateByToken(ctx, alice.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: &attendingStatus,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event is at capacity")
+}
+
+func TestUpdateByTokenPlusOneCapacityEnforced(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 3.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 3)
+
+	// Alice attending with 1 plus-one (2 spots used).
+	alice, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+
+	// Bob takes the last spot.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Alice trying to increase plus-ones should fail.
+	morePlusOnes := 2
+	_, err = svc.UpdateByToken(ctx, alice.RSVPToken, UpdateRSVPRequest{
+		PlusOnes: &morePlusOnes,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event is at capacity")
+}
+
+func TestGetPublicInviteShowsCapacityInfo(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	cap := 5
+	showHeadcount := true
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00:00Z",
+		MaxCapacity:   &cap,
+		ShowHeadcount: &showHeadcount,
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	// Add 2 attending guests.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: 1,
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+
+	require.NotNil(t, data.Event.MaxCapacity)
+	assert.Equal(t, 5, *data.Event.MaxCapacity)
+	require.NotNil(t, data.Event.SpotsLeft)
+	assert.Equal(t, 3, *data.Event.SpotsLeft) // 5 - 2 (Alice + 1 plus-one)
+	assert.False(t, data.Event.AtCapacity)
+}
+
+func TestGetPublicInviteAtCapacity(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	cap := 1
+	showHeadcount := true
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title:         "Party",
+		EventDate:     "2026-06-15T14:00:00Z",
+		MaxCapacity:   &cap,
+		ShowHeadcount: &showHeadcount,
+	})
+	require.NoError(t, err)
+	_, err = eventSvc.Publish(ctx, ev.ID, org.ID)
+	require.NoError(t, err)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+
+	assert.True(t, data.Event.AtCapacity)
+	require.NotNil(t, data.Event.SpotsLeft)
+	assert.Equal(t, 0, *data.Event.SpotsLeft)
+}
+
+// --- Calendar Integration Tests ---
+
+func TestGetEventForCalendar(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	calData, err := svc.GetEventForCalendar(ctx, ev.ShareToken)
+	require.NoError(t, err)
+	assert.Equal(t, ev.ID, calData.ID)
+	assert.Equal(t, "Test Event", calData.Title)
+}
+
+func TestGetEventForCalendarUnpublished(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev, err := eventSvc.Create(ctx, org.ID, event.CreateEventRequest{
+		Title: "Draft", EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetEventForCalendar(ctx, ev.ShareToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event not found")
 }

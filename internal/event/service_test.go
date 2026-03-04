@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -398,6 +399,7 @@ func TestDuplicateEventForbidden(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+func intPtr(i int) *int    { return &i }
 
 func TestCreateEventDefaultVisibility(t *testing.T) {
 	svc, authStore := setupEvent(t)
@@ -496,4 +498,259 @@ func TestDeleteEvent(t *testing.T) {
 	events, err := svc.ListByOrganizer(ctx, org.ID)
 	require.NoError(t, err)
 	assert.Empty(t, events)
+}
+
+// --- RSVP Deadline Tests ---
+
+func TestCreateEventWithRSVPDeadline(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	deadline := "2026-06-14T23:59:00Z"
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:        "Party",
+		EventDate:    "2026-06-15T14:00:00Z",
+		RSVPDeadline: &deadline,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ev.RSVPDeadline)
+	assert.Equal(t, 2026, ev.RSVPDeadline.Year())
+	assert.Equal(t, 14, ev.RSVPDeadline.Day())
+
+	// Verify persistence.
+	found, err := svc.GetByID(ctx, ev.ID)
+	require.NoError(t, err)
+	require.NotNil(t, found.RSVPDeadline)
+	assert.Equal(t, ev.RSVPDeadline.Unix(), found.RSVPDeadline.Unix())
+}
+
+func TestCreateEventRSVPDeadlineAfterEventDate(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	deadline := "2026-06-16T00:00:00Z"
+	_, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:        "Party",
+		EventDate:    "2026-06-15T14:00:00Z",
+		RSVPDeadline: &deadline,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "RSVP deadline must be on or before the event date")
+}
+
+func TestUpdateEventRSVPDeadline(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00:00Z",
+	})
+	require.NoError(t, err)
+	assert.Nil(t, ev.RSVPDeadline)
+
+	// Set a deadline.
+	deadline := "2026-06-14T23:59:00Z"
+	updated, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		RSVPDeadline: &deadline,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated.RSVPDeadline)
+
+	// Clear the deadline.
+	emptyDeadline := ""
+	cleared, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		RSVPDeadline: &emptyDeadline,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, cleared.RSVPDeadline)
+}
+
+func TestUpdateEventRSVPDeadlineAfterEventDate(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00:00Z",
+	})
+	require.NoError(t, err)
+
+	deadline := "2026-06-16T00:00:00Z"
+	_, err = svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		RSVPDeadline: &deadline,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "RSVP deadline must be on or before the event date")
+}
+
+func TestToPublicRSVPDeadline(t *testing.T) {
+	ev := &Event{
+		Title:     "Party",
+		EventDate: time.Date(2026, 6, 15, 14, 0, 0, 0, time.UTC),
+		Timezone:  "America/New_York",
+	}
+
+	// Without deadline.
+	pub := ev.ToPublic()
+	assert.Empty(t, pub.RSVPDeadline)
+	assert.False(t, pub.RSVPsClosed)
+
+	// With future deadline.
+	futureDeadline := time.Now().UTC().Add(24 * time.Hour)
+	ev.RSVPDeadline = &futureDeadline
+	pub = ev.ToPublic()
+	assert.NotEmpty(t, pub.RSVPDeadline)
+	assert.False(t, pub.RSVPsClosed)
+
+	// With past deadline.
+	pastDeadline := time.Now().UTC().Add(-24 * time.Hour)
+	ev.RSVPDeadline = &pastDeadline
+	pub = ev.ToPublic()
+	assert.NotEmpty(t, pub.RSVPDeadline)
+	assert.True(t, pub.RSVPsClosed)
+}
+
+func TestDuplicateEventCopiesDeadlineAndCapacity(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	deadline := "2026-06-14T23:59:00Z"
+	capacity := 50
+	created, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:        "Party",
+		EventDate:    "2026-06-15T14:00:00Z",
+		RSVPDeadline: &deadline,
+		MaxCapacity:  &capacity,
+	})
+	require.NoError(t, err)
+
+	dup, err := svc.Duplicate(ctx, created.ID, org.ID)
+	require.NoError(t, err)
+	require.NotNil(t, dup.RSVPDeadline)
+	assert.Equal(t, created.RSVPDeadline.Unix(), dup.RSVPDeadline.Unix())
+	require.NotNil(t, dup.MaxCapacity)
+	assert.Equal(t, 50, *dup.MaxCapacity)
+}
+
+// --- Capacity Limit Tests ---
+
+func TestCreateEventWithMaxCapacity(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	capacity := 100
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:       "Party",
+		EventDate:   "2026-06-15T14:00",
+		MaxCapacity: &capacity,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ev.MaxCapacity)
+	assert.Equal(t, 100, *ev.MaxCapacity)
+
+	// Verify persistence.
+	found, err := svc.GetByID(ctx, ev.ID)
+	require.NoError(t, err)
+	require.NotNil(t, found.MaxCapacity)
+	assert.Equal(t, 100, *found.MaxCapacity)
+}
+
+func TestCreateEventMaxCapacityZero(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	capacity := 0
+	_, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:       "Party",
+		EventDate:   "2026-06-15T14:00",
+		MaxCapacity: &capacity,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "maxCapacity must be at least 1")
+}
+
+func TestCreateEventMaxCapacityNegative(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	capacity := -5
+	_, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:       "Party",
+		EventDate:   "2026-06-15T14:00",
+		MaxCapacity: &capacity,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "maxCapacity must be at least 1")
+}
+
+func TestUpdateEventMaxCapacity(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.Nil(t, ev.MaxCapacity)
+
+	// Set capacity.
+	cap := 50
+	updated, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		MaxCapacity: &cap,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated.MaxCapacity)
+	assert.Equal(t, 50, *updated.MaxCapacity)
+
+	// Remove capacity by sending 0.
+	zeroCap := 0
+	cleared, err := svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		MaxCapacity: &zeroCap,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, cleared.MaxCapacity)
+}
+
+func TestUpdateEventMaxCapacityNegative(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+
+	negCap := -1
+	_, err = svc.Update(ctx, ev.ID, org.ID, UpdateEventRequest{
+		MaxCapacity: &negCap,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "maxCapacity must be a positive number")
+}
+
+func TestCreateEventNoDeadlineOrCapacity(t *testing.T) {
+	svc, authStore := setupEvent(t)
+	org := createOrganizer(t, authStore)
+	ctx := context.Background()
+
+	ev, err := svc.Create(ctx, org.ID, CreateEventRequest{
+		Title:     "Party",
+		EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	assert.Nil(t, ev.RSVPDeadline)
+	assert.Nil(t, ev.MaxCapacity)
 }

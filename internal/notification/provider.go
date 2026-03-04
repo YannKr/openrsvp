@@ -10,12 +10,20 @@ const (
 	ChannelSMS   Channel = "sms"
 )
 
+// Attachment represents a file to attach to an email.
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
 // Message represents a notification to be sent.
 type Message struct {
-	To      string // email address or phone number
-	Subject string // for email
-	Body    string // HTML for email, plain text for SMS
-	Plain   string // plain text fallback for email
+	To          string       // email address or phone number
+	Subject     string       // for email
+	Body        string       // HTML for email, plain text for SMS
+	Plain       string       // plain text fallback for email
+	Attachments []Attachment // file attachments (email only)
 }
 
 // Provider is the interface all notification providers must implement.

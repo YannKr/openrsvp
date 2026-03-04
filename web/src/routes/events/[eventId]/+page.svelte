@@ -51,27 +51,33 @@
 		return attendees.filter((a) => a.rsvpStatus === activeFilter);
 	});
 
-	onMount(async () => {
-		try {
-			const [eventResult, attendeeResult, statsResult, remindersResult] = await Promise.all([
-				api.get<{ data: Event }>(`/events/${eventId}`),
-				api.get<{ data: Attendee[] }>(`/rsvp/event/${eventId}`).catch(() => ({ data: [] })),
-				api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
-					data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
-				})),
-				api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] }))
-			]);
-			event = eventResult.data;
-			$currentEvent = event;
-			attendees = attendeeResult.data;
-			stats = statsResult.data;
-			reminders = remindersResult.data;
-		} catch (err: unknown) {
-			const apiErr = err as { message?: string };
-			toast.error(apiErr.message || 'Failed to load event');
-		} finally {
-			loading = false;
-		}
+	onMount(() => {
+		document.addEventListener('click', handleExportClickOutside);
+
+		(async () => {
+			try {
+				const [eventResult, attendeeResult, statsResult, remindersResult] = await Promise.all([
+					api.get<{ data: Event }>(`/events/${eventId}`),
+					api.get<{ data: Attendee[] }>(`/rsvp/event/${eventId}`).catch(() => ({ data: [] })),
+					api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
+						data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
+					})),
+					api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] }))
+				]);
+				event = eventResult.data;
+				$currentEvent = event;
+				attendees = attendeeResult.data;
+				stats = statsResult.data;
+				reminders = remindersResult.data;
+			} catch (err: unknown) {
+				const apiErr = err as { message?: string };
+				toast.error(apiErr.message || 'Failed to load event');
+			} finally {
+				loading = false;
+			}
+		})();
+
+		return () => document.removeEventListener('click', handleExportClickOutside);
 	});
 
 	function statusVariant(status: string): 'success' | 'warning' | 'error' | 'info' | 'neutral' {
@@ -193,6 +199,28 @@
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to cancel reminder');
 		}
+	}
+
+	// CSV Export
+	let exportMenuOpen = $state(false);
+	let exportDropdownRef: HTMLDivElement = $state(undefined as unknown as HTMLDivElement);
+
+	function exportCSV(status: string) {
+		const a = document.createElement('a');
+		a.href = `/api/v1/rsvp/event/${eventId}/export?status=${status}`;
+		a.download = '';
+		a.click();
+		exportMenuOpen = false;
+	}
+
+	function handleExportClickOutside(e: MouseEvent) {
+		if (exportDropdownRef && !exportDropdownRef.contains(e.target as Node)) {
+			exportMenuOpen = false;
+		}
+	}
+
+	function handleExportKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') exportMenuOpen = false;
 	}
 
 	// Editing attendees
@@ -430,6 +458,32 @@
 			</div>
 		</div>
 
+		<!-- Capacity Status -->
+		{#if event.maxCapacity}
+			<div class="mb-6 flex items-center gap-2 text-sm text-slate-600">
+				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+				</svg>
+				Capacity: {stats.attendingHeadcount} / {event.maxCapacity}
+				{#if stats.attendingHeadcount >= event.maxCapacity}
+					<Badge variant="error">Full</Badge>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- RSVP Deadline Display -->
+		{#if event.rsvpDeadline}
+			<div class="mb-6 flex items-center gap-2 text-sm text-slate-600">
+				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+				RSVP Deadline: {formatDateTime(event.rsvpDeadline)}
+				{#if new Date(event.rsvpDeadline) < new Date()}
+					<Badge variant="warning">Closed</Badge>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Reminder management -->
 		<Card class="mb-6">
 			{#snippet header()}
@@ -464,7 +518,7 @@
 					label="Custom Message (optional)"
 					name="message"
 					bind:value={reminderMessage}
-					placeholder="Don’t forget to RSVP before Friday!"
+					placeholder="Don't forget to RSVP before Friday!"
 					rows={3}
 				/>
 
@@ -540,7 +594,47 @@
 		<Card>
 			{#snippet header()}
 				<div class="flex items-center justify-between">
-					<h2 class="text-lg font-semibold text-slate-900">Attendees</h2>
+					<div class="flex items-center gap-3">
+						<h2 class="text-lg font-semibold text-slate-900">Attendees</h2>
+						<!-- CSV Export split-button -->
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<div class="relative inline-flex" role="group" bind:this={exportDropdownRef} onkeydown={handleExportKeydown}>
+							<Button variant="outline" size="sm" onclick={() => exportCSV('all')}>
+								Export CSV
+							</Button>
+							<button
+								onclick={() => (exportMenuOpen = !exportMenuOpen)}
+								aria-expanded={exportMenuOpen}
+								aria-haspopup="true"
+								aria-label="Export options"
+								class="inline-flex items-center rounded-r-lg border border-l-0 border-slate-300 bg-white px-2 py-1.5 text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 -ml-px"
+							>
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+							{#if exportMenuOpen}
+								<div
+									class="absolute right-0 z-10 mt-1 w-48 rounded-lg bg-white shadow-lg border border-slate-200 py-1 top-full"
+									role="menu"
+									aria-label="Export filter options"
+								>
+									<button onclick={() => exportCSV('attending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+										Attending Only
+									</button>
+									<button onclick={() => exportCSV('maybe')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+										Maybe Only
+									</button>
+									<button onclick={() => exportCSV('declined')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+										Declined Only
+									</button>
+									<button onclick={() => exportCSV('pending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+										Pending Only
+									</button>
+								</div>
+							{/if}
+						</div>
+					</div>
 					<div class="flex gap-1">
 						{#each ['all', 'attending', 'maybe', 'declined'] as filter}
 							<button

@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +47,15 @@ type sendGridRequest struct {
 	From             sendGridAddress           `json:"from"`
 	Subject          string                    `json:"subject"`
 	Content          []sendGridContent         `json:"content"`
+	Attachments      []sendGridAttachment      `json:"attachments,omitempty"`
+}
+
+// sendGridAttachment represents a file attachment in the SendGrid API.
+type sendGridAttachment struct {
+	Content     string `json:"content"`     // Base64-encoded file content.
+	Type        string `json:"type"`        // MIME type.
+	Filename    string `json:"filename"`    // Display filename.
+	Disposition string `json:"disposition"` // "attachment" or "inline".
 }
 
 // sendGridPersonalization represents a single personalization block.
@@ -108,6 +118,16 @@ func (p *SendGridProvider) Send(ctx context.Context, msg *notification.Message) 
 		From:    sendGridAddress{Email: p.from},
 		Subject: msg.Subject,
 		Content: content,
+	}
+
+	// Add attachments if present.
+	for _, att := range msg.Attachments {
+		payload.Attachments = append(payload.Attachments, sendGridAttachment{
+			Content:     base64.StdEncoding.EncodeToString(att.Data),
+			Type:        att.ContentType,
+			Filename:    att.Filename,
+			Disposition: "attachment",
+		})
 	}
 
 	body, err := json.Marshal(payload)

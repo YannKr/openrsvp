@@ -6,7 +6,7 @@
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import { toISOLocal } from '$lib/utils/dates';
 	import { getTimezoneOptions } from '$lib/utils/timezones';
-	import type { Event } from '$lib/types';
+	import type { Event, RSVPStats } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -31,8 +31,15 @@
 	let contactRequirement = $state('email_or_phone');
 	let showHeadcount = $state(false);
 	let showGuestList = $state(false);
+	let rsvpDeadline = $state('');
+	let maxCapacity = $state('');
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
+	let attendingHeadcount = $state(0);
+
+	const capacityWarning = $derived(
+		maxCapacity && parseInt(maxCapacity) > 0 && attendingHeadcount > parseInt(maxCapacity)
+	);
 
 	const contactRequirementOptions = [
 		{ value: 'email_or_phone', label: 'Email or Phone (at least one)' },
@@ -49,13 +56,18 @@
 
 	let errors: Record<string, string> = $state({});
 
-	let tzOptions = getTimezoneOptions();
+	let tzOptions = $state(getTimezoneOptions());
 
 	onMount(async () => {
 		loadAppConfig();
 		try {
-			const result = await api.get<{ data: Event }>(`/events/${eventId}`);
-			const e = result.data;
+			const [eventResult, statsResult] = await Promise.all([
+				api.get<{ data: Event }>(`/events/${eventId}`),
+				api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
+					data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
+				}))
+			]);
+			const e = eventResult.data;
 			title = e.title;
 			eventDate = e.eventDate ? toISOLocal(new Date(e.eventDate)) : '';
 			endDate = e.endDate ? toISOLocal(new Date(e.endDate)) : '';
@@ -66,8 +78,11 @@
 			contactRequirement = e.contactRequirement || 'email_or_phone';
 			showHeadcount = e.showHeadcount ?? false;
 			showGuestList = e.showGuestList ?? false;
+			rsvpDeadline = e.rsvpDeadline ? toISOLocal(new Date(e.rsvpDeadline)) : '';
+			maxCapacity = e.maxCapacity ? String(e.maxCapacity) : '';
 			retentionDays = String(e.retentionDays);
 			showRetention = e.retentionDays !== 30;
+			attendingHeadcount = statsResult.data.attendingHeadcount;
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to load event');
@@ -86,6 +101,9 @@
 			if (isNaN(days) || days < 1 || days > 365) {
 				errors.retentionDays = 'Retention days must be between 1 and 365';
 			}
+		}
+		if (maxCapacity && (parseInt(maxCapacity) < 1 || isNaN(parseInt(maxCapacity)))) {
+			errors.maxCapacity = 'Max attendees must be at least 1';
 		}
 		return Object.keys(errors).length === 0;
 	}
@@ -107,6 +125,10 @@
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
+			if (rsvpDeadline) body.rsvpDeadline = rsvpDeadline;
+			else body.rsvpDeadline = '';
+			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
+			else body.maxCapacity = 0;
 
 			await api.put(`/events/${eventId}`, body);
 			toast.success('Event updated successfully');
@@ -222,6 +244,36 @@
 							</label>
 						</div>
 					</fieldset>
+
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<DateTimePicker
+							label="RSVP Deadline (optional)"
+							name="rsvpDeadline"
+							bind:value={rsvpDeadline}
+							max={eventDate || undefined}
+							helper="Guests won't be able to RSVP or change their response after this date."
+						/>
+						<Input
+							label="Max Attendees (optional)"
+							name="maxCapacity"
+							type="number"
+							bind:value={maxCapacity}
+							placeholder="Leave empty for unlimited"
+							helper="Total headcount including plus-ones. Leave empty for no limit."
+							error={errors.maxCapacity || ''}
+						/>
+					</div>
+
+					{#if capacityWarning}
+						<div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+							<svg class="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+							</svg>
+							<span>
+								Warning: Current attending headcount ({attendingHeadcount}) exceeds this limit. Existing RSVPs will not be removed, but no new attending RSVPs will be accepted.
+							</span>
+						</div>
+					{/if}
 
 					<div class="pt-2">
 						{#if showRetention}

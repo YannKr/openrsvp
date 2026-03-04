@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/auth"
+	"github.com/openrsvp/openrsvp/internal/calendar"
 	"github.com/openrsvp/openrsvp/internal/config"
 	"github.com/openrsvp/openrsvp/internal/database"
 	"github.com/openrsvp/openrsvp/internal/event"
@@ -97,6 +98,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	rsvpStore := rsvp.NewStore(db)
 	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService)
 	rsvpService.SetSMSEnabled(cfg.SMSEnabled())
+	rsvpService.SetBaseURL(cfg.BaseURL)
 	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx), rsvp.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire up notification layer.
@@ -141,12 +143,36 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				if err != nil {
 					logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("rsvp notify: failed to render attendee template")
 				} else {
-					if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
+					confirmMsg := &notification.Message{
 						To:      *attendee.Email,
 						Subject: "RSVP Confirmation — " + ev.Title,
 						Body:    htmlBody,
 						Plain:   plainBody,
-					}); err != nil {
+					}
+
+					// Attach ICS calendar file for attending and maybe RSVPs.
+					if attendee.RSVPStatus == "attending" || attendee.RSVPStatus == "maybe" {
+						inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+						icsData := calendar.GenerateICS(calendar.EventData{
+							ID:          ev.ID,
+							Title:       ev.Title,
+							Description: ev.Description,
+							Location:    ev.Location,
+							EventDate:   ev.EventDate,
+							EndDate:     ev.EndDate,
+							Timezone:    ev.Timezone,
+							URL:         inviteURL,
+						})
+						confirmMsg.Attachments = []notification.Attachment{
+							{
+								Filename:    "event.ics",
+								ContentType: "text/calendar; charset=utf-8; method=PUBLISH",
+								Data:        []byte(icsData),
+							},
+						}
+					}
+
+					if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, confirmMsg); err != nil {
 						logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("rsvp notify: failed to send attendee email")
 					}
 				}

@@ -327,7 +327,7 @@
 
 						<!-- Background Image Upload -->
 						<div class="space-y-2">
-							<label class="block text-sm font-medium text-slate-700">Background Image</label>
+							<label for="bg-image-input" class="block text-sm font-medium text-slate-700">Background Image</label>
 							{#if backgroundImageUrl}
 								<div class="relative rounded-lg border border-slate-200 overflow-hidden">
 									<img src={backgroundImageUrl} alt="Background preview" class="w-full h-24 object-cover" />

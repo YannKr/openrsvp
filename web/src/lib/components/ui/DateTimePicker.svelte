@@ -6,6 +6,7 @@
 		min?: string;
 		max?: string;
 		error?: string;
+		helper?: string;
 		required?: boolean;
 		class?: string;
 	}
@@ -17,6 +18,7 @@
 		min,
 		max,
 		error = '',
+		helper = '',
 		required = false,
 		class: className = ''
 	}: Props = $props();
@@ -45,5 +47,7 @@
 	/>
 	{#if error}
 		<p class="text-sm text-red-600">{error}</p>
+	{:else if helper}
+		<p class="text-sm text-slate-500">{helper}</p>
 	{/if}
 </div>

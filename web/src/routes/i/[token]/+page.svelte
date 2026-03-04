@@ -3,8 +3,10 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
+	import { formatDateTime } from '$lib/utils/dates';
 	import type { PublicEvent, InviteCard, PublicAttendance, ApiError } from '$lib/types';
 	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
+	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
 
 	interface PublicInviteData {
 		event: PublicEvent;
@@ -37,7 +39,7 @@
 	let submitted = $state(false);
 	let rsvpToken = $state('');
 
-	const token = $derived($page.params.token);
+	const token = $derived($page.params.token ?? '');
 
 	onMount(async () => {
 		await loadAppConfig();
@@ -65,6 +67,30 @@
 	const phoneRequired = $derived(
 		$smsEnabled && (contactReq === 'phone' || contactReq === 'email_and_phone')
 	);
+
+	// RSVP deadline display logic
+	const deadlineText = $derived.by(() => {
+		if (!eventData?.rsvpDeadline) return '';
+		const deadline = new Date(eventData.rsvpDeadline);
+		const now = new Date();
+		const hoursLeft = Math.max(0, (deadline.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+		if (hoursLeft <= 0) return '';
+		if (hoursLeft < 1) return 'Less than 1 hour left to RSVP';
+		if (hoursLeft < 24) return `${Math.ceil(hoursLeft)} hours left to RSVP`;
+		if (hoursLeft < 48) return 'About 1 day left to RSVP';
+		return `RSVP by ${formatDateTime(eventData.rsvpDeadline)}`;
+	});
+
+	// Capacity display logic
+	const capacityPercent = $derived(
+		eventData?.maxCapacity && eventData?.spotsLeft !== undefined
+			? Math.min(100, Math.round(((eventData.maxCapacity - eventData.spotsLeft) / eventData.maxCapacity) * 100))
+			: 0
+	);
+
+	// When at capacity, default to 'maybe' instead of 'attending'
+	const attendingDisabled = $derived(eventData?.atCapacity === true);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -214,6 +240,53 @@
 			/>
 		</div>
 
+		<!-- Add to Calendar -->
+		<div class="w-full max-w-lg mb-6 flex justify-center">
+			<AddToCalendar event={eventData} shareToken={token} />
+		</div>
+
+		<!-- Capacity Display -->
+		{#if eventData.atCapacity}
+			<div class="w-full max-w-lg mb-6">
+				<div class="rounded-lg bg-red-50 border border-red-200 p-4 text-center">
+					<p class="text-sm font-medium text-red-800">This event is at capacity</p>
+					<p class="text-xs text-red-600 mt-1">
+						You can still RSVP as "maybe" or "declined".
+					</p>
+				</div>
+			</div>
+		{:else if eventData.spotsLeft !== undefined && eventData.spotsLeft !== null && eventData.maxCapacity}
+			<div class="w-full max-w-lg mb-6">
+				<div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow border border-slate-200/60 p-4">
+					<div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+						<span>{eventData.spotsLeft} {eventData.spotsLeft === 1 ? 'spot' : 'spots'} remaining</span>
+						<span>{eventData.maxCapacity - eventData.spotsLeft} / {eventData.maxCapacity}</span>
+					</div>
+					<div class="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+						<div
+							class="h-full rounded-full transition-all duration-300 {capacityPercent >= 90 ? 'bg-red-500' : capacityPercent >= 70 ? 'bg-amber-500' : 'bg-indigo-500'}"
+							style="width: {capacityPercent}%"
+							role="progressbar"
+							aria-valuenow={capacityPercent}
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-label="Event capacity"
+						></div>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- RSVP Deadline Display -->
+		{#if deadlineText && !eventData.rsvpsClosed}
+			<div class="w-full max-w-lg mb-4 flex items-center justify-center gap-2">
+				<svg class="h-3.5 w-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+				<p class="text-xs text-amber-600 font-medium">{deadlineText}</p>
+			</div>
+		{/if}
+
 		<!-- Attendance Display -->
 		{#if attendance && (attendance.headcount > 0 || (attendance.names && attendance.names.length > 0))}
 			{#if !(submitted && rsvpStatus === 'declined')}
@@ -266,7 +339,16 @@
 		{/if}
 
 		<!-- RSVP Form or Success -->
-		{#if submitted}
+		{#if eventData.rsvpsClosed}
+			<div class="w-full max-w-lg">
+				<div class="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
+					<p class="text-sm font-medium text-amber-800">RSVPs are closed</p>
+					<p class="text-xs text-amber-600 mt-1">
+						The RSVP deadline for this event has passed.
+					</p>
+				</div>
+			</div>
+		{:else if submitted}
 			<div class="w-full max-w-lg">
 				<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 text-center">
 					<div class="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
@@ -284,6 +366,11 @@
 							{statusLabel}
 						</span>
 					</div>
+					{#if (rsvpStatus === 'attending' || rsvpStatus === 'maybe')}
+						<div class="mt-4 flex justify-center">
+							<AddToCalendar event={eventData} shareToken={token} />
+						</div>
+					{/if}
 					{#if rsvpToken}
 						<div class="mt-4 pt-4 border-t border-slate-100">
 							<p class="text-sm text-slate-500 mb-3">
@@ -380,12 +467,19 @@
 								Will you attend?
 							</legend>
 							<div class="grid grid-cols-3 gap-3">
-								<label class="rsvp-option" class:rsvp-option-selected={rsvpStatus === 'attending'} class:rsvp-option-attending={rsvpStatus === 'attending'}>
-									<input type="radio" name="rsvpStatus" value="attending" bind:group={rsvpStatus} class="sr-only" />
+								<label
+									class="rsvp-option {attendingDisabled ? 'rsvp-option-disabled' : ''}"
+									class:rsvp-option-selected={rsvpStatus === 'attending'}
+									class:rsvp-option-attending={rsvpStatus === 'attending'}
+								>
+									<input type="radio" name="rsvpStatus" value="attending" bind:group={rsvpStatus} class="sr-only" disabled={attendingDisabled} />
 									<svg class="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
 									<span class="text-xs sm:text-sm font-medium">I'll be there!</span>
+									{#if attendingDisabled}
+										<span class="text-[10px] text-red-500 mt-0.5">Full</span>
+									{/if}
 								</label>
 								<label class="rsvp-option" class:rsvp-option-selected={rsvpStatus === 'maybe'} class:rsvp-option-maybe={rsvpStatus === 'maybe'}>
 									<input type="radio" name="rsvpStatus" value="maybe" bind:group={rsvpStatus} class="sr-only" />
@@ -469,7 +563,7 @@
 		{/if}
 
 		<!-- Lookup existing RSVP -->
-		{#if !submitted}
+		{#if !submitted && !eventData.rsvpsClosed}
 			<div class="w-full max-w-lg mt-6">
 				{#if !showLookup}
 					<p class="text-center">
@@ -565,5 +659,13 @@
 		border-color: #ef4444;
 		background-color: #fef2f2;
 		color: #dc2626;
+	}
+	.rsvp-option-disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.rsvp-option-disabled:hover {
+		border-color: #e2e8f0;
+		background-color: transparent;
 	}
 </style>

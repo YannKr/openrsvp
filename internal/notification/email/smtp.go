@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"mime"
 	"mime/quotedprintable"
@@ -44,50 +45,72 @@ func (p *SMTPProvider) Channel() notification.Channel {
 	return notification.ChannelEmail
 }
 
-// Send composes a proper MIME email (multipart/alternative with plain text and
-// HTML) and delivers it via SMTP.
+// Send composes a proper MIME email and delivers it via SMTP.
+// When attachments are present, the structure is:
+//
+//	multipart/mixed
+//	  multipart/alternative
+//	    text/plain
+//	    text/html
+//	  attachment(s)
+//
+// Without attachments, the structure is just multipart/alternative.
 func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) error {
 	addr := net.JoinHostPort(p.host, p.port)
-
-	// Build multipart/alternative MIME message.
-	boundary := fmt.Sprintf("==OpenRSVP==%d==", time.Now().UnixNano())
 
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("From: %s\r\n", p.from))
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", msg.To))
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("utf-8", msg.Subject)))
 	buf.WriteString("MIME-Version: 1.0\r\n")
-	buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z)))
-	buf.WriteString("\r\n")
 
-	// Plain text part.
-	plain := msg.Plain
-	if plain == "" {
-		plain = msg.Body
-	}
-	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-	buf.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
-	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
-	buf.WriteString("\r\n")
-	qpw := quotedprintable.NewWriter(&buf)
-	qpw.Write([]byte(plain))
-	qpw.Close()
-	buf.WriteString("\r\n")
+	altBoundary := fmt.Sprintf("==OpenRSVP-alt==%d==", time.Now().UnixNano())
 
-	// HTML part.
-	if msg.Body != "" && msg.Body != plain {
-		buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-		buf.WriteString("Content-Type: text/html; charset=\"utf-8\"\r\n")
-		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+	if len(msg.Attachments) > 0 {
+		// Wrap in multipart/mixed when attachments are present.
+		mixedBoundary := fmt.Sprintf("==OpenRSVP-mix==%d==", time.Now().UnixNano())
+		buf.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", mixedBoundary))
 		buf.WriteString("\r\n")
-		qpw = quotedprintable.NewWriter(&buf)
-		qpw.Write([]byte(msg.Body))
-		qpw.Close()
-		buf.WriteString("\r\n")
-	}
 
-	buf.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+		// Start the alternative part inside mixed.
+		buf.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
+		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", altBoundary))
+		buf.WriteString("\r\n")
+
+		writeAlternativeParts(&buf, msg, altBoundary)
+
+		buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
+
+		// Write each attachment.
+		for _, att := range msg.Attachments {
+			buf.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
+			buf.WriteString(fmt.Sprintf("Content-Type: %s; name=\"%s\"\r\n", att.ContentType, att.Filename))
+			buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+			buf.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", att.Filename))
+			buf.WriteString("\r\n")
+			encoded := base64.StdEncoding.EncodeToString(att.Data)
+			// Wrap base64 at 76 characters per line (RFC 2045).
+			for i := 0; i < len(encoded); i += 76 {
+				end := i + 76
+				if end > len(encoded) {
+					end = len(encoded)
+				}
+				buf.WriteString(encoded[i:end])
+				buf.WriteString("\r\n")
+			}
+		}
+
+		buf.WriteString(fmt.Sprintf("--%s--\r\n", mixedBoundary))
+	} else {
+		// No attachments — just multipart/alternative.
+		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", altBoundary))
+		buf.WriteString("\r\n")
+
+		writeAlternativeParts(&buf, msg, altBoundary)
+
+		buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
+	}
 
 	// Send via SMTP.
 	var auth smtp.Auth
@@ -101,6 +124,35 @@ func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) erro
 	}
 
 	return nil
+}
+
+// writeAlternativeParts writes the text/plain and text/html MIME parts inside
+// a multipart/alternative boundary.
+func writeAlternativeParts(buf *bytes.Buffer, msg *notification.Message, boundary string) {
+	plain := msg.Plain
+	if plain == "" {
+		plain = msg.Body
+	}
+
+	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	buf.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+	buf.WriteString("\r\n")
+	qpw := quotedprintable.NewWriter(buf)
+	qpw.Write([]byte(plain))
+	qpw.Close()
+	buf.WriteString("\r\n")
+
+	if msg.Body != "" && msg.Body != plain {
+		buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+		buf.WriteString("Content-Type: text/html; charset=\"utf-8\"\r\n")
+		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+		buf.WriteString("\r\n")
+		qpw = quotedprintable.NewWriter(buf)
+		qpw.Write([]byte(msg.Body))
+		qpw.Close()
+		buf.WriteString("\r\n")
+	}
 }
 
 // SendBatch delivers multiple notifications by iterating and sending each

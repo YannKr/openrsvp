@@ -2,11 +2,18 @@ package rsvp
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/calendar"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -44,6 +51,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/public/{shareToken}", h.handleGetPublicInvite)
 	r.Post("/public/{shareToken}", h.handleSubmitRSVP)
 	r.Post("/public/{shareToken}/lookup", h.handleLookupRSVP)
+	r.Get("/public/{shareToken}/calendar.ics", h.handleCalendarDownload)
 	r.Get("/public/token/{rsvpToken}", h.handleGetByToken)
 	r.Put("/public/token/{rsvpToken}", h.handleUpdateByToken)
 	r.Patch("/public/token/{rsvpToken}", h.handleUpdateByToken)
@@ -53,6 +61,7 @@ func (h *Handler) Routes() chi.Router {
 		auth.Use(h.authMiddleware)
 		auth.Get("/event/{eventId}", h.handleListByEvent)
 		auth.Get("/event/{eventId}/stats", h.handleStats)
+		auth.Get("/event/{eventId}/export", h.handleExportCSV)
 		auth.Patch("/event/{eventId}/{attendeeId}", h.handleUpdateAttendee)
 		auth.Delete("/event/{eventId}/{attendeeId}", h.handleRemoveAttendee)
 	})
@@ -152,6 +161,110 @@ func (h *Handler) handleLookupRSVP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"rsvpToken": rsvpToken}})
+}
+
+func (h *Handler) handleCalendarDownload(w http.ResponseWriter, r *http.Request) {
+	shareToken := chi.URLParam(r, "shareToken")
+
+	data, err := h.service.GetEventForCalendar(r.Context(), shareToken)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	icsContent := calendar.GenerateICS(*data)
+
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s.ics"`, slugify(data.Title)))
+	w.Write([]byte(icsContent))
+}
+
+func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
+	organizerID, ok := h.organizerFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	if status == "" {
+		status = "all"
+	}
+	if status != "all" && !isValidRSVPStatus(status) {
+		writeError(w, http.StatusBadRequest, "bad_request",
+			"invalid status filter: must be all, attending, maybe, declined, or pending")
+		return
+	}
+
+	attendees, err := h.service.ListByEvent(r.Context(), eventID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list attendees for export")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		return
+	}
+
+	// Filter by status.
+	if status != "all" {
+		filtered := make([]*Attendee, 0, len(attendees))
+		for _, a := range attendees {
+			if a.RSVPStatus == status {
+				filtered = append(filtered, a)
+			}
+		}
+		attendees = filtered
+	}
+
+	// Fetch event title for the filename.
+	ev, err := h.service.GetEventByID(r.Context(), eventID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get event for export")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		return
+	}
+
+	filename := fmt.Sprintf("%s-guests-%s.csv", slugify(ev.Title), status)
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	// UTF-8 BOM for Excel compatibility.
+	w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Write([]string{"Name", "Email", "Phone", "RSVP Status", "Dietary Notes", "Plus Ones", "RSVP Date"})
+
+	for _, a := range attendees {
+		email := ""
+		if a.Email != nil {
+			email = *a.Email
+		}
+		phone := ""
+		if a.Phone != nil {
+			phone = *a.Phone
+		}
+		writer.Write([]string{
+			a.Name,
+			email,
+			phone,
+			a.RSVPStatus,
+			a.DietaryNotes,
+			strconv.Itoa(a.PlusOnes),
+			a.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	writer.Flush()
 }
 
 func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
@@ -263,6 +376,19 @@ func (h *Handler) handleRemoveAttendee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"message": "attendee removed"}})
+}
+
+// slugify converts a string to a URL-safe slug for filenames.
+// Replaces non-alphanumeric characters with hyphens, lowercases,
+// trims leading/trailing hyphens, collapses consecutive hyphens.
+// Returns "event" as a fallback if the result would be empty.
+func slugify(s string) string {
+	slug := regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(strings.ToLower(s), "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return "event"
+	}
+	return slug
 }
 
 // writeJSON writes a JSON response with the given status code.

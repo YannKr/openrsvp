@@ -36,6 +36,8 @@
 	let contactRequirement = $state('email');
 	let showHeadcount = $state(false);
 	let showGuestList = $state(false);
+	let rsvpDeadline = $state('');
+	let maxCapacity = $state('');
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
 
@@ -79,6 +81,9 @@
 				errors.retentionDays = 'Retention days must be between 1 and 365';
 			}
 		}
+		if (maxCapacity && (parseInt(maxCapacity) < 1 || isNaN(parseInt(maxCapacity)))) {
+			errors.maxCapacity = 'Max attendees must be at least 1';
+		}
 		return Object.keys(errors).length === 0;
 	}
 
@@ -109,6 +114,8 @@
 				retentionDays: parseInt(retentionDays)
 			};
 			if (endDate) body.endDate = endDate;
+			if (rsvpDeadline) body.rsvpDeadline = rsvpDeadline;
+			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
 
 			const result = await api.post<{ data: Event }>('/events', body);
 			toast.success('Event created successfully!');
@@ -248,6 +255,26 @@
 						</div>
 					</fieldset>
 
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<DateTimePicker
+							label="RSVP Deadline (optional)"
+							name="rsvpDeadline"
+							bind:value={rsvpDeadline}
+							min={minDate}
+							max={eventDate || undefined}
+							helper="Guests won't be able to RSVP or change their response after this date."
+						/>
+						<Input
+							label="Max Attendees (optional)"
+							name="maxCapacity"
+							type="number"
+							bind:value={maxCapacity}
+							placeholder="Leave empty for unlimited"
+							helper="Total headcount including plus-ones. Leave empty for no limit."
+							error={errors.maxCapacity || ''}
+						/>
+					</div>
+
 					<div class="pt-2">
 						{#if showRetention}
 							<Input
@@ -324,6 +351,18 @@
 										Guest names visible
 									{/if}
 								</dd>
+							</div>
+						{/if}
+						{#if rsvpDeadline}
+							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
+								<dt class="text-sm font-medium text-slate-500">RSVP Deadline</dt>
+								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{rsvpDeadline}</dd>
+							</div>
+						{/if}
+						{#if maxCapacity}
+							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
+								<dt class="text-sm font-medium text-slate-500">Max Attendees</dt>
+								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{maxCapacity}</dd>
 							</div>
 						{/if}
 						{#if retentionDays !== '30'}
