@@ -361,6 +361,23 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 - Fix: rate limiting scoped to API routes only (no longer affects static SPA assets)
 - Add: rate limit handling (429) in frontend API client
 
+### v1.1.1
+
+- Add calendar integration (.ics download and Add to Calendar button)
+- Add CSV export for guest lists with status filtering
+- Add RSVP deadlines with countdown display on invite page
+- Add capacity limits with real-time spots-remaining display
+- Add feedback follow-up opt-in checkbox and confirmation email
+- Show headcount and guest list visibility toggles for events
+- Default contact requirement to email-only when creating events
+- Use shared email template for magic link sign-in email
+- Add production Docker setup guide to self-hosting docs
+- Warn at startup when no feedback channel is configured
+
+### v1.1.0
+
+- Default DB_DSN and UPLOADS_DIR to `/data` instead of relative paths
+
 ### v1.0.1
 
 - SMS enable/disable controlled by `NOTIFICATION_SMS_PROVIDER` env var; email always required when SMS is off
