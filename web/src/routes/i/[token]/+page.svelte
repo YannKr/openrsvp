@@ -165,6 +165,7 @@
 	let lookupEmail = $state('');
 	let lookupLoading = $state(false);
 	let lookupError = $state('');
+	let lookupSuccess = $state(false);
 
 	async function handleLookup(e: SubmitEvent) {
 		e.preventDefault();
@@ -175,13 +176,13 @@
 		lookupLoading = true;
 		lookupError = '';
 		try {
-			const result = await api.post<{ data: { rsvpToken: string } }>(`/rsvp/public/${token}/lookup`, {
+			await api.post(`/rsvp/public/${token}/lookup`, {
 				email: lookupEmail.trim()
 			});
-			window.location.href = `/r/${result.data.rsvpToken}`;
+			lookupSuccess = true;
 		} catch (err) {
 			const apiErr = err as ApiError;
-			lookupError = apiErr.message || 'No RSVP found for this email.';
+			lookupError = apiErr.message || 'Something went wrong. Please try again.';
 		} finally {
 			lookupLoading = false;
 		}
@@ -567,6 +568,18 @@
 							Already RSVP'd? Look up your response
 						</button>
 					</p>
+				{:else if lookupSuccess}
+					<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 text-center">
+						<div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
+							<svg class="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+							</svg>
+						</div>
+						<h3 class="text-lg font-semibold text-slate-900 mb-2">Check Your Email</h3>
+						<p class="text-sm text-slate-600">
+							If you have an RSVP, you'll receive an email shortly with a link to manage it.
+						</p>
+					</div>
 				{:else}
 					<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
 						<h3 class="text-lg font-semibold text-slate-900 mb-4">Find Your RSVP</h3>
@@ -599,9 +612,9 @@
 									class="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									{#if lookupLoading}
-										Finding...
+										Sending...
 									{:else}
-										Find my RSVP
+										Send me a link
 									{/if}
 								</button>
 							</div>

@@ -13,6 +13,7 @@ import (
 	"github.com/openrsvp/openrsvp/internal/calendar"
 	"github.com/openrsvp/openrsvp/internal/event"
 	"github.com/openrsvp/openrsvp/internal/invite"
+	"github.com/openrsvp/openrsvp/internal/notification/templates"
 )
 
 // base62Chars is the alphabet used for generating RSVP tokens.
@@ -21,6 +22,9 @@ const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 // NotifyRSVPFunc is called after an RSVP is submitted or updated to send a
 // confirmation email to the attendee. It runs asynchronously.
 type NotifyRSVPFunc func(ctx context.Context, eventID string, attendee *Attendee)
+
+// EmailSender is a function that sends an email.
+type EmailSender func(ctx context.Context, to, subject, htmlBody, plainBody string) error
 
 // capacityMutexes provides per-event locking for capacity checks to prevent
 // race conditions in the check-then-insert pattern. This works for
@@ -50,6 +54,7 @@ type Service struct {
 	eventService  *event.Service
 	inviteService *invite.Service
 	notifyRSVP    NotifyRSVPFunc
+	sendEmail     EmailSender
 	smsEnabled    bool
 	baseURL       string
 }
@@ -71,6 +76,12 @@ func (s *Service) SetBaseURL(baseURL string) {
 // SetNotifyRSVP registers the function that sends RSVP confirmation emails.
 func (s *Service) SetNotifyRSVP(fn NotifyRSVPFunc) {
 	s.notifyRSVP = fn
+}
+
+// SetEmailSender sets the email sending function. Called after notification
+// wiring is complete to break the circular dependency.
+func (s *Service) SetEmailSender(fn EmailSender) {
+	s.sendEmail = fn
 }
 
 // SetSMSEnabled sets whether SMS notifications are available. When disabled,
@@ -626,27 +637,46 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	return a, nil
 }
 
-// LookupRSVPByEmail finds an attendee's RSVP token by their email address on
-// a published event. This allows attendees who lost their modify link to
-// recover it.
-func (s *Service) LookupRSVPByEmail(ctx context.Context, shareToken, email string) (string, error) {
+// SendRSVPLookupEmail sends a magic link email to the attendee so they can
+// access their RSVP. It always returns nil to prevent email enumeration —
+// callers cannot distinguish "email found" from "email not found".
+// Returns an error only for invalid share tokens (unpublished/missing events).
+func (s *Service) SendRSVPLookupEmail(ctx context.Context, shareToken, email string) error {
 	ev, err := s.eventService.GetByShareToken(ctx, shareToken)
 	if err != nil {
-		return "", fmt.Errorf("event not found")
+		return fmt.Errorf("event not found")
 	}
 	if ev.Status != "published" {
-		return "", fmt.Errorf("event not found")
+		return fmt.Errorf("event not found")
 	}
 
 	a, err := s.store.FindByEventAndEmail(ctx, ev.ID, email)
-	if err != nil {
-		return "", fmt.Errorf("lookup failed")
-	}
-	if a == nil {
-		return "", fmt.Errorf("no RSVP found for this email")
+	if err != nil || a == nil {
+		// Silently succeed to prevent email enumeration.
+		return nil
 	}
 
-	return a.RSVPToken, nil
+	// Send the lookup email asynchronously.
+	if s.sendEmail != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("recovered from panic in RSVP lookup email goroutine: %v", r)
+				}
+			}()
+			modifyURL := s.baseURL + "/r/" + a.RSVPToken
+			htmlBody, plainBody, err := templates.RenderRSVPLookup(ev.Title, modifyURL)
+			if err != nil {
+				log.Printf("rsvp lookup: failed to render template: %v", err)
+				return
+			}
+			if err := s.sendEmail(context.Background(), email, "Your RSVP Link — "+ev.Title, htmlBody, plainBody); err != nil {
+				log.Printf("rsvp lookup: failed to send email to %s: %v", email, err)
+			}
+		}()
+	}
+
+	return nil
 }
 
 // isValidRSVPStatus checks whether the given status is one of the allowed values.

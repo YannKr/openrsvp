@@ -64,6 +64,17 @@ class ApiClient {
 		});
 
 		if (!response.ok) {
+			if (response.status === 429) {
+				const retryAfter = response.headers.get('Retry-After');
+				const error: ApiError = {
+					error: 'rate_limited',
+					message: retryAfter
+						? `Too many requests. Please wait ${retryAfter} seconds and try again.`
+						: 'Too many requests. Please wait a moment and try again.',
+					status: 429
+				};
+				throw error;
+			}
 			const error: ApiError = await response.json().catch(() => ({
 				error: 'unknown',
 				message: response.statusText,
@@ -132,6 +143,17 @@ class ApiClient {
 		});
 
 		if (!response.ok) {
+			if (response.status === 429) {
+				const retryAfter = response.headers.get('Retry-After');
+				const error: ApiError = {
+					error: 'rate_limited',
+					message: retryAfter
+						? `Too many requests. Please wait ${retryAfter} seconds and try again.`
+						: 'Too many requests. Please wait a moment and try again.',
+					status: 429
+				};
+				throw error;
+			}
 			const error: ApiError = await response.json().catch(() => ({
 				error: 'unknown',
 				message: response.statusText,

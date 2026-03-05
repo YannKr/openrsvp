@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html feedback_confirmation.html
+//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html feedback_confirmation.html rsvp_lookup.html
 var templateFS embed.FS
 
 var (
@@ -18,6 +18,7 @@ var (
 	retentionWarningTmpl        *template.Template
 	organizerRSVPNotifyTmpl     *template.Template
 	feedbackConfirmationTmpl    *template.Template
+	rsvpLookupTmpl              *template.Template
 )
 
 func init() {
@@ -27,6 +28,7 @@ func init() {
 	retentionWarningTmpl = template.Must(template.ParseFS(templateFS, "retention_warning.html"))
 	organizerRSVPNotifyTmpl = template.Must(template.ParseFS(templateFS, "organizer_rsvp_notification.html"))
 	feedbackConfirmationTmpl = template.Must(template.ParseFS(templateFS, "feedback_confirmation.html"))
+	rsvpLookupTmpl = template.Must(template.ParseFS(templateFS, "rsvp_lookup.html"))
 }
 
 // magicLinkData holds the template data for a magic link email.
@@ -229,6 +231,33 @@ func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEma
 	sb.WriteString(fmt.Sprintf("\nView your event dashboard:\n%s\n", dashboardURL))
 
 	return buf.String(), sb.String(), nil
+}
+
+// rsvpLookupData holds the template data for an RSVP lookup email.
+type rsvpLookupData struct {
+	EventTitle string
+	ModifyURL  string
+}
+
+// RenderRSVPLookup renders the RSVP lookup magic link email template and
+// returns the HTML body and a plain text fallback.
+func RenderRSVPLookup(eventTitle, modifyURL string) (html, plain string, err error) {
+	data := rsvpLookupData{
+		EventTitle: eventTitle,
+		ModifyURL:  modifyURL,
+	}
+
+	var buf bytes.Buffer
+	if err := rsvpLookupTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render rsvp lookup template: %w", err)
+	}
+
+	plainText := fmt.Sprintf(
+		"Find Your RSVP\n\nClick the link below to view and manage your RSVP for %s:\n%s\n\nThis link is personal — please don't share it.",
+		eventTitle, modifyURL,
+	)
+
+	return buf.String(), plainText, nil
 }
 
 // feedbackConfirmationData holds the template data for a feedback confirmation email.

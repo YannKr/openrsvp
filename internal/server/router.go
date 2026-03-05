@@ -34,7 +34,6 @@ func (s *Server) routes() *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
-	r.Use(security.RateLimitMiddleware(s.securityMw.GeneralRateLimiter))
 	r.Use(s.securityMw.CSRF)
 
 	// --- Health checks ---
@@ -43,6 +42,8 @@ func (s *Server) routes() *chi.Mux {
 
 	// --- API v1 ---
 	r.Route("/api/v1", func(api chi.Router) {
+		// General rate limiting applies to API routes only (not static SPA files).
+		api.Use(security.RateLimitMiddleware(s.securityMw.GeneralRateLimiter))
 		// Limit request body size to 1 MB for API routes.
 		api.Use(security.BodyLimitMiddleware(1 << 20))
 		// Sanitize all incoming JSON request bodies.

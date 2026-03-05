@@ -150,17 +150,21 @@ func (h *Handler) handleLookupRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rsvpToken, err := h.service.LookupRSVPByEmail(r.Context(), shareToken, req.Email)
+	err := h.service.SendRSVPLookupEmail(r.Context(), shareToken, req.Email)
 	if err != nil {
 		if err.Error() == "event not found" {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		writeError(w, http.StatusNotFound, "not_found", "no RSVP found for this email")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"rsvpToken": rsvpToken}})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]string{
+			"message": "If you have an RSVP, you'll receive an email shortly with a link to manage it.",
+		},
+	})
 }
 
 func (h *Handler) handleCalendarDownload(w http.ResponseWriter, r *http.Request) {

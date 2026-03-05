@@ -353,6 +353,14 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ## 📝 Changelog
 
+### v1.0.2
+
+- Security: RSVP lookup now sends a magic link email instead of returning the token directly (prevents email enumeration)
+- Fix: dashboard stats (attending, maybe, declined, headcount) now refresh after editing or removing attendees
+- Fix: max attendees validation rejects non-numeric input on both create and edit forms
+- Fix: rate limiting scoped to API routes only (no longer affects static SPA assets)
+- Add: rate limit handling (429) in frontend API client
+
 ### v1.0.1
 
 - SMS enable/disable controlled by `NOTIFICATION_SMS_PROVIDER` env var; email always required when SMS is off

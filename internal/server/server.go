@@ -121,6 +121,22 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		})
 	}
 
+	// Wire email sending into RSVP service (for RSVP lookup magic links).
+	if notifRegistry.Has(notification.ChannelEmail) {
+		rsvpService.SetEmailSender(func(ctx context.Context, to, subject, htmlBody, plainBody string) error {
+			provider, err := notifRegistry.Get(notification.ChannelEmail)
+			if err != nil {
+				return err
+			}
+			return provider.Send(ctx, &notification.Message{
+				To:      to,
+				Subject: subject,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			})
+		})
+	}
+
 	// Wire RSVP confirmation emails into the RSVP service.
 	if notifRegistry.Has(notification.ChannelEmail) {
 		rsvpService.SetNotifyRSVP(func(ctx context.Context, eventID string, attendee *rsvp.Attendee) {

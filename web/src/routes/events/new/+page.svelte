@@ -81,8 +81,11 @@
 				errors.retentionDays = 'Retention days must be between 1 and 365';
 			}
 		}
-		if (maxCapacity && (parseInt(maxCapacity) < 1 || isNaN(parseInt(maxCapacity)))) {
-			errors.maxCapacity = 'Max attendees must be at least 1';
+		if (maxCapacity) {
+			const parsed = Number(maxCapacity);
+			if (!Number.isInteger(parsed) || parsed < 1) {
+				errors.maxCapacity = 'Max attendees must be a whole number of at least 1';
+			}
 		}
 		return Object.keys(errors).length === 0;
 	}

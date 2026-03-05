@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -518,25 +519,40 @@ func TestUpdateAttendeeAsOrganizerInvalidStatus(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid rsvpStatus")
 }
 
-func TestLookupRSVPByEmail(t *testing.T) {
+func TestSendRSVPLookupEmailSendsEmail(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
 	ctx := context.Background()
 
 	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
 	require.NoError(t, err)
 	ev := createPublishedEvent(t, eventSvc, org.ID)
+	svc.SetBaseURL("https://example.com")
 
-	attendee, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
 		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
 	})
 	require.NoError(t, err)
 
-	token, err := svc.LookupRSVPByEmail(ctx, ev.ShareToken, "alice@example.com")
+	// Track whether email was sent.
+	emailSent := make(chan string, 1)
+	svc.SetEmailSender(func(ctx context.Context, to, subject, htmlBody, plainBody string) error {
+		emailSent <- to
+		return nil
+	})
+
+	err = svc.SendRSVPLookupEmail(ctx, ev.ShareToken, "alice@example.com")
 	require.NoError(t, err)
-	assert.Equal(t, attendee.RSVPToken, token)
+
+	// Wait for async email send.
+	select {
+	case to := <-emailSent:
+		assert.Equal(t, "alice@example.com", to)
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected email to be sent")
+	}
 }
 
-func TestLookupRSVPByEmailNotFound(t *testing.T) {
+func TestSendRSVPLookupEmailNotFoundNoError(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
 	ctx := context.Background()
 
@@ -544,12 +560,12 @@ func TestLookupRSVPByEmailNotFound(t *testing.T) {
 	require.NoError(t, err)
 	ev := createPublishedEvent(t, eventSvc, org.ID)
 
-	_, err = svc.LookupRSVPByEmail(ctx, ev.ShareToken, "nobody@example.com")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no RSVP found")
+	// Looking up a non-existent email should return nil (no enumeration).
+	err = svc.SendRSVPLookupEmail(ctx, ev.ShareToken, "nobody@example.com")
+	assert.NoError(t, err)
 }
 
-func TestLookupRSVPByEmailUnpublished(t *testing.T) {
+func TestSendRSVPLookupEmailUnpublished(t *testing.T) {
 	svc, eventSvc, authStore := setupRSVP(t)
 	ctx := context.Background()
 
@@ -560,7 +576,7 @@ func TestLookupRSVPByEmailUnpublished(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = svc.LookupRSVPByEmail(ctx, ev.ShareToken, "alice@example.com")
+	err = svc.SendRSVPLookupEmail(ctx, ev.ShareToken, "alice@example.com")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "event not found")
 }

@@ -262,6 +262,11 @@
 			attendees = attendees.map((a) => (a.id === editingAttendeeId ? result.data : a));
 			editingAttendeeId = null;
 			toast.success('Attendee updated');
+			// Re-fetch stats to reflect changes in status/plus-ones.
+			try {
+				const refreshed = await api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`);
+				stats = refreshed.data;
+			} catch { /* non-critical */ }
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to update attendee');
@@ -274,10 +279,14 @@
 		try {
 			await api.delete<{ data: { message: string } }>(`/rsvp/event/${eventId}/${attendeeId}`);
 			attendees = attendees.filter((a) => a.id !== attendeeId);
-			stats = { ...stats, total: stats.total - 1 };
 			removeAttendeeTarget = null;
 			showRemoveAttendeeModal = false;
 			toast.success('Attendee removed');
+			// Re-fetch stats to reflect removal (status counts, headcount, plus-ones).
+			try {
+				const refreshed = await api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`);
+				stats = refreshed.data;
+			} catch { /* non-critical */ }
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
 			toast.error(apiErr.message || 'Failed to remove attendee');
