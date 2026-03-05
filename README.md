@@ -353,7 +353,7 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ## 📝 Changelog
 
-### v1.0.2
+### v1.2
 
 - Security: RSVP lookup now sends a magic link email instead of returning the token directly (prevents email enumeration)
 - Fix: dashboard stats (attending, maybe, declined, headcount) now refresh after editing or removing attendees
