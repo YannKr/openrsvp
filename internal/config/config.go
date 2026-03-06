@@ -62,6 +62,9 @@ type Config struct {
 
 	// Security
 	TrustedProxies []string // CIDR ranges of trusted reverse proxies
+
+	// Limits
+	MaxCoHostsPerEvent int
 }
 
 // Load reads environment variables (optionally from .env) and returns a Config.
@@ -124,6 +127,14 @@ func Load() (*Config, error) {
 		}
 	}
 
+	maxCoHosts, err := strconv.Atoi(getEnv("MAX_COHOSTS_PER_EVENT", "10"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAX_COHOSTS_PER_EVENT: %w", err)
+	}
+	if maxCoHosts < 1 {
+		return nil, fmt.Errorf("invalid MAX_COHOSTS_PER_EVENT: %d (must be at least 1)", maxCoHosts)
+	}
+
 	cfg := &Config{
 		Port: port,
 		Env:  env,
@@ -167,6 +178,8 @@ func Load() (*Config, error) {
 		DefaultRetentionDays: retentionDays,
 
 		TrustedProxies: trustedProxies,
+
+		MaxCoHostsPerEvent: maxCoHosts,
 	}
 
 	return cfg, nil
