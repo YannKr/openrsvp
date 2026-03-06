@@ -13,6 +13,12 @@ var (
 	ErrEmptyBody    = errors.New("body is required")
 )
 
+// Field length limits.
+const (
+	maxSubjectLen = 200
+	maxBodyLen    = 10000
+)
+
 // NotifyAttendeesFunc is called after an organizer message is stored to
 // dispatch email/SMS notifications to the matching attendees. It runs
 // asynchronously so it does not block the HTTP response.
@@ -56,8 +62,14 @@ func (s *Service) SendFromOrganizer(ctx context.Context, eventID, organizerID st
 	if req.Subject == "" {
 		return nil, ErrEmptySubject
 	}
+	if len(req.Subject) > maxSubjectLen {
+		return nil, fmt.Errorf("subject must be %d characters or less", maxSubjectLen)
+	}
 	if req.Body == "" {
 		return nil, ErrEmptyBody
+	}
+	if len(req.Body) > maxBodyLen {
+		return nil, fmt.Errorf("body must be %d characters or less", maxBodyLen)
 	}
 
 	msg := &Message{
@@ -102,8 +114,14 @@ func (s *Service) SendFromAttendee(ctx context.Context, eventID, attendeeID stri
 	if req.Subject == "" {
 		return nil, ErrEmptySubject
 	}
+	if len(req.Subject) > maxSubjectLen {
+		return nil, fmt.Errorf("subject must be %d characters or less", maxSubjectLen)
+	}
 	if req.Body == "" {
 		return nil, ErrEmptyBody
+	}
+	if len(req.Body) > maxBodyLen {
+		return nil, fmt.Errorf("body must be %d characters or less", maxBodyLen)
 	}
 
 	msg := &Message{

@@ -15,10 +15,19 @@ import (
 	"github.com/openrsvp/openrsvp/internal/event"
 	"github.com/openrsvp/openrsvp/internal/invite"
 	"github.com/openrsvp/openrsvp/internal/notification/templates"
+	"github.com/openrsvp/openrsvp/internal/security"
 )
 
 // base62Chars is the alphabet used for generating RSVP tokens.
 const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// Field length limits.
+const (
+	maxNameLen         = 200
+	maxEmailLen        = 254 // RFC 5321
+	maxPhoneLen        = 20
+	maxDietaryNotesLen = 500
+)
 
 // NotifyRSVPFunc is called after an RSVP is submitted or updated to send a
 // confirmation email to the attendee. It runs asynchronously.
@@ -248,6 +257,24 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPRequest) (*Attendee, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("name is required")
+	}
+	if len(req.Name) > maxNameLen {
+		return nil, fmt.Errorf("name must be %d characters or less", maxNameLen)
+	}
+	if req.Email != nil && *req.Email != "" && len(*req.Email) > maxEmailLen {
+		return nil, fmt.Errorf("email must be %d characters or less", maxEmailLen)
+	}
+	if req.Phone != nil && *req.Phone != "" && len(*req.Phone) > maxPhoneLen {
+		return nil, fmt.Errorf("phone must be %d characters or less", maxPhoneLen)
+	}
+	if len(req.DietaryNotes) > maxDietaryNotesLen {
+		return nil, fmt.Errorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
+	}
+	if req.Email != nil && *req.Email != "" && !security.ValidateEmail(*req.Email) {
+		return nil, fmt.Errorf("invalid email format")
+	}
+	if req.Phone != nil && *req.Phone != "" && !security.ValidatePhone(*req.Phone) {
+		return nil, fmt.Errorf("invalid phone format: must be E.164 (e.g. +14155552671)")
 	}
 	if req.RSVPStatus == "" {
 		return nil, fmt.Errorf("rsvpStatus is required")
@@ -636,6 +663,19 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		}
 	}
 
+	// Validate field lengths and formats for UpdateByToken.
+	if req.Name != nil {
+		if *req.Name == "" {
+			return nil, fmt.Errorf("name is required")
+		}
+		if len(*req.Name) > maxNameLen {
+			return nil, fmt.Errorf("name must be %d characters or less", maxNameLen)
+		}
+	}
+	if req.DietaryNotes != nil && len(*req.DietaryNotes) > maxDietaryNotesLen {
+		return nil, fmt.Errorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
+	}
+
 	if req.Name != nil {
 		a.Name = *req.Name
 	}
@@ -776,6 +816,35 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	}
 
 	oldStatus := a.RSVPStatus
+
+	// Validate field lengths and formats for organizer updates.
+	if req.Name != nil {
+		if *req.Name == "" {
+			return nil, fmt.Errorf("name is required")
+		}
+		if len(*req.Name) > maxNameLen {
+			return nil, fmt.Errorf("name must be %d characters or less", maxNameLen)
+		}
+	}
+	if req.Email != nil && *req.Email != "" {
+		if len(*req.Email) > maxEmailLen {
+			return nil, fmt.Errorf("email must be %d characters or less", maxEmailLen)
+		}
+		if !security.ValidateEmail(*req.Email) {
+			return nil, fmt.Errorf("invalid email format")
+		}
+	}
+	if req.Phone != nil && *req.Phone != "" {
+		if len(*req.Phone) > maxPhoneLen {
+			return nil, fmt.Errorf("phone must be %d characters or less", maxPhoneLen)
+		}
+		if !security.ValidatePhone(*req.Phone) {
+			return nil, fmt.Errorf("invalid phone format: must be E.164 (e.g. +14155552671)")
+		}
+	}
+	if req.DietaryNotes != nil && len(*req.DietaryNotes) > maxDietaryNotesLen {
+		return nil, fmt.Errorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
+	}
 
 	if req.Name != nil {
 		a.Name = *req.Name
