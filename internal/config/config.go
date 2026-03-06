@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -58,6 +59,9 @@ type Config struct {
 
 	// Data Retention
 	DefaultRetentionDays int
+
+	// Security
+	TrustedProxies []string // CIDR ranges of trusted reverse proxies
 }
 
 // Load reads environment variables (optionally from .env) and returns a Config.
@@ -109,6 +113,17 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid DEFAULT_RETENTION_DAYS: %d (must be greater than 0)", retentionDays)
 	}
 
+	// Parse TRUSTED_PROXIES (comma-separated CIDR ranges or IPs).
+	var trustedProxies []string
+	if raw := getEnv("TRUSTED_PROXIES", ""); raw != "" {
+		for _, entry := range strings.Split(raw, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry != "" {
+				trustedProxies = append(trustedProxies, entry)
+			}
+		}
+	}
+
 	cfg := &Config{
 		Port: port,
 		Env:  env,
@@ -150,6 +165,8 @@ func Load() (*Config, error) {
 		UploadsDir: getEnv("UPLOADS_DIR", "/data/uploads"),
 
 		DefaultRetentionDays: retentionDays,
+
+		TrustedProxies: trustedProxies,
 	}
 
 	return cfg, nil
