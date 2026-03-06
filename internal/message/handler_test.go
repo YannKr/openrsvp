@@ -81,7 +81,9 @@ func setupMessageHandler(t *testing.T) (http.Handler, *Service, *auth.Organizer,
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
+	// No-op RSVP rate limiter for tests (passthrough).
+	noopRateLimiter := func(next http.Handler) http.Handler { return next }
+	handler := NewHandler(svc, authMW, noopRateLimiter, msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), svc, org, ev.ID
 }
 
@@ -106,7 +108,8 @@ func setupMessageHandlerNoAuth(t *testing.T) (http.Handler, string) {
 	msgStore := NewStore(db)
 	svc := NewService(msgStore, zerolog.Nop())
 
-	handler := NewHandler(svc, testutil.NoAuthMiddleware(), msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
+	noopRateLimiter := func(next http.Handler) http.Handler { return next }
+	handler := NewHandler(svc, testutil.NoAuthMiddleware(), noopRateLimiter, msgOrgFromCtx(), stubAttendeeFromToken(ev.ID), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), ev.ID
 }
 
