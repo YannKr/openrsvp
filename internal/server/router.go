@@ -92,6 +92,16 @@ func (s *Server) routes() *chi.Mux {
 			// Strip prefix to get filename, then take only the base name
 			// to prevent path traversal attacks (e.g. ../../etc/passwd).
 			name := filepath.Base(strings.TrimPrefix(r.URL.Path, "/api/v1"+uploadsPrefix))
+
+			// Security headers to prevent MIME-sniffing polyglot file attacks.
+			// nosniff stops browsers from guessing a different Content-Type.
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			// Strict CSP blocks any script execution even if the browser
+			// renders the file as HTML.
+			w.Header().Set("Content-Security-Policy", "default-src 'none'")
+			// Prevent the uploaded file from being embedded in a frame.
+			w.Header().Set("X-Frame-Options", "DENY")
+
 			http.ServeFile(w, r, filepath.Join(s.uploadsDir, name))
 		})
 		api.Mount("/messages", s.messageHandler.Routes())
