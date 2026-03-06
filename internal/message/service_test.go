@@ -101,11 +101,19 @@ func TestListMessagesByEvent(t *testing.T) {
 	svc, eventID, orgID := setupMessage(t)
 	ctx := context.Background()
 
+	// Use a controllable clock so successive sends don't hit the rate limit.
+	now := time.Now()
+	svc.nowFunc = func() time.Time { return now }
+
 	_, err := svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
 		RecipientType: "group", RecipientID: "all",
 		Subject: "Message 1", Body: "Body 1",
 	})
 	require.NoError(t, err)
+
+	// Advance clock past the 1-minute organizer cooldown.
+	now = now.Add(2 * time.Minute)
+
 	_, err = svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
 		RecipientType: "group", RecipientID: "all",
 		Subject: "Message 2", Body: "Body 2",
@@ -139,6 +147,160 @@ func TestListMessagesForAttendee(t *testing.T) {
 	msgs, err := svc.ListForAttendee(ctx, eventID, attendeeID)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
+}
+
+// --- Rate Limiting Tests ---
+
+func TestOrganizerRateLimit(t *testing.T) {
+	svc, eventID, orgID := setupMessage(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	svc.nowFunc = func() time.Time { return now }
+
+	// First send should succeed.
+	_, err := svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "First", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	// Immediate second send should be rate limited.
+	_, err = svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Second", Body: "Body",
+	})
+	assert.ErrorIs(t, err, ErrRateLimited)
+
+	// Advance clock by 30 seconds — still within cooldown.
+	now = now.Add(30 * time.Second)
+	_, err = svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Third", Body: "Body",
+	})
+	assert.ErrorIs(t, err, ErrRateLimited)
+
+	// Advance clock past 1-minute cooldown — should succeed.
+	now = now.Add(31 * time.Second)
+	_, err = svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Fourth", Body: "Body",
+	})
+	require.NoError(t, err)
+}
+
+func TestAttendeeRateLimit(t *testing.T) {
+	svc, eventID, _ := setupMessage(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	svc.nowFunc = func() time.Time { return now }
+
+	attendeeID := "attendee-rate-test"
+
+	// First send should succeed.
+	_, err := svc.SendFromAttendee(ctx, eventID, attendeeID, &AttendeeSendRequest{
+		Subject: "First", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	// Immediate second send should be rate limited.
+	_, err = svc.SendFromAttendee(ctx, eventID, attendeeID, &AttendeeSendRequest{
+		Subject: "Second", Body: "Body",
+	})
+	assert.ErrorIs(t, err, ErrRateLimited)
+
+	// Advance clock by 3 minutes — still within 5-minute cooldown.
+	now = now.Add(3 * time.Minute)
+	_, err = svc.SendFromAttendee(ctx, eventID, attendeeID, &AttendeeSendRequest{
+		Subject: "Third", Body: "Body",
+	})
+	assert.ErrorIs(t, err, ErrRateLimited)
+
+	// Advance clock past 5-minute cooldown — should succeed.
+	now = now.Add(3 * time.Minute)
+	_, err = svc.SendFromAttendee(ctx, eventID, attendeeID, &AttendeeSendRequest{
+		Subject: "Fourth", Body: "Body",
+	})
+	require.NoError(t, err)
+}
+
+func TestOrganizerRateLimit_DifferentEvents(t *testing.T) {
+	// Rate limiting is per organizer+event, so different events should not
+	// interfere with each other.
+	db := testutil.NewTestDB(t)
+	cfg := testutil.TestConfig()
+
+	authStore := auth.NewStore(db)
+	org, err := authStore.CreateOrganizer(context.Background(), "org@example.com")
+	require.NoError(t, err)
+
+	eventStore := event.NewStore(db)
+	eventSvc := event.NewService(eventStore, cfg.DefaultRetentionDays)
+	ev1, err := eventSvc.Create(context.Background(), org.ID, event.CreateEventRequest{
+		Title: "Event 1", EventDate: "2026-06-15T14:00",
+	})
+	require.NoError(t, err)
+	ev2, err := eventSvc.Create(context.Background(), org.ID, event.CreateEventRequest{
+		Title: "Event 2", EventDate: "2026-06-16T14:00",
+	})
+	require.NoError(t, err)
+
+	store := NewStore(db)
+	svc := NewService(store, zerolog.Nop())
+	ctx := context.Background()
+
+	// Send to event 1 — should succeed.
+	_, err = svc.SendFromOrganizer(ctx, ev1.ID, org.ID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Event 1 msg", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	// Send to event 2 — should also succeed (different event key).
+	_, err = svc.SendFromOrganizer(ctx, ev2.ID, org.ID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Event 2 msg", Body: "Body",
+	})
+	require.NoError(t, err)
+}
+
+func TestCleanupStaleLimits(t *testing.T) {
+	svc, eventID, orgID := setupMessage(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	svc.nowFunc = func() time.Time { return now }
+
+	// Send a message to populate rate limit entries.
+	_, err := svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "Test", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SendFromAttendee(ctx, eventID, "attendee-cleanup", &AttendeeSendRequest{
+		Subject: "Test", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	// Advance clock past the stale threshold (10 minutes).
+	now = now.Add(11 * time.Minute)
+
+	// Cleanup should remove stale entries.
+	svc.CleanupStaleLimits()
+
+	// After cleanup, both senders should be able to send again (entries removed).
+	_, err = svc.SendFromOrganizer(ctx, eventID, orgID, &SendMessageRequest{
+		RecipientType: "group", RecipientID: "all",
+		Subject: "After cleanup", Body: "Body",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.SendFromAttendee(ctx, eventID, "attendee-cleanup", &AttendeeSendRequest{
+		Subject: "After cleanup", Body: "Body",
+	})
+	require.NoError(t, err)
 }
 
 func TestSendFromOrganizerTriggersNotifyAttendees(t *testing.T) {

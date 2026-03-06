@@ -414,6 +414,17 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	}
 	feedbackHandler := feedback.NewHandler(feedbackSvc, authMiddleware, feedback.OrganizerFromCtx(organizerEmailFromCtx))
 
+	// Wire up security middleware (created early so rate limiters are available
+	// for handler constructors that need them).
+	secMw := security.NewMiddleware(security.SecurityConfig{
+		AuthRateLimit:    10,
+		RSVPRateLimit:    30,
+		GeneralRateLimit: 100,
+		RateWindow:       1 * time.Minute,
+		CSRFExcludePaths: []string{"/api/v1/rsvp/public/", "/api/v1/auth/"},
+		IsProduction:     cfg.Env == "production",
+	})
+
 	// Wire up message layer.
 	messageStore := message.NewStore(db)
 	messageService := message.NewService(messageStore, logger)
@@ -424,7 +435,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		}
 		return &message.AttendeeInfo{ID: attendee.ID, EventID: attendee.EventID}, nil
 	}
-	messageHandler := message.NewHandler(messageService, authMiddleware, message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken, message.EventOwnershipChecker(checkEventOwner), logger)
+	messageHandler := message.NewHandler(messageService, authMiddleware, security.RateLimitMiddleware(secMw.RSVPRateLimiter), message.OrganizerFromCtx(organizerFromCtx), attendeeFromToken, message.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire email dispatch into message service so organizer messages are
 	// delivered to attendees via email.
@@ -750,16 +761,6 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Register series generator background job.
 	seriesJob := scheduler.NewSeriesGeneratorJob(seriesService, logger)
 	sched.Register(seriesJob)
-
-	// Wire up security middleware.
-	secMw := security.NewMiddleware(security.SecurityConfig{
-		AuthRateLimit:    10,
-		RSVPRateLimit:    30,
-		GeneralRateLimit: 100,
-		RateWindow:       1 * time.Minute,
-		CSRFExcludePaths: []string{"/api/v1/rsvp/public/", "/api/v1/auth/"},
-		IsProduction:     cfg.Env == "production",
-	})
 
 	s := &Server{
 		cfg:             cfg,

@@ -27,30 +27,33 @@ type EventOwnershipChecker func(ctx context.Context, eventID, organizerID string
 
 // Handler holds HTTP handlers for message endpoints.
 type Handler struct {
-	service           *Service
-	authMiddleware    func(http.Handler) http.Handler
-	organizerFrom     OrganizerFromCtx
-	attendeeFromToken AttendeeFromToken
-	checkEventOwner   EventOwnershipChecker
-	logger            zerolog.Logger
+	service            *Service
+	authMiddleware     func(http.Handler) http.Handler
+	rsvpRateLimiterMw  func(http.Handler) http.Handler
+	organizerFrom      OrganizerFromCtx
+	attendeeFromToken  AttendeeFromToken
+	checkEventOwner    EventOwnershipChecker
+	logger             zerolog.Logger
 }
 
 // NewHandler creates a new message Handler.
 func NewHandler(
 	service *Service,
 	authMiddleware func(http.Handler) http.Handler,
+	rsvpRateLimiterMw func(http.Handler) http.Handler,
 	organizerFrom OrganizerFromCtx,
 	attendeeFromToken AttendeeFromToken,
 	checkEventOwner EventOwnershipChecker,
 	logger zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		service:           service,
-		authMiddleware:    authMiddleware,
-		organizerFrom:     organizerFrom,
-		attendeeFromToken: attendeeFromToken,
-		checkEventOwner:   checkEventOwner,
-		logger:            logger,
+		service:            service,
+		authMiddleware:     authMiddleware,
+		rsvpRateLimiterMw:  rsvpRateLimiterMw,
+		organizerFrom:      organizerFrom,
+		attendeeFromToken:  attendeeFromToken,
+		checkEventOwner:    checkEventOwner,
+		logger:             logger,
 	}
 }
 
@@ -66,8 +69,12 @@ func (h *Handler) Routes() chi.Router {
 	})
 
 	// Public routes (attendee, by RSVP token).
-	r.Post("/attendee/{rsvpToken}", h.handleAttendeeSend)
-	r.Get("/attendee/{rsvpToken}", h.handleAttendeeList)
+	// Apply the stricter RSVP rate limiter (30/min) to attendee endpoints.
+	r.Group(func(attendee chi.Router) {
+		attendee.Use(h.rsvpRateLimiterMw)
+		attendee.Post("/attendee/{rsvpToken}", h.handleAttendeeSend)
+		attendee.Get("/attendee/{rsvpToken}", h.handleAttendeeList)
+	})
 
 	return r
 }
@@ -95,6 +102,10 @@ func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := h.service.SendFromOrganizer(r.Context(), eventID, organizerID, &req)
 	if err != nil {
+		if err == ErrRateLimited {
+			writeError(w, http.StatusTooManyRequests, "rate_limited", err.Error())
+			return
+		}
 		if err == ErrEmptySubject || err == ErrEmptyBody {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
@@ -154,6 +165,10 @@ func (h *Handler) handleAttendeeSend(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := h.service.SendFromAttendee(r.Context(), attendee.EventID, attendee.ID, &req)
 	if err != nil {
+		if err == ErrRateLimited {
+			writeError(w, http.StatusTooManyRequests, "rate_limited", err.Error())
+			return
+		}
 		if err == ErrEmptySubject || err == ErrEmptyBody {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return

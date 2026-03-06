@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -11,6 +13,7 @@ import (
 var (
 	ErrEmptySubject = errors.New("subject is required")
 	ErrEmptyBody    = errors.New("body is required")
+	ErrRateLimited  = errors.New("rate limit: please wait before sending another message")
 )
 
 // Field length limits.
@@ -34,14 +37,99 @@ type Service struct {
 	logger          zerolog.Logger
 	notifyAttendees NotifyAttendeesFunc
 	notifyOrganizer NotifyOrganizerFunc
+
+	// Per-sender rate limiting.
+	organizerLastSend sync.Map // key: "organizerID:eventID" -> time.Time
+	attendeeLastSend  sync.Map // key: rsvpToken -> time.Time
+
+	// nowFunc allows overriding time.Now in tests.
+	nowFunc func() time.Time
 }
+
+const (
+	// organizerSendCooldown is the minimum interval between organizer messages
+	// on the same event.
+	organizerSendCooldown = 1 * time.Minute
+
+	// attendeeSendCooldown is the minimum interval between attendee messages
+	// from the same RSVP token.
+	attendeeSendCooldown = 5 * time.Minute
+
+	// rateLimitStaleThreshold is the age after which a rate limit entry is
+	// considered stale and eligible for cleanup.
+	rateLimitStaleThreshold = 10 * time.Minute
+)
 
 // NewService creates a new message Service.
 func NewService(store *Store, logger zerolog.Logger) *Service {
 	return &Service{
-		store:  store,
-		logger: logger,
+		store:   store,
+		logger:  logger,
+		nowFunc: time.Now,
 	}
+}
+
+// now returns the current time, allowing tests to override.
+func (s *Service) now() time.Time {
+	return s.nowFunc()
+}
+
+// checkOrganizerRate returns ErrRateLimited if the organizer has sent a
+// message to this event within the cooldown period.
+func (s *Service) checkOrganizerRate(organizerID, eventID string) error {
+	key := organizerID + ":" + eventID
+	if v, ok := s.organizerLastSend.Load(key); ok {
+		lastSend := v.(time.Time)
+		if s.now().Sub(lastSend) < organizerSendCooldown {
+			return ErrRateLimited
+		}
+	}
+	return nil
+}
+
+// recordOrganizerSend records the current time as the last send time for the
+// organizer+event pair.
+func (s *Service) recordOrganizerSend(organizerID, eventID string) {
+	key := organizerID + ":" + eventID
+	s.organizerLastSend.Store(key, s.now())
+}
+
+// checkAttendeeRate returns ErrRateLimited if the attendee (by sender ID)
+// has sent a message within the cooldown period.
+func (s *Service) checkAttendeeRate(attendeeID string) error {
+	if v, ok := s.attendeeLastSend.Load(attendeeID); ok {
+		lastSend := v.(time.Time)
+		if s.now().Sub(lastSend) < attendeeSendCooldown {
+			return ErrRateLimited
+		}
+	}
+	return nil
+}
+
+// recordAttendeeSend records the current time as the last send time for the
+// attendee.
+func (s *Service) recordAttendeeSend(attendeeID string) {
+	s.attendeeLastSend.Store(attendeeID, s.now())
+}
+
+// CleanupStaleLimits removes rate limit entries older than the stale threshold.
+// This is called periodically to reclaim memory.
+func (s *Service) CleanupStaleLimits() {
+	cutoff := s.now().Add(-rateLimitStaleThreshold)
+
+	s.organizerLastSend.Range(func(key, value any) bool {
+		if value.(time.Time).Before(cutoff) {
+			s.organizerLastSend.Delete(key)
+		}
+		return true
+	})
+
+	s.attendeeLastSend.Range(func(key, value any) bool {
+		if value.(time.Time).Before(cutoff) {
+			s.attendeeLastSend.Delete(key)
+		}
+		return true
+	})
 }
 
 // SetNotifyAttendees registers the function that dispatches email notifications
@@ -72,6 +160,11 @@ func (s *Service) SendFromOrganizer(ctx context.Context, eventID, organizerID st
 		return nil, fmt.Errorf("body must be %d characters or less", maxBodyLen)
 	}
 
+	// Per-sender rate limiting: 1 message per minute per organizer per event.
+	if err := s.checkOrganizerRate(organizerID, eventID); err != nil {
+		return nil, err
+	}
+
 	msg := &Message{
 		EventID:       eventID,
 		SenderType:    "organizer",
@@ -85,6 +178,9 @@ func (s *Service) SendFromOrganizer(ctx context.Context, eventID, organizerID st
 	if err := s.store.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("create organizer message: %w", err)
 	}
+
+	// Record successful send for rate limiting.
+	s.recordOrganizerSend(organizerID, eventID)
 
 	s.logger.Info().
 		Str("event_id", eventID).
@@ -124,6 +220,11 @@ func (s *Service) SendFromAttendee(ctx context.Context, eventID, attendeeID stri
 		return nil, fmt.Errorf("body must be %d characters or less", maxBodyLen)
 	}
 
+	// Per-sender rate limiting: 1 message per 5 minutes per attendee.
+	if err := s.checkAttendeeRate(attendeeID); err != nil {
+		return nil, err
+	}
+
 	msg := &Message{
 		EventID:       eventID,
 		SenderType:    "attendee",
@@ -137,6 +238,9 @@ func (s *Service) SendFromAttendee(ctx context.Context, eventID, attendeeID stri
 	if err := s.store.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("create attendee message: %w", err)
 	}
+
+	// Record successful send for rate limiting.
+	s.recordAttendeeSend(attendeeID)
 
 	s.logger.Info().
 		Str("event_id", eventID).
