@@ -22,8 +22,8 @@ trap 'rm -f "$BACKEND_FILE" "$FRONTEND_FILE"' EXIT
 # Handler package → mount prefix (from router.go api.Mount calls).
 # If you add a new handler, add an entry here.
 extract_routes() {
-  local pkg="$1" pfx="$2"
-  local handler="$ROOT/internal/$pkg/handler.go"
+  local pkg="$1" pfx="$2" file="${3:-handler.go}"
+  local handler="$ROOT/internal/$pkg/$file"
   [ -f "$handler" ] || return 0
 
   grep -E '\.(Get|Post|Put|Patch|Delete)\("/' "$handler" 2>/dev/null | while IFS= read -r line; do
@@ -39,6 +39,8 @@ extract_routes() {
 {
   extract_routes auth      /auth
   extract_routes event     /events
+  extract_routes event     /events/series series_handler.go
+  extract_routes question  /events/:p/questions
   extract_routes rsvp      /rsvp
   extract_routes invite    /invite
   extract_routes message   /messages

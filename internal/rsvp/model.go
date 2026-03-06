@@ -20,13 +20,14 @@ type Attendee struct {
 
 // RSVPRequest is the request body for submitting a new RSVP.
 type RSVPRequest struct {
-	Name          string  `json:"name"`
-	Email         *string `json:"email,omitempty"`
-	Phone         *string `json:"phone,omitempty"`
-	RSVPStatus    string  `json:"rsvpStatus"`
-	ContactMethod string  `json:"contactMethod"`
-	DietaryNotes  string  `json:"dietaryNotes"`
-	PlusOnes      int     `json:"plusOnes"`
+	Name          string            `json:"name"`
+	Email         *string           `json:"email,omitempty"`
+	Phone         *string           `json:"phone,omitempty"`
+	RSVPStatus    string            `json:"rsvpStatus"`
+	ContactMethod string            `json:"contactMethod"`
+	DietaryNotes  string            `json:"dietaryNotes"`
+	PlusOnes      int               `json:"plusOnes"`
+	Answers       map[string]string `json:"answers,omitempty"` // questionID -> answer
 }
 
 // RSVPStats holds aggregate counts of RSVP responses for an event.
@@ -36,6 +37,7 @@ type RSVPStats struct {
 	Maybe              int `json:"maybe"`
 	MaybeHeadcount     int `json:"maybeHeadcount"`
 	Declined           int `json:"declined"`
+	Waitlisted         int `json:"waitlisted"`
 	Pending            int `json:"pending"`
 	Total              int `json:"total"`
 	TotalHeadcount     int `json:"totalHeadcount"`
@@ -43,10 +45,11 @@ type RSVPStats struct {
 
 // UpdateRSVPRequest is the request body for updating an existing RSVP.
 type UpdateRSVPRequest struct {
-	Name         *string `json:"name,omitempty"`
-	RSVPStatus   *string `json:"rsvpStatus,omitempty"`
-	DietaryNotes *string `json:"dietaryNotes,omitempty"`
-	PlusOnes     *int    `json:"plusOnes,omitempty"`
+	Name         *string           `json:"name,omitempty"`
+	RSVPStatus   *string           `json:"rsvpStatus,omitempty"`
+	DietaryNotes *string           `json:"dietaryNotes,omitempty"`
+	PlusOnes     *int              `json:"plusOnes,omitempty"`
+	Answers      map[string]string `json:"answers,omitempty"` // questionID -> answer
 }
 
 // OrganizerUpdateAttendeeRequest is the request body for an organizer editing

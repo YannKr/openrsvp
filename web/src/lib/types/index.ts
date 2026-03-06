@@ -24,6 +24,33 @@ export interface Event {
 	shareToken: string;
 	rsvpDeadline?: string;
 	maxCapacity?: number;
+	waitlistEnabled: boolean;
+	seriesId?: string;
+	seriesIndex?: number;
+	seriesOverride?: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface EventSeries {
+	id: string;
+	organizerId: string;
+	title: string;
+	description: string;
+	location: string;
+	timezone: string;
+	eventTime: string;
+	durationMinutes?: number;
+	recurrenceRule: 'weekly' | 'biweekly' | 'monthly';
+	recurrenceEnd?: string;
+	maxOccurrences?: number;
+	seriesStatus: 'active' | 'stopped';
+	retentionDays: number;
+	contactRequirement: 'email' | 'phone' | 'email_or_phone' | 'email_and_phone';
+	showHeadcount: boolean;
+	showGuestList: boolean;
+	rsvpDeadlineOffsetHours?: number;
+	maxCapacity?: number;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -49,7 +76,7 @@ export interface Attendee {
 	name: string;
 	email?: string;
 	phone?: string;
-	rsvpStatus: 'pending' | 'attending' | 'maybe' | 'declined';
+	rsvpStatus: 'pending' | 'attending' | 'maybe' | 'declined' | 'waitlisted';
 	rsvpToken: string;
 	contactMethod: 'email' | 'sms';
 	dietaryNotes: string;
@@ -89,6 +116,7 @@ export interface RSVPStats {
 	maybeHeadcount: number;
 	declined: number;
 	pending: number;
+	waitlisted: number;
 	total: number;
 	totalHeadcount: number;
 }
@@ -106,11 +134,23 @@ export interface PublicEvent {
 	maxCapacity?: number;
 	spotsLeft?: number;
 	atCapacity: boolean;
+	waitlistEnabled: boolean;
 }
 
 export interface PublicAttendance {
 	headcount: number;
 	names?: string[];
+}
+
+export interface CoHost {
+	id: string;
+	eventId: string;
+	organizerId: string;
+	role: 'cohost';
+	addedBy: string;
+	organizerEmail: string;
+	organizerName: string;
+	createdAt: string;
 }
 
 export interface ApiError {
@@ -128,6 +168,27 @@ export interface PaginatedResponse<T> {
 	total: number;
 	page: number;
 	perPage: number;
+}
+
+export interface EventQuestion {
+	id: string;
+	eventId: string;
+	label: string;
+	type: 'text' | 'select' | 'checkbox';
+	options: string[];
+	required: boolean;
+	sortOrder: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface QuestionAnswer {
+	id: string;
+	attendeeId: string;
+	questionId: string;
+	answer: string;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export type InviteTemplate = {

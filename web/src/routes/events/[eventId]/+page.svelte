@@ -5,11 +5,13 @@
 	import { toast } from '$lib/stores/toast';
 	import { currentEvent } from '$lib/stores/events';
 	import { formatDateTime, toISOLocal } from '$lib/utils/dates';
-	import type { Event, Attendee, RSVPStats, Reminder } from '$lib/types';
+	import { currentUser } from '$lib/stores/auth';
+	import type { Event, Attendee, RSVPStats, Reminder, CoHost } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import DateTimePicker from '$lib/components/ui/DateTimePicker.svelte';
@@ -28,15 +30,19 @@
 	let event: Event | null = $state(null);
 	let attendees: Attendee[] = $state([]);
 	let reminders: Reminder[] = $state([]);
-	let stats: RSVPStats = $state({ attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 });
+	let stats: RSVPStats = $state({ attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, waitlisted: 0, total: 0, totalHeadcount: 0 });
 	let activeFilter: string = $state('all');
 	let creatingReminder = $state(false);
 	let reminderRemindAt = $state(toISOLocal(new Date(Date.now() + 60 * 60 * 1000)));
 	let reminderTargetGroup: Reminder['targetGroup'] = $state('all');
 	let reminderMessage = $state('');
 	let reminderErrors: Record<string, string> = $state({});
+	let cohosts: CoHost[] = $state([]);
+	let cohostEmail = $state('');
+	let addingCohost = $state(false);
 
 	const eventId = $derived($page.params.eventId);
+	const currentUserId = $derived($currentUser?.id);
 	const reminderMinDate = $derived(toISOLocal(new Date()));
 
 	const reminderTargetOptions = [
@@ -57,19 +63,21 @@
 
 		(async () => {
 			try {
-				const [eventResult, attendeeResult, statsResult, remindersResult] = await Promise.all([
+				const [eventResult, attendeeResult, statsResult, remindersResult, cohostsResult] = await Promise.all([
 					api.get<{ data: Event }>(`/events/${eventId}`),
 					api.get<{ data: Attendee[] }>(`/rsvp/event/${eventId}`).catch(() => ({ data: [] })),
 					api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
-						data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
+						data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, waitlisted: 0, total: 0, totalHeadcount: 0 }
 					})),
-					api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] }))
+					api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] })),
+					api.get<{ data: CoHost[] }>(`/events/${eventId}/cohosts`).catch(() => ({ data: [] }))
 				]);
 				event = eventResult.data;
 				$currentEvent = event;
 				attendees = attendeeResult.data;
 				stats = statsResult.data;
 				reminders = remindersResult.data;
+				cohosts = cohostsResult.data;
 			} catch (err: unknown) {
 				const apiErr = err as { message?: string };
 				toast.error(apiErr.message || 'Failed to load event');
@@ -90,7 +98,8 @@
 			attending: 'success',
 			maybe: 'warning',
 			declined: 'error',
-			pending: 'info'
+			pending: 'info',
+			waitlisted: 'info'
 		};
 		return map[status] || 'neutral';
 	}
@@ -293,6 +302,57 @@
 		}
 	}
 
+	// Promote waitlisted attendee
+	let promotingAttendeeId: string | null = $state(null);
+	async function promoteAttendee(attendeeId: string) {
+		promotingAttendeeId = attendeeId;
+		try {
+			const result = await api.post<{ data: Attendee }>(`/rsvp/event/${eventId}/${attendeeId}/promote`);
+			attendees = attendees.map((a) => (a.id === attendeeId ? result.data : a));
+			toast.success('Attendee promoted from waitlist');
+			// Re-fetch stats
+			try {
+				const refreshed = await api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`);
+				stats = refreshed.data;
+			} catch { /* non-critical */ }
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to promote attendee');
+		} finally {
+			promotingAttendeeId = null;
+		}
+	}
+
+	// Co-host management
+	async function addCoHost() {
+		if (!cohostEmail.trim()) return;
+		addingCohost = true;
+		try {
+			const result = await api.post<{ data: CoHost }>(`/events/${eventId}/cohosts`, {
+				email: cohostEmail.trim()
+			});
+			cohosts = [...cohosts, result.data];
+			cohostEmail = '';
+			toast.success('Co-host added');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to add co-host');
+		} finally {
+			addingCohost = false;
+		}
+	}
+
+	async function removeCoHost(cohostId: string) {
+		try {
+			await api.delete(`/events/${eventId}/cohosts/${cohostId}`);
+			cohosts = cohosts.filter(c => c.id !== cohostId);
+			toast.success('Co-host removed');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to remove co-host');
+		}
+	}
+
 	// Editing reminders
 	let editingReminderId: string | null = $state(null);
 	let editRemindAt = $state('');
@@ -356,6 +416,21 @@
 			</div>
 		</div>
 
+		<!-- Series banner -->
+		{#if event.seriesId}
+			<div class="mb-4 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+				<svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+				</svg>
+				<span>
+					Part of a <a href="/events/series/{event.seriesId}" class="font-medium underline underline-offset-2 hover:text-indigo-800">recurring series</a>
+					{#if event.seriesOverride}
+						<span class="text-yellow-700 font-medium">(Modified)</span>
+					{/if}
+				</span>
+			</div>
+		{/if}
+
 		<!-- Event info card -->
 		<Card class="mb-6">
 			<div class="flex items-start justify-between">
@@ -383,9 +458,13 @@
 					{#if event.status === 'draft'}
 						<Button size="sm" onclick={publishEvent}>Publish</Button>
 					{:else if event.status === 'published'}
-						<Button variant="danger" size="sm" onclick={() => showCancelModal = true}>Cancel Event</Button>
+						{#if event.organizerId === currentUserId}
+							<Button variant="danger" size="sm" onclick={() => showCancelModal = true}>Cancel Event</Button>
+						{/if}
 					{:else if event.status === 'cancelled'}
-						<Button size="sm" onclick={reopenEvent}>Re-open as Draft</Button>
+						{#if event.organizerId === currentUserId}
+							<Button size="sm" onclick={reopenEvent}>Re-open as Draft</Button>
+						{/if}
 					{/if}
 				</div>
 			</div>
@@ -470,6 +549,17 @@
 			</div>
 		</div>
 
+		{#if stats.waitlisted > 0}
+			<div class="grid grid-cols-1 gap-4 mb-6">
+				<div class="rounded-xl border border-blue-200 p-4 bg-blue-50">
+					<div class="flex items-baseline gap-2">
+						<p class="text-2xl font-bold text-blue-600">{stats.waitlisted}</p>
+					</div>
+					<p class="text-xs font-medium text-blue-600 mt-1">Waitlisted</p>
+				</div>
+			</div>
+		{/if}
+
 		<!-- Capacity Status -->
 		{#if event.maxCapacity}
 			<div class="mb-6 flex items-center gap-2 text-sm text-slate-600">
@@ -479,6 +569,9 @@
 				Capacity: {stats.attendingHeadcount} / {event.maxCapacity}
 				{#if stats.attendingHeadcount >= event.maxCapacity}
 					<Badge variant="error">Full</Badge>
+				{/if}
+				{#if event.waitlistEnabled}
+					<Badge variant="info">Waitlist On</Badge>
 				{/if}
 			</div>
 		{/if}
@@ -648,7 +741,7 @@
 						</div>
 					</div>
 					<div class="flex gap-1">
-						{#each ['all', 'attending', 'maybe', 'declined'] as filter}
+						{#each ['all', 'attending', 'maybe', 'declined', 'waitlisted'] as filter}
 							<button
 								type="button"
 								class="px-3 py-1 rounded-full text-xs font-medium transition-colors {activeFilter === filter
@@ -692,6 +785,7 @@
 											<option value="maybe">Maybe</option>
 											<option value="declined">Declined</option>
 											<option value="pending">Pending</option>
+											<option value="waitlisted">Waitlisted</option>
 										</select>
 									</div>
 									<div>
@@ -726,6 +820,9 @@
 									<Badge variant={statusVariant(attendee.rsvpStatus)}>
 										{attendee.rsvpStatus}
 									</Badge>
+									{#if attendee.rsvpStatus === "waitlisted"}
+										<Button size="sm" loading={promotingAttendeeId === attendee.id} onclick={() => promoteAttendee(attendee.id)}>Promote</Button>
+									{/if}
 									<Button size="sm" variant="outline" onclick={() => startEditAttendee(attendee)}>Edit</Button>
 									<Button size="sm" variant="danger" onclick={() => { removeAttendeeTarget = attendee; showRemoveAttendeeModal = true; }}>Remove</Button>
 								</div>
@@ -735,6 +832,62 @@
 				</div>
 			{/if}
 		</Card>
+
+		<!-- Co-host management (owner only) -->
+		{#if event && event.organizerId === currentUserId}
+			<Card class="mt-6">
+				{#snippet header()}
+					<div class="flex items-center gap-2">
+						<h2 class="text-lg font-semibold text-slate-900">Co-hosts</h2>
+						<span class="group relative">
+							<svg class="h-4 w-4 text-slate-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" />
+							</svg>
+							<span class="invisible group-hover:visible absolute left-6 top-0 z-10 w-64 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg">
+								Co-hosts can edit event details, manage guests, and send messages. Only the event owner can delete the event or manage co-hosts.
+							</span>
+						</span>
+					</div>
+				{/snippet}
+
+				{#if cohosts.length === 0}
+					<p class="text-sm text-slate-500 py-2">No co-hosts yet.</p>
+				{:else}
+					<div class="divide-y divide-slate-100">
+						{#each cohosts as cohost (cohost.id)}
+							<div class="flex items-center justify-between py-3">
+								<div>
+									<p class="text-sm font-medium text-slate-900">{cohost.organizerName || cohost.organizerEmail}</p>
+									<p class="text-xs text-slate-500">{cohost.organizerEmail}</p>
+								</div>
+								<Button variant="ghost" size="sm" onclick={() => removeCoHost(cohost.id)}>
+									Remove
+								</Button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+
+				{#if cohosts.length < 10}
+					<form
+						onsubmit={(e) => { e.preventDefault(); addCoHost(); }}
+						class="mt-4 flex gap-2"
+					>
+						<div class="flex-1">
+							<Input
+								name="cohostEmail"
+								bind:value={cohostEmail}
+								placeholder="Co-host email address"
+								type="email"
+							/>
+						</div>
+						<Button type="submit" size="sm" loading={addingCohost}>Add</Button>
+					</form>
+				{:else}
+					<p class="text-xs text-slate-400 mt-4">Maximum 10 co-hosts reached.</p>
+				{/if}
+			</Card>
+		{/if}
 	{:else}
 		<Card>
 			<p class="text-center text-slate-500 py-8">Event not found.</p>

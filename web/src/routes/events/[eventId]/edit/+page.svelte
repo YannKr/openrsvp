@@ -15,6 +15,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import QuestionBuilder from '$lib/components/questions/QuestionBuilder.svelte';
 	import { onMount } from 'svelte';
 
 	const eventId = $derived($page.params.eventId);
@@ -36,6 +37,7 @@
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
 	let attendingHeadcount = $state(0);
+	let waitlistEnabled = $state(false);
 
 	const capacityWarning = $derived(
 		maxCapacity && parseInt(maxCapacity) > 0 && attendingHeadcount > parseInt(maxCapacity)
@@ -64,7 +66,7 @@
 			const [eventResult, statsResult] = await Promise.all([
 				api.get<{ data: Event }>(`/events/${eventId}`),
 				api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
-					data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, total: 0, totalHeadcount: 0 }
+					data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, waitlisted: 0, total: 0, totalHeadcount: 0 }
 				}))
 			]);
 			const e = eventResult.data;
@@ -82,6 +84,7 @@
 			maxCapacity = e.maxCapacity ? String(e.maxCapacity) : '';
 			retentionDays = String(e.retentionDays);
 			showRetention = e.retentionDays !== 30;
+			waitlistEnabled = e.waitlistEnabled ?? false;
 			attendingHeadcount = statsResult.data.attendingHeadcount;
 		} catch (err: unknown) {
 			const apiErr = err as { message?: string };
@@ -130,8 +133,13 @@
 			if (endDate) body.endDate = new Date(endDate).toISOString();
 			if (rsvpDeadline) body.rsvpDeadline = new Date(rsvpDeadline).toISOString();
 			else body.rsvpDeadline = '';
-			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
-			else body.maxCapacity = 0;
+			if (maxCapacity) {
+				body.maxCapacity = parseInt(maxCapacity);
+				body.waitlistEnabled = waitlistEnabled;
+			} else {
+				body.maxCapacity = 0;
+				body.waitlistEnabled = false;
+			}
 
 			await api.put(`/events/${eventId}`, body);
 			toast.success('Event updated successfully');
@@ -278,6 +286,20 @@
 						</div>
 					{/if}
 
+					{#if maxCapacity}
+						<label class="flex items-center gap-3 cursor-pointer">
+							<input
+								type="checkbox"
+								bind:checked={waitlistEnabled}
+								class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+							/>
+							<div>
+								<span class="text-sm text-slate-700">Enable waitlist</span>
+								<p class="text-xs text-slate-400">When at capacity, guests can join a waitlist instead of being turned away.</p>
+							</div>
+						</label>
+					{/if}
+
 					<div class="pt-2">
 						{#if showRetention}
 							<Input
@@ -307,6 +329,10 @@
 						<Button type="submit" loading={saving}>Save Changes</Button>
 					</div>
 				</form>
+			</Card>
+
+			<Card class="mt-6">
+				<QuestionBuilder eventId={eventId ?? ''} />
 			</Card>
 		{/if}
 	</div>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 // Service contains the business logic for event management.
 type Service struct {
 	store            *Store
+	cohostStore      *CoHostStore
 	defaultRetention int
 	smsEnabled       bool
 	onPublish        func(ctx context.Context, e *Event)
@@ -52,6 +54,42 @@ func (s *Service) SetOnCancel(fn func(ctx context.Context, e *Event)) {
 // phone-only contact requirement is rejected.
 func (s *Service) SetSMSEnabled(enabled bool) {
 	s.smsEnabled = enabled
+}
+
+// SetCoHostStore sets the co-host store on the service, enabling co-host
+// authorization checks.
+func (s *Service) SetCoHostStore(cs *CoHostStore) {
+	s.cohostStore = cs
+}
+
+// CanManageEvent checks whether the given organizer can manage the event.
+// Returns true if the organizer is the owner or a co-host.
+func (s *Service) CanManageEvent(ctx context.Context, eventID, organizerID string) (bool, error) {
+	ev, err := s.store.FindByID(ctx, eventID)
+	if err != nil || ev == nil {
+		return false, err
+	}
+	if ev.OrganizerID == organizerID {
+		return true, nil
+	}
+	if s.cohostStore == nil {
+		return false, nil
+	}
+	cohost, err := s.cohostStore.FindByEventAndOrganizer(ctx, eventID, organizerID)
+	if err != nil {
+		return false, err
+	}
+	return cohost != nil, nil
+}
+
+// IsEventOwner checks whether the given organizer is the owner (not co-host) of
+// the event.
+func (s *Service) IsEventOwner(ctx context.Context, eventID, organizerID string) (bool, error) {
+	ev, err := s.store.FindByID(ctx, eventID)
+	if err != nil || ev == nil {
+		return false, err
+	}
+	return ev.OrganizerID == organizerID, nil
 }
 
 // Create validates the request and creates a new event for the given organizer.
@@ -132,6 +170,11 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		maxCapacity = req.MaxCapacity
 	}
 
+	waitlistEnabled := false
+	if req.WaitlistEnabled != nil {
+		waitlistEnabled = *req.WaitlistEnabled
+	}
+
 	e := &Event{
 		ID:                 uuid.Must(uuid.NewV7()).String(),
 		OrganizerID:        organizerID,
@@ -147,6 +190,7 @@ func (s *Service) Create(ctx context.Context, organizerID string, req CreateEven
 		ShowGuestList:      showGuestList,
 		RSVPDeadline:       rsvpDeadline,
 		MaxCapacity:        maxCapacity,
+		WaitlistEnabled:    waitlistEnabled,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}
@@ -182,19 +226,68 @@ func (s *Service) GetByShareToken(ctx context.Context, token string) (*Event, er
 	return e, nil
 }
 
-// ListByOrganizer retrieves all events belonging to the given organizer.
+// ListByOrganizer retrieves all events belonging to the given organizer,
+// including events where the organizer is a co-host.
 func (s *Service) ListByOrganizer(ctx context.Context, organizerID string) ([]*Event, error) {
-	events, err := s.store.FindByOrganizerID(ctx, organizerID)
+	owned, err := s.store.FindByOrganizerID(ctx, organizerID)
 	if err != nil {
 		return nil, err
 	}
-	if events == nil {
-		events = []*Event{}
+
+	if s.cohostStore == nil {
+		if owned == nil {
+			owned = []*Event{}
+		}
+		return owned, nil
 	}
-	return events, nil
+
+	cohostIDs, err := s.cohostStore.FindCohostedEventIDs(ctx, organizerID)
+	if err != nil {
+		if owned == nil {
+			owned = []*Event{}
+		}
+		return owned, nil // Fall back to owned only on error
+	}
+
+	if len(cohostIDs) == 0 {
+		if owned == nil {
+			owned = []*Event{}
+		}
+		return owned, nil
+	}
+
+	cohosted, err := s.store.FindByIDs(ctx, cohostIDs)
+	if err != nil {
+		if owned == nil {
+			owned = []*Event{}
+		}
+		return owned, nil
+	}
+
+	// Merge and deduplicate.
+	ownedIDs := make(map[string]bool)
+	for _, e := range owned {
+		ownedIDs[e.ID] = true
+	}
+	for _, e := range cohosted {
+		if !ownedIDs[e.ID] {
+			owned = append(owned, e)
+		}
+	}
+
+	// Sort by event_date DESC.
+	sort.Slice(owned, func(i, j int) bool {
+		return owned[i].EventDate.After(owned[j].EventDate)
+	})
+
+	if owned == nil {
+		owned = []*Event{}
+	}
+	return owned, nil
 }
 
-// Update applies partial updates to an event. Only the event owner can update.
+// Update applies partial updates to an event. The event owner or a co-host can
+// update.
 func (s *Service) Update(ctx context.Context, eventID, organizerID string, req UpdateEventRequest) (*Event, error) {
 	e, err := s.store.FindByID(ctx, eventID)
 	if err != nil {
@@ -203,7 +296,12 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 	if e == nil {
 		return nil, fmt.Errorf("event not found")
 	}
-	if e.OrganizerID != organizerID {
+
+	canManage, err := s.CanManageEvent(ctx, eventID, organizerID)
+	if err != nil {
+		return nil, err
+	}
+	if !canManage {
 		return nil, fmt.Errorf("forbidden: you do not own this event")
 	}
 
@@ -276,6 +374,10 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 		}
 	}
 
+	if req.WaitlistEnabled != nil {
+		e.WaitlistEnabled = *req.WaitlistEnabled
+	}
+
 	if !s.smsEnabled && e.ContactRequirement == "phone" {
 		return nil, fmt.Errorf("phone-only contact requirement is not available when SMS is disabled")
 	}
@@ -287,7 +389,8 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 	return e, nil
 }
 
-// Publish transitions an event from draft to published status.
+// Publish transitions an event from draft to published status. The event owner
+// or a co-host can publish.
 func (s *Service) Publish(ctx context.Context, eventID, organizerID string) (*Event, error) {
 	e, err := s.store.FindByID(ctx, eventID)
 	if err != nil {
@@ -296,7 +399,12 @@ func (s *Service) Publish(ctx context.Context, eventID, organizerID string) (*Ev
 	if e == nil {
 		return nil, fmt.Errorf("event not found")
 	}
-	if e.OrganizerID != organizerID {
+
+	canManage, err := s.CanManageEvent(ctx, eventID, organizerID)
+	if err != nil {
+		return nil, err
+	}
+	if !canManage {
 		return nil, fmt.Errorf("forbidden: you do not own this event")
 	}
 	if e.Status != "draft" {
@@ -315,7 +423,8 @@ func (s *Service) Publish(ctx context.Context, eventID, organizerID string) (*Ev
 	return e, nil
 }
 
-// Cancel transitions an event from published to cancelled status.
+// Cancel transitions an event from published to cancelled status. The event
+// owner or a co-host can cancel.
 // When notifyAttendees is true, the onCancel callback is invoked to
 // send cancellation notifications.
 func (s *Service) Cancel(ctx context.Context, eventID, organizerID string, notifyAttendees bool) (*Event, error) {
@@ -326,7 +435,12 @@ func (s *Service) Cancel(ctx context.Context, eventID, organizerID string, notif
 	if e == nil {
 		return nil, fmt.Errorf("event not found")
 	}
-	if e.OrganizerID != organizerID {
+
+	canManage, err := s.CanManageEvent(ctx, eventID, organizerID)
+	if err != nil {
+		return nil, err
+	}
+	if !canManage {
 		return nil, fmt.Errorf("forbidden: you do not own this event")
 	}
 	if e.Status != "published" {
@@ -345,7 +459,8 @@ func (s *Service) Cancel(ctx context.Context, eventID, organizerID string, notif
 	return e, nil
 }
 
-// Reopen transitions a cancelled event back to draft status.
+// Reopen transitions a cancelled event back to draft status. The event owner
+// or a co-host can reopen.
 func (s *Service) Reopen(ctx context.Context, eventID, organizerID string) (*Event, error) {
 	e, err := s.store.FindByID(ctx, eventID)
 	if err != nil {
@@ -354,7 +469,12 @@ func (s *Service) Reopen(ctx context.Context, eventID, organizerID string) (*Eve
 	if e == nil {
 		return nil, fmt.Errorf("event not found")
 	}
-	if e.OrganizerID != organizerID {
+
+	canManage, err := s.CanManageEvent(ctx, eventID, organizerID)
+	if err != nil {
+		return nil, err
+	}
+	if !canManage {
 		return nil, fmt.Errorf("forbidden: you do not own this event")
 	}
 	if e.Status != "cancelled" {
@@ -408,6 +528,7 @@ func (s *Service) Duplicate(ctx context.Context, eventID, organizerID string) (*
 		ShowGuestList:      e.ShowGuestList,
 		RSVPDeadline:       e.RSVPDeadline,
 		MaxCapacity:        e.MaxCapacity,
+		WaitlistEnabled:    e.WaitlistEnabled,
 		Status:             "draft",
 		ShareToken:         shareToken,
 	}
@@ -439,6 +560,13 @@ func (s *Service) Delete(ctx context.Context, eventID, organizerID string) error
 
 	e.Status = "archived"
 	return s.store.Update(ctx, e)
+}
+
+// CreateFromSeries persists an event that was generated by a series template.
+// It bypasses the normal Create() validation flow since the series service
+// constructs a fully-formed Event struct.
+func (s *Service) CreateFromSeries(ctx context.Context, event *Event) error {
+	return s.store.Create(ctx, event)
 }
 
 // parseFlexibleTime tries RFC3339 first, then falls back to common datetime

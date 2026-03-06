@@ -2,7 +2,8 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
-	import type { PublicEvent, Attendee, Message, PublicAttendance, ApiError } from '$lib/types';
+	import type { PublicEvent, Attendee, Message, PublicAttendance, EventQuestion, QuestionAnswer, ApiError } from '$lib/types';
+	import QuestionRenderer from '$lib/components/questions/QuestionRenderer.svelte';
 	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
 
 	interface RsvpData {
@@ -10,6 +11,9 @@
 		event: PublicEvent;
 		attendance?: PublicAttendance;
 		shareToken?: string;
+		questions?: EventQuestion[];
+		answers?: QuestionAnswer[];
+		waitlistPosition?: number;
 	}
 
 	let loading = $state(true);
@@ -19,6 +23,9 @@
 	let attendance = $state<PublicAttendance | null>(null);
 	let shareToken = $state('');
 	let showAllNames = $state(false);
+	let eventQuestions = $state<EventQuestion[]>([]);
+	let editAnswers: Record<string, string> = $state({});
+	let waitlistPosition = $state<number | null>(null);
 	const displayNames = $derived(
 		attendance?.names
 			? (showAllNames ? attendance.names : attendance.names.slice(0, 50))
@@ -69,6 +76,16 @@
 			eventData = result.data.event;
 			attendance = result.data.attendance ?? null;
 			shareToken = result.data.shareToken ?? '';
+			eventQuestions = result.data.questions ?? [];
+			waitlistPosition = result.data.waitlistPosition ?? null;
+			// Pre-fill answers from previous submission
+			if (result.data.answers && result.data.answers.length > 0) {
+				const answerMap: Record<string, string> = {};
+				for (const a of result.data.answers) {
+					answerMap[a.questionId] = a.answer;
+				}
+				editAnswers = answerMap;
+			}
 			populateEditForm();
 		} catch (err) {
 			const apiErr = err as ApiError;
@@ -85,7 +102,7 @@
 	function populateEditForm() {
 		if (!attendee) return;
 		editName = attendee.name;
-		editStatus = attendee.rsvpStatus === 'pending' ? 'attending' : attendee.rsvpStatus;
+		editStatus = (attendee.rsvpStatus === 'pending' || attendee.rsvpStatus === 'waitlisted') ? 'attending' : attendee.rsvpStatus;
 		editDietary = attendee.dietaryNotes || '';
 		editPlusOnes = attendee.plusOnes;
 	}
@@ -102,12 +119,16 @@
 		saveSuccess = false;
 
 		try {
-			const result = await api.patch<{ data: Attendee }>(`/rsvp/public/token/${token}`, {
+			const payload: Record<string, unknown> = {
 				name: editName.trim(),
 				rsvpStatus: editStatus,
 				dietaryNotes: editDietary.trim() || undefined,
 				plusOnes: editPlusOnes
-			});
+			};
+			if (Object.keys(editAnswers).length > 0) {
+				payload.answers = editAnswers;
+			}
+			const result = await api.patch<{ data: Attendee }>(`/rsvp/public/token/${token}`, payload);
 			attendee = result.data;
 			saveSuccess = true;
 			editing = false;
@@ -206,6 +227,7 @@
 			case 'attending': return 'bg-green-50 text-green-700 border-green-200';
 			case 'maybe': return 'bg-amber-50 text-amber-700 border-amber-200';
 			case 'declined': return 'bg-red-50 text-red-700 border-red-200';
+			case 'waitlisted': return 'bg-blue-50 text-blue-700 border-blue-200';
 			default: return 'bg-slate-50 text-slate-700 border-slate-200';
 		}
 	}
@@ -216,7 +238,28 @@
 			case 'maybe': return 'Maybe';
 			case 'declined': return 'Declined';
 			case 'pending': return 'Pending';
+			case 'waitlisted': return 'Waitlisted';
 			default: return status;
+		}
+	}
+
+	// Waitlist: leave waitlist handler
+	let leavingWaitlist = $state(false);
+	async function leaveWaitlist() {
+		leavingWaitlist = true;
+		try {
+			const result = await api.patch<{ data: Attendee }>(`/rsvp/public/token/${token}`, {
+				rsvpStatus: 'declined'
+			});
+			attendee = result.data;
+			waitlistPosition = null;
+			saveSuccess = true;
+			setTimeout(() => { saveSuccess = false; }, 4000);
+		} catch (err) {
+			const apiErr = err as ApiError;
+			saveError = apiErr.message || 'Failed to leave waitlist. Please try again.';
+		} finally {
+			leavingWaitlist = false;
 		}
 	}
 </script>
@@ -263,8 +306,34 @@
 				</div>
 			{/if}
 
+			<!-- Waitlist Status -->
+			{#if attendee.rsvpStatus === 'waitlisted'}
+				<div class="mb-4 rounded-lg bg-blue-50 border border-blue-200 p-4 text-center">
+					<p class="text-sm font-medium text-blue-800">
+						{#if waitlistPosition}
+							You're on the waitlist -- Position #{waitlistPosition} in line
+						{:else}
+							You're on the waitlist
+						{/if}
+					</p>
+					<p class="text-xs text-blue-600 mt-1">We'll email you if a spot opens up.</p>
+					<button
+						type="button"
+						onclick={leaveWaitlist}
+						disabled={leavingWaitlist}
+						class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{#if leavingWaitlist}
+							Leaving...
+						{:else}
+							Leave Waitlist
+						{/if}
+					</button>
+				</div>
+			{/if}
+
 			<!-- Capacity Notice -->
-			{#if eventData.atCapacity && attendee.rsvpStatus !== 'attending'}
+			{#if eventData.atCapacity && attendee.rsvpStatus !== 'attending' && attendee.rsvpStatus !== 'waitlisted'}
 				<div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 text-center">
 					This event is at capacity. You can still RSVP as "maybe" or "declined".
 				</div>
@@ -291,7 +360,7 @@
 			<div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8 mb-6">
 				<div class="flex items-center justify-between mb-6">
 					<h2 class="text-lg font-semibold text-slate-900">Your RSVP</h2>
-					{#if !editing && !rsvpsClosed}
+					{#if !editing && !rsvpsClosed && attendee.rsvpStatus !== 'waitlisted'}
 						<button
 							onclick={() => { populateEditForm(); editing = true; }}
 							class="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
@@ -388,6 +457,11 @@
 								<span class="text-sm text-slate-500">additional guest{editPlusOnes !== 1 ? 's' : ''}</span>
 							</div>
 						</div>
+
+						<!-- Custom Questions -->
+						{#if eventQuestions.length > 0}
+							<QuestionRenderer questions={eventQuestions} bind:answers={editAnswers} />
+						{/if}
 
 						<!-- Error -->
 						{#if saveError}
