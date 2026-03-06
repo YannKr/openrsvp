@@ -1,7 +1,9 @@
 package security
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -9,9 +11,21 @@ import (
 	"strings"
 )
 
-// generateCSRFToken produces a cryptographically random 32-byte token
+// csrfHMACKey is a package-level key generated once at startup. It is used to
+// bind CSRF tokens to session cookie values via HMAC-SHA256 so that a token
+// issued for one session cannot be replayed against another.
+var csrfHMACKey []byte
+
+func init() {
+	csrfHMACKey = make([]byte, 32)
+	if _, err := rand.Read(csrfHMACKey); err != nil {
+		panic("security: failed to generate CSRF HMAC key: " + err.Error())
+	}
+}
+
+// generateCSRFNonce produces a cryptographically random 32-byte nonce
 // encoded as a 64-character hex string.
-func generateCSRFToken() (string, error) {
+func generateCSRFNonce() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -19,14 +33,66 @@ func generateCSRFToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// computeCSRFHMAC returns HMAC-SHA256(nonce, sessionValue) as a hex string.
+func computeCSRFHMAC(nonce, sessionValue string) string {
+	mac := hmac.New(sha256.New, csrfHMACKey)
+	mac.Write([]byte(nonce))
+	mac.Write([]byte(sessionValue))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// buildCSRFToken creates a session-bound CSRF token: "nonce.hmac".
+// If sessionValue is empty (unauthenticated), the token is just the nonce
+// for backwards compatibility.
+func buildCSRFToken(sessionValue string) (string, error) {
+	nonce, err := generateCSRFNonce()
+	if err != nil {
+		return "", err
+	}
+	if sessionValue == "" {
+		return nonce, nil
+	}
+	return nonce + "." + computeCSRFHMAC(nonce, sessionValue), nil
+}
+
+// verifyCSRFToken validates a CSRF token against the session value.
+// For session-bound tokens (containing "."), the HMAC is recomputed and
+// compared.  For plain tokens (no session), the cookie and header values
+// are compared directly.
+func verifyCSRFToken(cookieToken, headerToken, sessionValue string) bool {
+	// The header and cookie must match exactly first.
+	if subtle.ConstantTimeCompare([]byte(cookieToken), []byte(headerToken)) != 1 {
+		return false
+	}
+
+	// If the token contains a dot, it is session-bound.
+	if idx := strings.IndexByte(cookieToken, '.'); idx > 0 {
+		nonce := cookieToken[:idx]
+		providedMAC := cookieToken[idx+1:]
+
+		// Session-bound tokens require a session.
+		if sessionValue == "" {
+			return false
+		}
+
+		expectedMAC := computeCSRFHMAC(nonce, sessionValue)
+		return subtle.ConstantTimeCompare([]byte(providedMAC), []byte(expectedMAC)) == 1
+	}
+
+	// Plain token (no session when it was issued) — accept as-is.
+	// This allows unauthenticated flows (login page) to work.
+	return true
+}
+
 // CSRFMiddleware returns middleware that implements the Synchronizer Token
 // Pattern for CSRF protection.
 //
-//   - On safe requests (GET, HEAD, OPTIONS): a csrf_token cookie is set with
-//     a freshly generated random token.
+//   - On safe requests (GET, HEAD, OPTIONS): a csrf_token cookie is set if
+//     one does not already exist.  When a session cookie is present, the
+//     token is bound to it via HMAC-SHA256.
 //   - On mutation requests (POST, PUT, PATCH, DELETE): the X-CSRF-Token
-//     request header must match the csrf_token cookie value. If not, the
-//     request is rejected with 403 Forbidden.
+//     request header must match the csrf_token cookie value and (if the
+//     user is authenticated) the HMAC must match the current session.
 //
 // Paths listed in excludePaths are exempt from CSRF validation (e.g. public
 // RSVP endpoints that use honeypot protection instead).
@@ -49,23 +115,32 @@ func CSRFMiddleware(excludePaths []string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Read the session cookie value (may be empty for unauthenticated users).
+			sessionValue := ""
+			if sc, err := r.Cookie("session"); err == nil {
+				sessionValue = sc.Value
+			}
+
 			switch r.Method {
 			case http.MethodGet, http.MethodHead, http.MethodOptions:
-				// Safe methods: issue a new CSRF token cookie.
-				token, err := generateCSRFToken()
-				if err != nil {
-					http.Error(w, "internal server error", http.StatusInternalServerError)
-					return
-				}
+				// Only set a new CSRF cookie if one doesn't already exist.
+				// This avoids unnecessary token regeneration on every GET.
+				if _, err := r.Cookie("csrf_token"); err != nil {
+					token, genErr := buildCSRFToken(sessionValue)
+					if genErr != nil {
+						http.Error(w, "internal server error", http.StatusInternalServerError)
+						return
+					}
 
-				http.SetCookie(w, &http.Cookie{
-					Name:     "csrf_token",
-					Value:    token,
-					Path:     "/",
-					HttpOnly: false, // JS needs to read the cookie
-					Secure:   isSecureRequest(r),
-					SameSite: http.SameSiteStrictMode,
-				})
+					http.SetCookie(w, &http.Cookie{
+						Name:     "csrf_token",
+						Value:    token,
+						Path:     "/",
+						HttpOnly: false, // JS needs to read the cookie
+						Secure:   isSecureRequest(r),
+						SameSite: http.SameSiteStrictMode,
+					})
+				}
 
 				next.ServeHTTP(w, r)
 
@@ -83,8 +158,7 @@ func CSRFMiddleware(excludePaths []string) func(http.Handler) http.Handler {
 					return
 				}
 
-				// Constant-time comparison to prevent timing attacks.
-				if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(headerToken)) != 1 {
+				if !verifyCSRFToken(cookie.Value, headerToken, sessionValue) {
 					csrfError(w)
 					return
 				}

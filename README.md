@@ -116,6 +116,7 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `FEEDBACK_GITHUB_TOKEN` | _(empty)_ | GitHub PAT for posting feedback as Issues |
 | `FEEDBACK_GITHUB_REPO` | _(empty)_ | Target repo for Issues, e.g. `owner/repo` |
 | `FEEDBACK_EMAIL` | _(empty)_ | Email address to receive feedback (fallback) |
+| `TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of trusted reverse proxies (e.g. `10.0.0.0/8,172.16.0.0/12`). When set, `X-Forwarded-For` / `X-Real-IP` headers are trusted to determine client IP. When empty (default), only `RemoteAddr` is used, which prevents IP spoofing. **Set this when running behind a reverse proxy (Nginx, Caddy, etc.)** |
 
 ### 📧 Email Providers
 
@@ -355,6 +356,9 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ### v1.2
 
+- Security: `middleware.RealIP` is now conditional on `TRUSTED_PROXIES` — prevents clients from spoofing their IP via `X-Forwarded-For` to bypass rate limiting
+- Security: CSRF tokens are now bound to the session cookie via HMAC-SHA256 — a token issued for one session cannot be replayed against another
+- Security: CSRF cookie is no longer regenerated on every GET request (only set when absent)
 - Security: RSVP lookup now sends a magic link email instead of returning the token directly (prevents email enumeration)
 - Fix: dashboard stats (attending, maybe, declined, headcount) now refresh after editing or removing attendees
 - Fix: max attendees validation rejects non-numeric input on both create and edit forms
