@@ -13,6 +13,13 @@ import (
 // base62Chars is the alphabet used for generating share tokens.
 const base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+// Field length limits.
+const (
+	maxTitleLen       = 200
+	maxDescriptionLen = 5000
+	maxLocationLen    = 500
+)
+
 // Service contains the business logic for event management.
 type Service struct {
 	store            *Store
@@ -96,6 +103,15 @@ func (s *Service) IsEventOwner(ctx context.Context, eventID, organizerID string)
 func (s *Service) Create(ctx context.Context, organizerID string, req CreateEventRequest) (*Event, error) {
 	if req.Title == "" {
 		return nil, fmt.Errorf("title is required")
+	}
+	if len(req.Title) > maxTitleLen {
+		return nil, fmt.Errorf("title must be %d characters or less", maxTitleLen)
+	}
+	if len(req.Description) > maxDescriptionLen {
+		return nil, fmt.Errorf("description must be %d characters or less", maxDescriptionLen)
+	}
+	if len(req.Location) > maxLocationLen {
+		return nil, fmt.Errorf("location must be %d characters or less", maxLocationLen)
 	}
 	if req.EventDate == "" {
 		return nil, fmt.Errorf("eventDate is required")
@@ -306,9 +322,15 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 	}
 
 	if req.Title != nil {
+		if len(*req.Title) > maxTitleLen {
+			return nil, fmt.Errorf("title must be %d characters or less", maxTitleLen)
+		}
 		e.Title = *req.Title
 	}
 	if req.Description != nil {
+		if len(*req.Description) > maxDescriptionLen {
+			return nil, fmt.Errorf("description must be %d characters or less", maxDescriptionLen)
+		}
 		e.Description = *req.Description
 	}
 	if req.EventDate != nil {
@@ -330,6 +352,9 @@ func (s *Service) Update(ctx context.Context, eventID, organizerID string, req U
 		}
 	}
 	if req.Location != nil {
+		if len(*req.Location) > maxLocationLen {
+			return nil, fmt.Errorf("location must be %d characters or less", maxLocationLen)
+		}
 		e.Location = *req.Location
 	}
 	if req.Timezone != nil {
