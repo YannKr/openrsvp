@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"hash/fnv"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/calendar"
 	"github.com/openrsvp/openrsvp/internal/event"
@@ -91,14 +91,18 @@ type Service struct {
 	listQuestions             ListQuestionsFunc
 	getAnswers                GetAnswersFunc
 	getExportQuestions        GetExportQuestionsFunc
+	logger                    zerolog.Logger
+	notifSem                  chan struct{} // bounds concurrent notification goroutines
 }
 
 // NewService creates a new RSVP Service.
-func NewService(store *Store, eventService *event.Service, inviteService *invite.Service) *Service {
+func NewService(store *Store, eventService *event.Service, inviteService *invite.Service, logger zerolog.Logger) *Service {
 	return &Service{
 		store:         store,
 		eventService:  eventService,
 		inviteService: inviteService,
+		logger:        logger,
+		notifSem:      make(chan struct{}, 100),
 	}
 }
 
@@ -158,6 +162,25 @@ func (s *Service) GetExportQuestions(ctx context.Context, eventID string) (*Expo
 		return nil, nil
 	}
 	return s.getExportQuestions(ctx, eventID)
+}
+
+// asyncNotify runs fn in a goroutine bounded by the notification semaphore.
+// If the semaphore is full, the notification is dropped and a warning is logged.
+func (s *Service) asyncNotify(fn func()) {
+	select {
+	case s.notifSem <- struct{}{}:
+		go func() {
+			defer func() { <-s.notifSem }()
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Error().Interface("panic", r).Msg("recovered from panic in notification goroutine")
+				}
+			}()
+			fn()
+		}()
+	default:
+		s.logger.Warn().Msg("notification semaphore full, dropping notification")
+	}
 }
 
 // PublicAttendance holds the attendance data visible on the public invite page.
@@ -410,14 +433,12 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			}
 		}
 		if s.notifyRSVP != nil {
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("recovered from panic in RSVP notification goroutine: %v", r)
-					}
-				}()
-				s.notifyRSVP(context.Background(), ev.ID, existing)
-			}()
+			notifyFn := s.notifyRSVP
+			eventID := ev.ID
+			a := existing
+			s.asyncNotify(func() {
+				notifyFn(context.Background(), eventID, a)
+			})
 		}
 		return existing, nil
 	}
@@ -468,14 +489,12 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 
 	if s.notifyRSVP != nil {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("recovered from panic in RSVP notification goroutine: %v", r)
-				}
-			}()
-			s.notifyRSVP(context.Background(), ev.ID, attendee)
-		}()
+		notifyFn := s.notifyRSVP
+		eventID := ev.ID
+		a := attendee
+		s.asyncNotify(func() {
+			notifyFn(context.Background(), eventID, a)
+		})
 	}
 
 	return attendee, nil
@@ -763,8 +782,25 @@ func (s *Service) GetEventByID(ctx context.Context, eventID string) (*event.Even
 	return s.eventService.GetByID(ctx, eventID)
 }
 
-// RemoveAttendee deletes an attendee from an event.
+// RemoveAttendee deletes an attendee from an event. When the event has a
+// capacity limit, the attendee status is read under the per-event mutex to
+// prevent TOCTOU races with concurrent status changes.
 func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string) error {
+	// Look up the event to check if it has a capacity limit.
+	ev, err := s.eventService.GetByID(ctx, eventID)
+	if err != nil {
+		return fmt.Errorf("event not found")
+	}
+
+	// Acquire the per-event mutex unconditionally when capacity is set.
+	// This ensures the FindByID read and the Delete happen atomically
+	// with respect to concurrent SubmitRSVP/UpdateByToken calls.
+	if ev.MaxCapacity != nil {
+		mu := getEventMutex(eventID)
+		mu.Lock()
+		defer mu.Unlock()
+	}
+
 	a, err := s.store.FindByID(ctx, attendeeID)
 	if err != nil {
 		return err
@@ -799,8 +835,24 @@ func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string
 
 // UpdateAttendeeAsOrganizer applies partial updates to an attendee as the
 // event organizer. Unlike attendee self-service, this allows editing contact
-// fields (email, phone) and setting any valid RSVP status.
+// fields (email, phone). When the event has a capacity limit and the update
+// changes an attendee to "attending", the per-event mutex is acquired and
+// capacity is re-checked to prevent races with concurrent SubmitRSVP calls.
 func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attendeeID string, req OrganizerUpdateAttendeeRequest) (*Attendee, error) {
+	// Look up the event to check capacity constraints.
+	ev, err := s.eventService.GetByID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	// Acquire per-event mutex for capacity-limited events to prevent
+	// races with concurrent SubmitRSVP/UpdateByToken calls.
+	if ev.MaxCapacity != nil {
+		mu := getEventMutex(eventID)
+		mu.Lock()
+		defer mu.Unlock()
+	}
+
 	a, err := s.store.FindByID(ctx, attendeeID)
 	if err != nil {
 		return nil, err
@@ -844,6 +896,21 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	}
 	if req.DietaryNotes != nil && len(*req.DietaryNotes) > maxDietaryNotesLen {
 		return nil, fmt.Errorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
+	}
+
+	// Check capacity when promoting to "attending" status.
+	if req.RSVPStatus != nil && *req.RSVPStatus == "attending" && ev.MaxCapacity != nil && a.RSVPStatus != "attending" {
+		stats, err := s.store.GetStats(ctx, eventID)
+		if err != nil {
+			return nil, fmt.Errorf("check capacity: %w", err)
+		}
+		newPlusOnes := a.PlusOnes
+		if req.PlusOnes != nil {
+			newPlusOnes = *req.PlusOnes
+		}
+		if stats.AttendingHeadcount+1+newPlusOnes > *ev.MaxCapacity {
+			return nil, fmt.Errorf("Event is at capacity")
+		}
 	}
 
 	if req.Name != nil {
@@ -907,14 +974,10 @@ func (s *Service) PromoteAttendee(ctx context.Context, eventID, attendeeID strin
 	}
 
 	if s.notifyWaitlistPromotion != nil {
-		go func(p *Attendee) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("recovered from panic in waitlist promotion notification: %v", r)
-				}
-			}()
-			s.notifyWaitlistPromotion(context.Background(), eventID, p)
-		}(a)
+		promoted := a
+		s.asyncNotify(func() {
+			s.notifyWaitlistPromotion(context.Background(), eventID, promoted)
+		})
 	}
 
 	return a, nil
@@ -964,14 +1027,10 @@ func (s *Service) promoteWaitlistLoop(ctx context.Context, eventID string) {
 			break
 		}
 		if s.notifyWaitlistPromotion != nil {
-			go func(p *Attendee) {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("recovered from panic in waitlist promotion notification: %v", r)
-					}
-				}()
+			p := promoted
+			s.asyncNotify(func() {
 				s.notifyWaitlistPromotion(context.Background(), eventID, p)
-			}(promoted)
+			})
 		}
 	}
 }
@@ -997,22 +1056,21 @@ func (s *Service) SendRSVPLookupEmail(ctx context.Context, shareToken, email str
 
 	// Send the lookup email asynchronously.
 	if s.sendEmail != nil {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("recovered from panic in RSVP lookup email goroutine: %v", r)
-				}
-			}()
-			modifyURL := s.baseURL + "/r/" + a.RSVPToken
-			htmlBody, plainBody, err := templates.RenderRSVPLookup(ev.Title, modifyURL)
+		sendFn := s.sendEmail
+		rsvpToken := a.RSVPToken
+		evTitle := ev.Title
+		baseURL := s.baseURL
+		s.asyncNotify(func() {
+			modifyURL := baseURL + "/r/" + rsvpToken
+			htmlBody, plainBody, err := templates.RenderRSVPLookup(evTitle, modifyURL)
 			if err != nil {
-				log.Printf("rsvp lookup: failed to render template: %v", err)
+				s.logger.Error().Err(err).Msg("rsvp lookup: failed to render template")
 				return
 			}
-			if err := s.sendEmail(context.Background(), email, "Your RSVP Link — "+ev.Title, htmlBody, plainBody); err != nil {
-				log.Printf("rsvp lookup: failed to send email to %s: %v", email, err)
+			if err := sendFn(context.Background(), email, "Your RSVP Link — "+evTitle, htmlBody, plainBody); err != nil {
+				s.logger.Error().Err(err).Str("to", email).Msg("rsvp lookup: failed to send email")
 			}
-		}()
+		})
 	}
 
 	return nil

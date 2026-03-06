@@ -126,7 +126,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Wire up RSVP layer.
 	rsvpStore := rsvp.NewStore(db)
-	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService)
+	rsvpService := rsvp.NewService(rsvpStore, eventService, inviteService, logger)
 	rsvpService.SetSMSEnabled(cfg.SMSEnabled())
 	rsvpService.SetBaseURL(cfg.BaseURL)
 	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx), rsvp.EventOwnershipChecker(checkEventOwner), logger)
