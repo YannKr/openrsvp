@@ -3,9 +3,11 @@ package rsvp
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +28,8 @@ func setupRSVP(t *testing.T) (*Service, *event.Service, *auth.Store) {
 	inviteStore := invite.NewStore(db)
 	inviteSvc := invite.NewService(inviteStore, t.TempDir())
 	rsvpStore := NewStore(db)
-	svc := NewService(rsvpStore, eventSvc, inviteSvc)
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	svc := NewService(rsvpStore, eventSvc, inviteSvc, logger)
 
 	return svc, eventSvc, authStore
 }

@@ -62,7 +62,7 @@ func setupRSVPHandler(t *testing.T) (http.Handler, *rsvp.Service, *event.Service
 	inviteSvc := invite.NewService(inviteStore, t.TempDir())
 
 	rsvpStore := rsvp.NewStore(db)
-	rsvpSvc := rsvp.NewService(rsvpStore, eventSvc, inviteSvc)
+	rsvpSvc := rsvp.NewService(rsvpStore, eventSvc, inviteSvc, zerolog.Nop())
 
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
@@ -88,7 +88,7 @@ func setupRSVPHandlerNoAuth(t *testing.T) (http.Handler, *event.Service, *auth.O
 	inviteSvc := invite.NewService(inviteStore, t.TempDir())
 
 	rsvpStore := rsvp.NewStore(db)
-	rsvpSvc := rsvp.NewService(rsvpStore, eventSvc, inviteSvc)
+	rsvpSvc := rsvp.NewService(rsvpStore, eventSvc, inviteSvc, zerolog.Nop())
 
 	handler := rsvp.NewHandler(rsvpSvc, testutil.NoAuthMiddleware(), rsvpOrgFromCtx(), makeCheckEventOwner(eventSvc), zerolog.Nop())
 	return handler.Routes(), eventSvc, org
