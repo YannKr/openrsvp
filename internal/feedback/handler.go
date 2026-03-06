@@ -6,6 +6,9 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer email from the request context.
@@ -16,14 +19,16 @@ type Handler struct {
 	service        *Service
 	authMiddleware func(http.Handler) http.Handler
 	organizerFrom  OrganizerFromCtx
+	logger         zerolog.Logger
 }
 
 // NewHandler creates a new feedback Handler.
-func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx) *Handler {
+func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler, organizerFrom OrganizerFromCtx, logger zerolog.Logger) *Handler {
 	return &Handler{
 		service:        service,
 		authMiddleware: authMiddleware,
 		organizerFrom:  organizerFrom,
+		logger:         logger,
 	}
 }
 
@@ -74,7 +79,9 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.Submit(r.Context(), email, req.Type, req.Message, req.AllowFollowUp); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to submit feedback")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Msg("failed to submit feedback")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 

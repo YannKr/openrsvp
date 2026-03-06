@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -118,7 +121,13 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	ev, err := h.service.Create(r.Context(), organizerID, req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to create event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -134,8 +143,9 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.service.ListByOrganizer(r.Context(), organizerID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("organizer_id", organizerID).Msg("failed to list events by organizer")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("organizer_id", organizerID).Msg("failed to list events by organizer")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -152,7 +162,13 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventId")
 	ev, err := h.service.GetByID(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		if err.Error() == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to get event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -183,14 +199,20 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	ev, err := h.service.Update(r.Context(), eventID, organizerID, req)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to process event request")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -209,14 +231,20 @@ func (h *Handler) handlePublish(w http.ResponseWriter, r *http.Request) {
 	ev, err := h.service.Publish(r.Context(), eventID, organizerID)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to process event request")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -243,14 +271,20 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 	ev, err := h.service.Cancel(r.Context(), eventID, organizerID, notifyAttendees)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to process event request")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -269,14 +303,20 @@ func (h *Handler) handleReopen(w http.ResponseWriter, r *http.Request) {
 	ev, err := h.service.Reopen(r.Context(), eventID, organizerID)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to process event request")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -295,14 +335,20 @@ func (h *Handler) handleDuplicate(w http.ResponseWriter, r *http.Request) {
 	ev, err := h.service.Duplicate(r.Context(), eventID, organizerID)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isEventValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to process event request")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -321,15 +367,16 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	err := h.service.Delete(r.Context(), eventID, organizerID)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
 		if err.Error() == "forbidden: you do not own this event" {
-			writeError(w, http.StatusForbidden, "forbidden", err.Error())
+			writeError(w, http.StatusForbidden, "forbidden", "you do not own this event")
 			return
 		}
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to delete event")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to delete event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -362,8 +409,9 @@ func (h *Handler) handleListCoHosts(w http.ResponseWriter, r *http.Request) {
 
 	cohosts, err := h.cohostStore.FindByEventID(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list co-hosts")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to list co-hosts")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -441,8 +489,9 @@ func (h *Handler) handleAddCoHost(w http.ResponseWriter, r *http.Request) {
 	// Check co-host limit.
 	count, err := h.cohostStore.CountByEventID(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to count co-hosts")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to count co-hosts")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 	if count >= 10 {
@@ -459,8 +508,9 @@ func (h *Handler) handleAddCoHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.cohostStore.Create(r.Context(), ch); err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to create co-host")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to create co-host")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -491,8 +541,9 @@ func (h *Handler) handleRemoveCoHost(w http.ResponseWriter, r *http.Request) {
 
 	ch, err := h.cohostStore.FindByID(r.Context(), cohostID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("cohost_id", cohostID).Msg("failed to find co-host")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("cohost_id", cohostID).Msg("failed to find co-host")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 	if ch == nil || ch.EventID != eventID {
@@ -515,12 +566,35 @@ func (h *Handler) handleRemoveCoHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.cohostStore.Delete(r.Context(), cohostID); err != nil {
-		h.logger.Error().Err(err).Str("cohost_id", cohostID).Msg("failed to delete co-host")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("cohost_id", cohostID).Msg("failed to delete co-host")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"message": "co-host removed"}})
+}
+
+// isEventValidationError returns true if the error is a known, safe validation
+// message from the event service that can be returned to the client.
+func isEventValidationError(err error) bool {
+	msg := err.Error()
+	safeMessages := []string{
+		"title is required",
+		"event_date is required",
+		"event cannot be published",
+		"event can only be",
+		"event is not in draft",
+		"event is not in published",
+		"event is not cancelled",
+		"event is already",
+	}
+	for _, safe := range safeMessages {
+		if strings.HasPrefix(msg, safe) {
+			return true
+		}
+	}
+	return false
 }
 
 // writeJSON writes a JSON response with the given status code.

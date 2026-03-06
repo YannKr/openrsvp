@@ -412,7 +412,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		}
 		return org.Email, true
 	}
-	feedbackHandler := feedback.NewHandler(feedbackSvc, authMiddleware, feedback.OrganizerFromCtx(organizerEmailFromCtx))
+	feedbackHandler := feedback.NewHandler(feedbackSvc, authMiddleware, feedback.OrganizerFromCtx(organizerEmailFromCtx), logger)
 
 	// Wire up security middleware (created early so rate limiters are available
 	// for handler constructors that need them).

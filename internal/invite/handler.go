@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -84,7 +86,13 @@ func (h *Handler) handleGetByEvent(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.service.GetByEventID(r.Context(), eventID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		if err.Error() == "invite card not found" {
+			writeError(w, http.StatusNotFound, "not_found", "invite card not found")
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("event_id", eventID).Msg("failed to get invite card")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -113,7 +121,13 @@ func (h *Handler) handleSave(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.service.Save(r.Context(), eventID, req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if strings.HasPrefix(err.Error(), "invalid templateId:") {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("event_id", eventID).Msg("failed to save invite card")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -136,8 +150,9 @@ func (h *Handler) handlePreview(w http.ResponseWriter, r *http.Request) {
 
 	card, err := h.service.GetPreview(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get invite preview")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("event_id", eventID).Msg("failed to get invite preview")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
