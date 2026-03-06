@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -126,8 +128,9 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Create(r.Context(), reminder); err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to create reminder")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("event_id", eventID).Msg("failed to create reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -150,8 +153,9 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 
 	reminders, err := h.store.FindByEventID(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list reminders by event")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("event_id", eventID).Msg("failed to list reminders by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -179,8 +183,9 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	reminder, err := h.store.FindByID(r.Context(), reminderID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to find reminder")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("reminder_id", reminderID).Msg("failed to find reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 	if reminder == nil {
@@ -227,8 +232,9 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Update(r.Context(), reminder); err != nil {
-		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to update reminder")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("reminder_id", reminderID).Msg("failed to update reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -247,8 +253,9 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 	// Fetch reminder to verify event ownership before cancelling.
 	reminder, err := h.store.FindByID(r.Context(), reminderID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to find reminder for cancel")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("reminder_id", reminderID).Msg("failed to find reminder for cancel")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 	if reminder == nil {
@@ -266,8 +273,9 @@ func (h *Handler) handleCancel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		h.logger.Error().Err(err).Str("reminder_id", reminderID).Msg("failed to cancel reminder")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Str("reminder_id", reminderID).Msg("failed to cancel reminder")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 

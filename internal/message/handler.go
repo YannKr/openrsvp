@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
+
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // AttendeeInfo holds the resolved attendee data needed by the message handler.
@@ -110,8 +112,9 @@ func (h *Handler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to send organizer message")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to send organizer message")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -135,8 +138,9 @@ func (h *Handler) handleListMessages(w http.ResponseWriter, r *http.Request) {
 
 	msgs, err := h.service.ListByEvent(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list messages by event")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to list messages by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -173,8 +177,9 @@ func (h *Handler) handleAttendeeSend(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		h.logger.Error().Err(err).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to send attendee message")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to send attendee message")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -193,8 +198,9 @@ func (h *Handler) handleAttendeeList(w http.ResponseWriter, r *http.Request) {
 
 	msgs, err := h.service.ListForAttendee(r.Context(), attendee.EventID, attendee.ID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to list attendee messages")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", attendee.EventID).Str("attendee_id", attendee.ID).Msg("failed to list attendee messages")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 

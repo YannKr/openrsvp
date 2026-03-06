@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // Handler provides HTTP handlers for authentication endpoints.
@@ -91,8 +92,9 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
 			return
 		}
-		h.logger.Error().Err(err).Msg("failed to verify magic link")
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Msg("failed to verify magic link")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "an internal error occurred (ref: " + ref + ")"})
 		return
 	}
 
@@ -124,8 +126,9 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
-		h.logger.Error().Err(err).Msg("failed to logout")
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Msg("failed to logout")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "an internal error occurred (ref: " + ref + ")"})
 		return
 	}
 
@@ -176,8 +179,9 @@ func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.UpdateProfile(r.Context(), organizer); err != nil {
-		h.logger.Error().Err(err).Msg("failed to update profile")
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_code", ref).Msg("failed to update profile")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "an internal error occurred (ref: " + ref + ")"})
 		return
 	}
 

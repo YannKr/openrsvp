@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openrsvp/openrsvp/internal/auth"
@@ -36,7 +37,7 @@ func setupFeedbackHandler(emailCaptured *string) http.Handler {
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, feedbackOrgFromCtx())
+	handler := NewHandler(svc, authMW, feedbackOrgFromCtx(), zerolog.Nop())
 	return handler.Routes()
 }
 
@@ -47,13 +48,13 @@ func setupFeedbackHandlerNoChannel() http.Handler {
 	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
 		return auth.ContextWithOrganizer(ctx, org)
 	})
-	handler := NewHandler(svc, authMW, feedbackOrgFromCtx())
+	handler := NewHandler(svc, authMW, feedbackOrgFromCtx(), zerolog.Nop())
 	return handler.Routes()
 }
 
 func setupFeedbackHandlerNoAuth() http.Handler {
 	svc := NewService("", "", "admin@example.com")
-	handler := NewHandler(svc, testutil.NoAuthMiddleware(), feedbackOrgFromCtx())
+	handler := NewHandler(svc, testutil.NoAuthMiddleware(), feedbackOrgFromCtx(), zerolog.Nop())
 	return handler.Routes()
 }
 

@@ -813,16 +813,6 @@ func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string
 	}
 	wasAttending := a.RSVPStatus == "attending"
 
-	// Acquire per-event mutex when removing an attending attendee to prevent
-	// a race between the delete and waitlist promotion: without the lock, a
-	// concurrent SubmitRSVP could fill the freed slot AND promotion could also
-	// fill it, resulting in over-capacity.
-	if wasAttending {
-		mu := getEventMutex(eventID)
-		mu.Lock()
-		defer mu.Unlock()
-	}
-
 	if err := s.store.Delete(ctx, attendeeID); err != nil {
 		return err
 	}

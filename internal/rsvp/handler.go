@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/openrsvp/openrsvp/internal/calendar"
+	"github.com/openrsvp/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.
@@ -75,7 +76,13 @@ func (h *Handler) handleGetPublicInvite(w http.ResponseWriter, r *http.Request) 
 
 	data, err := h.service.GetPublicInvite(r.Context(), shareToken)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		if err.Error() == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("share_token", shareToken).Msg("failed to get public invite")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -97,7 +104,13 @@ func (h *Handler) handleSubmitRSVP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isRSVPValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("share_token", shareToken).Msg("failed to submit RSVP")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -109,7 +122,14 @@ func (h *Handler) handleGetByToken(w http.ResponseWriter, r *http.Request) {
 
 	data, err := h.service.GetByTokenWithEvent(r.Context(), rsvpToken)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		msg := err.Error()
+		if msg == "rsvp not found" || msg == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", msg)
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to get RSVP by token")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -127,11 +147,18 @@ func (h *Handler) handleUpdateByToken(w http.ResponseWriter, r *http.Request) {
 
 	attendee, err := h.service.UpdateByToken(r.Context(), rsvpToken, req)
 	if err != nil {
-		if err.Error() == "rsvp not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+		msg := err.Error()
+		if msg == "rsvp not found" || msg == "event not found" {
+			writeError(w, http.StatusNotFound, "not_found", msg)
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isRSVPValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", msg)
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Msg("failed to update RSVP by token")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -154,10 +181,12 @@ func (h *Handler) handleLookupRSVP(w http.ResponseWriter, r *http.Request) {
 	err := h.service.SendRSVPLookupEmail(r.Context(), shareToken, req.Email)
 	if err != nil {
 		if err.Error() == "event not found" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			writeError(w, http.StatusNotFound, "not_found", "event not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("share_token", shareToken).Msg("failed to send RSVP lookup email")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -212,8 +241,9 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 
 	attendees, err := h.service.ListByEvent(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list attendees for export")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to list attendees for export")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -231,8 +261,9 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 	// Fetch event title for the filename.
 	ev, err := h.service.GetEventByID(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get event for export")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to get event for export")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -323,11 +354,18 @@ func (h *Handler) handleUpdateAttendee(w http.ResponseWriter, r *http.Request) {
 
 	attendee, err := h.service.UpdateAttendeeAsOrganizer(r.Context(), eventID, attendeeID, req)
 	if err != nil {
-		if err.Error() == "attendee not found" || err.Error() == "attendee does not belong to this event" {
-			writeError(w, http.StatusNotFound, "not_found", err.Error())
+		msg := err.Error()
+		if msg == "attendee not found" || msg == "attendee does not belong to this event" {
+			writeError(w, http.StatusNotFound, "not_found", msg)
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isRSVPValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", msg)
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Str("attendee_id", attendeeID).Msg("failed to update attendee")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -350,8 +388,9 @@ func (h *Handler) handleListByEvent(w http.ResponseWriter, r *http.Request) {
 
 	attendees, err := h.service.ListByEvent(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to list attendees by event")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to list attendees by event")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -374,8 +413,9 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.service.GetStats(r.Context(), eventID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get RSVP stats")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Msg("failed to get RSVP stats")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -403,8 +443,9 @@ func (h *Handler) handleRemoveAttendee(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		h.logger.Error().Err(err).Str("event_id", eventID).Str("attendee_id", attendeeID).Msg("failed to remove attendee")
-		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Str("attendee_id", attendeeID).Msg("failed to remove attendee")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 
@@ -450,6 +491,30 @@ func slugify(s string) string {
 		return "event"
 	}
 	return slug
+}
+
+// isRSVPValidationError returns true if the error is a known, safe validation
+// message from the RSVP service that can be returned to the client.
+func isRSVPValidationError(err error) bool {
+	msg := err.Error()
+	safeMessages := []string{
+		"name is required",
+		"rsvpStatus is required",
+		"invalid rsvpStatus:",
+		"invalid contactMethod:",
+		"sms contact method is not available",
+		"RSVPs are closed",
+		"email is required",
+		"phone is required",
+		"email or phone is required",
+		"Event is at capacity",
+	}
+	for _, safe := range safeMessages {
+		if strings.HasPrefix(msg, safe) {
+			return true
+		}
+	}
+	return false
 }
 
 // writeJSON writes a JSON response with the given status code.
