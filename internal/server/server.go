@@ -22,6 +22,7 @@ import (
 	"github.com/openrsvp/openrsvp/internal/message"
 	"github.com/openrsvp/openrsvp/internal/notification"
 	"github.com/openrsvp/openrsvp/internal/notification/templates"
+	"github.com/openrsvp/openrsvp/internal/question"
 	"github.com/openrsvp/openrsvp/internal/rsvp"
 	"github.com/openrsvp/openrsvp/internal/scheduler"
 	"github.com/openrsvp/openrsvp/internal/security"
@@ -35,9 +36,11 @@ type Server struct {
 	http            *http.Server
 	authHandler     *auth.Handler
 	eventHandler    *event.Handler
+	seriesHandler   *event.SeriesHandler
 	rsvpHandler     *rsvp.Handler
 	inviteHandler   *invite.Handler
 	messageHandler  *message.Handler
+	questionHandler *question.Handler
 	feedbackHandler *feedback.Handler
 	reminderHandler *scheduler.Handler
 	notifService    *notification.Service
@@ -65,16 +68,43 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Wire up event layer.
 	eventStore := event.NewStore(db)
 	eventService := event.NewService(eventStore, cfg.DefaultRetentionDays)
-	eventHandler := event.NewHandler(eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx), logger)
 
-	// checkEventOwner verifies that the given organizer owns the event.
-	// Returns nil if the organizer owns the event; a non-nil error otherwise.
+	// Wire up co-host store and set it on the event service.
+	cohostStore := event.NewCoHostStore(db)
+	eventService.SetCoHostStore(cohostStore)
+
+	// Organizer lookup by email for co-host management.
+	organizerLookupByEmail := event.OrganizerLookupByEmail(func(ctx context.Context, email string) (string, string, error) {
+		org, err := authStore.FindOrganizerByEmail(ctx, email)
+		if err != nil {
+			return "", "", err
+		}
+		if org == nil {
+			return "", "", nil
+		}
+		return org.ID, org.Name, nil
+	})
+
+	eventHandler := event.NewHandler(
+		eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx), logger,
+		event.WithCoHostStore(cohostStore),
+		event.WithOrganizerLookup(organizerLookupByEmail),
+	)
+
+	// Wire up event series layer.
+	seriesStore := event.NewSeriesStore(db)
+	seriesService := event.NewSeriesService(seriesStore, eventStore, eventService, cfg.DefaultRetentionDays, logger)
+	seriesHandler := event.NewSeriesHandler(seriesService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx), logger)
+
+	// checkEventOwner verifies that the given organizer can manage the event
+	// (either as owner or co-host).
+	// Returns nil if the organizer can manage the event; a non-nil error otherwise.
 	checkEventOwner := func(ctx context.Context, eventID, organizerID string) error {
-		ev, err := eventService.GetByID(ctx, eventID)
+		canManage, err := eventService.CanManageEvent(ctx, eventID, organizerID)
 		if err != nil {
 			return err
 		}
-		if ev.OrganizerID != organizerID {
+		if !canManage {
 			return fmt.Errorf("event not found")
 		}
 		return nil
@@ -100,6 +130,51 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	rsvpService.SetSMSEnabled(cfg.SMSEnabled())
 	rsvpService.SetBaseURL(cfg.BaseURL)
 	rsvpHandler := rsvp.NewHandler(rsvpService, authMiddleware, rsvp.OrganizerFromCtx(organizerFromCtx), rsvp.EventOwnershipChecker(checkEventOwner), logger)
+
+	// Wire up question layer.
+	questionStore := question.NewStore(db)
+	questionService := question.NewService(questionStore)
+	questionHandler := question.NewHandler(questionService, authMiddleware, question.OrganizerFromCtx(organizerFromCtx), question.EventOwnershipChecker(checkEventOwner), logger)
+
+	// Wire question validation and listing into the RSVP service.
+	rsvpService.SetValidateAnswers(questionService.ValidateAndSaveAnswers)
+	rsvpService.SetListQuestions(func(ctx context.Context, eventID string) (any, error) {
+		return questionService.ListByEvent(ctx, eventID)
+	})
+	rsvpService.SetGetAnswers(func(ctx context.Context, attendeeID string) (any, error) {
+		return questionService.GetAnswersForAttendee(ctx, attendeeID)
+	})
+	rsvpService.SetGetExportQuestions(func(ctx context.Context, eventID string) (*rsvp.ExportQuestionsData, error) {
+		questions, err := questionService.ListByEvent(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+		if len(questions) == 0 {
+			return nil, nil
+		}
+		answersByEvent, err := questionService.GetAnswersByEvent(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+		data := &rsvp.ExportQuestionsData{
+			Labels:            make([]string, len(questions)),
+			QuestionIDs:       make([]string, len(questions)),
+			AnswersByAttendee: make(map[string]map[string]string),
+		}
+		for i, q := range questions {
+			data.Labels[i] = q.Label
+			data.QuestionIDs[i] = q.ID
+		}
+		for attendeeID, answers := range answersByEvent {
+			if data.AnswersByAttendee[attendeeID] == nil {
+				data.AnswersByAttendee[attendeeID] = make(map[string]string)
+			}
+			for _, a := range answers {
+				data.AnswersByAttendee[attendeeID][a.QuestionID] = a.Answer
+			}
+		}
+		return data, nil
+	})
 
 	// Wire up notification layer.
 	notifRegistry := buildNotificationRegistry(cfg, logger)
@@ -226,11 +301,87 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 			if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
 				To:      organizer.Email,
-				Subject: "New RSVP — " + attendee.Name + " — " + ev.Title,
+				Subject: "New RSVP — " + attendee.Name + " — " + ev.Title + " (" + ev.EventDate.Format("Jan 2") + ")",
 				Body:    htmlBody,
 				Plain:   plainBody,
 			}); err != nil {
 				logger.Error().Err(err).Str("organizer_email", organizer.Email).Msg("rsvp notify: failed to send organizer email")
+			}
+		})
+	}
+
+	// Wire co-host invitation notifications into the event handler.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		eventHandler.SetNotifyCoHost(func(ctx context.Context, coHostEmail, eventID, addedByOrganizerID string) {
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("cohost notify: failed to get event")
+				return
+			}
+
+			organizer, err := authStore.FindOrganizerByID(ctx, addedByOrganizerID)
+			if err != nil || organizer == nil {
+				logger.Error().Err(err).Str("organizer_id", addedByOrganizerID).Msg("cohost notify: failed to get organizer")
+				return
+			}
+
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+			dashboardURL := cfg.BaseURL + "/events/" + eventID
+
+			htmlBody, plainBody, err := templates.RenderCoHostInvitation(ev.Title, eventDate, location, organizer.Name, dashboardURL)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("cohost notify: failed to render template")
+				return
+			}
+
+			if err := notifService.Send(ctx, eventID, addedByOrganizerID, notification.ChannelEmail, &notification.Message{
+				To:      coHostEmail,
+				Subject: "You've been added as a co-host — " + ev.Title,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); err != nil {
+				logger.Error().Err(err).Str("cohost_email", coHostEmail).Msg("cohost notify: failed to send email")
+			}
+		})
+	}
+
+	// Wire waitlist promotion notifications into the RSVP service.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		rsvpService.SetNotifyWaitlistPromotion(func(ctx context.Context, eventID string, attendee *rsvp.Attendee) {
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("waitlist promote: failed to get event")
+				return
+			}
+
+			if attendee.Email == nil || *attendee.Email == "" {
+				return
+			}
+
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+			modifyURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
+
+			htmlBody, plainBody, err := templates.RenderWaitlistPromotion(ev.Title, eventDate, location, modifyURL)
+			if err != nil {
+				logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("waitlist promote: failed to render template")
+				return
+			}
+
+			if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
+				To:      *attendee.Email,
+				Subject: "A spot opened up! — " + ev.Title,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); err != nil {
+				logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("waitlist promote: failed to send email")
 			}
 		})
 	}
@@ -349,6 +500,12 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				return
 			}
 
+			// Look up attendee name for a personalized notification.
+			senderName := "A guest"
+			if attendee, err := rsvpStore.FindByID(ctx, attendeeID); err == nil && attendee != nil {
+				senderName = attendee.Name
+			}
+
 			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
 			location := ev.Location
 			if location == "" {
@@ -360,7 +517,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				ev.Title,
 				eventDate,
 				location,
-				"A guest sent you a new message:\n\n"+body,
+				senderName+" sent you a message:\n\n"+body,
 				dashboardURL,
 			)
 			if err != nil {
@@ -370,7 +527,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 			if err := notifService.Send(ctx, eventID, attendeeID, notification.ChannelEmail, &notification.Message{
 				To:      organizer.Email,
-				Subject: "New attendee message — " + subject,
+				Subject: "New message from " + senderName + " — " + subject,
 				Body:    htmlBody,
 				Plain:   plainBody,
 			}); err != nil {
@@ -556,6 +713,44 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	sched.Register(reminderJob)
 	sched.Register(cleanupJob)
 
+	// Copy invite card when a new series occurrence is generated.
+	seriesService.SetOnCreateOccurrence(func(ctx context.Context, seriesID, occurrenceID string) {
+		events, err := eventStore.FindBySeriesID(ctx, seriesID)
+		if err != nil || len(events) == 0 {
+			return
+		}
+		for _, e := range events {
+			if e.ID == occurrenceID {
+				continue
+			}
+			card, err := inviteService.GetByEventID(ctx, e.ID)
+			if err != nil || card == nil {
+				continue
+			}
+			_, err = inviteService.Save(ctx, occurrenceID, invite.SaveInviteRequest{
+				TemplateID:     card.TemplateID,
+				Heading:        card.Heading,
+				Body:           card.Body,
+				Footer:         card.Footer,
+				PrimaryColor:   card.PrimaryColor,
+				SecondaryColor: card.SecondaryColor,
+				Font:           card.Font,
+				CustomData:     card.CustomData,
+			})
+			if err != nil {
+				logger.Error().Err(err).
+					Str("series_id", seriesID).
+					Str("occurrence_id", occurrenceID).
+					Msg("failed to copy invite card for series occurrence")
+			}
+			break
+		}
+	})
+
+	// Register series generator background job.
+	seriesJob := scheduler.NewSeriesGeneratorJob(seriesService, logger)
+	sched.Register(seriesJob)
+
 	// Wire up security middleware.
 	secMw := security.NewMiddleware(security.SecurityConfig{
 		AuthRateLimit:    10,
@@ -572,9 +767,11 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		logger:          logger,
 		authHandler:     authHandler,
 		eventHandler:    eventHandler,
+		seriesHandler:   seriesHandler,
 		rsvpHandler:     rsvpHandler,
 		inviteHandler:   inviteHandler,
 		messageHandler:  messageHandler,
+		questionHandler: questionHandler,
 		feedbackHandler: feedbackHandler,
 		reminderHandler: reminderHandler,
 		notifService:    notifService,

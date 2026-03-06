@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html feedback_confirmation.html rsvp_lookup.html
+//go:embed magic_link.html rsvp_confirmation.html event_reminder.html retention_warning.html organizer_rsvp_notification.html feedback_confirmation.html rsvp_lookup.html waitlist_promotion.html cohost_invitation.html
 var templateFS embed.FS
 
 var (
@@ -19,6 +19,8 @@ var (
 	organizerRSVPNotifyTmpl     *template.Template
 	feedbackConfirmationTmpl    *template.Template
 	rsvpLookupTmpl              *template.Template
+	waitlistPromotionTmpl       *template.Template
+	cohostInvitationTmpl        *template.Template
 )
 
 func init() {
@@ -29,6 +31,8 @@ func init() {
 	organizerRSVPNotifyTmpl = template.Must(template.ParseFS(templateFS, "organizer_rsvp_notification.html"))
 	feedbackConfirmationTmpl = template.Must(template.ParseFS(templateFS, "feedback_confirmation.html"))
 	rsvpLookupTmpl = template.Must(template.ParseFS(templateFS, "rsvp_lookup.html"))
+	waitlistPromotionTmpl = template.Must(template.ParseFS(templateFS, "waitlist_promotion.html"))
+	cohostInvitationTmpl = template.Must(template.ParseFS(templateFS, "cohost_invitation.html"))
 }
 
 // magicLinkData holds the template data for a magic link email.
@@ -85,6 +89,8 @@ func displayStatus(status string) string {
 		return "Can't make it"
 	case "pending":
 		return "Pending"
+	case "waitlisted":
+		return "Waitlisted"
 	default:
 		return status
 	}
@@ -286,6 +292,76 @@ func RenderFeedbackConfirmation(feedbackType string, allowFollowUp bool) (htmlBo
 		sb.WriteString("Since you opted in to follow-up contact, we may reach out to you if we have questions or updates related to your feedback.\n\n")
 	}
 	sb.WriteString("Your feedback helps make OpenRSVP better for everyone.\n")
+
+	return buf.String(), sb.String(), nil
+}
+
+// cohostInvitationData holds the template data for a co-host invitation email.
+type cohostInvitationData struct {
+	EventTitle   string
+	EventDate    string
+	Location     string
+	AddedByName  string
+	DashboardURL string
+}
+
+// RenderCoHostInvitation renders the co-host invitation email template and
+// returns the HTML body and a plain text fallback.
+func RenderCoHostInvitation(eventTitle, eventDate, location, addedByName, dashboardURL string) (html, plain string, err error) {
+	data := cohostInvitationData{
+		EventTitle:   eventTitle,
+		EventDate:    eventDate,
+		Location:     location,
+		AddedByName:  addedByName,
+		DashboardURL: dashboardURL,
+	}
+
+	var buf bytes.Buffer
+	if err := cohostInvitationTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render cohost invitation template: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("You've Been Added as a Co-Host\n\n")
+	sb.WriteString(fmt.Sprintf("%s has added you as a co-host for %s.\n\n", addedByName, eventTitle))
+	sb.WriteString(fmt.Sprintf("Event: %s\n", eventTitle))
+	sb.WriteString(fmt.Sprintf("Date: %s\n", eventDate))
+	sb.WriteString(fmt.Sprintf("Location: %s\n\n", location))
+	sb.WriteString(fmt.Sprintf("View the event dashboard:\n%s\n", dashboardURL))
+
+	return buf.String(), sb.String(), nil
+}
+
+// waitlistPromotionData holds the template data for a waitlist promotion email.
+type waitlistPromotionData struct {
+	EventTitle string
+	EventDate  string
+	Location   string
+	ModifyURL  string
+}
+
+// RenderWaitlistPromotion renders the waitlist promotion email template and
+// returns the HTML body and a plain text fallback.
+func RenderWaitlistPromotion(eventTitle, eventDate, location, modifyURL string) (html, plain string, err error) {
+	data := waitlistPromotionData{
+		EventTitle: eventTitle,
+		EventDate:  eventDate,
+		Location:   location,
+		ModifyURL:  modifyURL,
+	}
+
+	var buf bytes.Buffer
+	if err := waitlistPromotionTmpl.Execute(&buf, data); err != nil {
+		return "", "", fmt.Errorf("render waitlist promotion template: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("A Spot Opened Up!\n\n")
+	sb.WriteString(fmt.Sprintf("Great news! A spot opened up for %s. You are now attending.\n\n", eventTitle))
+	sb.WriteString(fmt.Sprintf("Event: %s\n", eventTitle))
+	sb.WriteString(fmt.Sprintf("Date: %s\n", eventDate))
+	sb.WriteString(fmt.Sprintf("Location: %s\n\n", location))
+	sb.WriteString(fmt.Sprintf("View your RSVP:\n%s\n", modifyURL))
 
 	return buf.String(), sb.String(), nil
 }

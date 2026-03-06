@@ -154,11 +154,13 @@ func (s *Store) GetStats(ctx context.Context, eventID string) (*RSVPStats, error
 			stats.MaybeHeadcount = count + plusOnes
 		case "declined":
 			stats.Declined = count
+		case "waitlisted":
+			stats.Waitlisted = count
 		case "pending":
 			stats.Pending = count
 		}
 		stats.Total += count
-		if status != "declined" {
+		if status != "declined" && status != "waitlisted" {
 			stats.TotalHeadcount += count + plusOnes
 		}
 	}
@@ -206,6 +208,35 @@ func (s *Store) GetPublicAttendance(ctx context.Context, eventID string) (int, [
 	}
 
 	return headcount, names, nil
+}
+
+// FindFirstWaitlisted retrieves the earliest waitlisted attendee for an event.
+func (s *Store) FindFirstWaitlisted(ctx context.Context, eventID string) (*Attendee, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, event_id, name, email, phone, rsvp_status, rsvp_token,
+				contact_method, dietary_notes, plus_ones, created_at, updated_at
+		 FROM attendees
+		 WHERE event_id = ? AND rsvp_status = 'waitlisted'
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT 1`,
+		eventID,
+	)
+	return scanAttendee(row)
+}
+
+// GetWaitlistPosition returns the 1-based position of an attendee in the waitlist.
+// Uses (created_at, id) ordering for deterministic positioning when timestamps match.
+func (s *Store) GetWaitlistPosition(ctx context.Context, eventID, attendeeID string) (int, error) {
+	var position int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) + 1 FROM attendees
+		 WHERE event_id = ? AND rsvp_status = 'waitlisted' AND (
+			 created_at < (SELECT created_at FROM attendees WHERE id = ? AND event_id = ?)
+			 OR (created_at = (SELECT created_at FROM attendees WHERE id = ? AND event_id = ?) AND id < ?)
+		 )`,
+		eventID, attendeeID, eventID, attendeeID, eventID, attendeeID,
+	).Scan(&position)
+	return position, err
 }
 
 // scanAttendee scans a single sql.Row into an Attendee.

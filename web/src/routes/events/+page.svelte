@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
+	import { currentUser } from '$lib/stores/auth';
 	import { events, eventsLoading } from '$lib/stores/events';
 	import { formatDateTime, daysUntil } from '$lib/utils/dates';
 	import type { Event } from '$lib/types';
@@ -42,7 +43,10 @@
 <AppShell>
 	<div class="flex items-center justify-between mb-8">
 		<h1 class="text-2xl font-bold text-slate-900">My Events</h1>
-		<Button href="/events/new">Create Event</Button>
+		<div class="flex items-center gap-3">
+			<Button variant="outline" href="/events/series">Series</Button>
+			<Button href="/events/new">Create Event</Button>
+		</div>
 	</div>
 
 	{#if $eventsLoading}
@@ -112,9 +116,17 @@
 									</p>
 								{/if}
 							</div>
-							<Badge variant={statusVariant(event.status)}>
-								{event.status}
-							</Badge>
+							<div class="flex items-center gap-2">
+								{#if event.seriesId}
+									<span class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">Series</span>
+								{/if}
+								{#if event.organizerId !== $currentUser?.id}
+									<span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Co-host</span>
+								{/if}
+								<Badge variant={statusVariant(event.status)}>
+									{event.status}
+								</Badge>
+							</div>
 						</div>
 						<div class="mt-4 flex items-center justify-between text-xs text-slate-500">
 							<span>

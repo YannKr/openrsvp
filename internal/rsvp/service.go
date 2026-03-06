@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"sync"
 	"time"
@@ -26,37 +27,61 @@ type NotifyRSVPFunc func(ctx context.Context, eventID string, attendee *Attendee
 // EmailSender is a function that sends an email.
 type EmailSender func(ctx context.Context, to, subject, htmlBody, plainBody string) error
 
-// capacityMutexes provides per-event locking for capacity checks to prevent
-// race conditions in the check-then-insert pattern. This works for
-// single-instance deployments. Multi-instance PostgreSQL deployments should
-// use advisory locks instead.
+// capacityMutexPool provides per-event locking for capacity checks to prevent
+// race conditions in the check-then-insert pattern. Uses a fixed-size pool
+// of mutexes indexed by FNV hash of the event ID. Two different event IDs may
+// share a mutex (causing serialization, not correctness issues), but the pool
+// never grows. This works for single-instance deployments. Multi-instance
+// PostgreSQL deployments should use advisory locks instead.
 // TODO: Add advisory lock support for multi-instance PostgreSQL deployments.
-var capacityMutexes = struct {
-	sync.Mutex
-	m map[string]*sync.Mutex
-}{m: make(map[string]*sync.Mutex)}
+const capacityMutexPoolSize = 256
 
-// getEventMutex returns a mutex for the given event ID, creating one if needed.
+var capacityMutexPool [capacityMutexPoolSize]sync.Mutex
+
+// getEventMutex returns a mutex for the given event ID from the fixed-size pool.
 func getEventMutex(eventID string) *sync.Mutex {
-	capacityMutexes.Lock()
-	defer capacityMutexes.Unlock()
-	mu, ok := capacityMutexes.m[eventID]
-	if !ok {
-		mu = &sync.Mutex{}
-		capacityMutexes.m[eventID] = mu
-	}
-	return mu
+	h := fnv.New32a()
+	h.Write([]byte(eventID))
+	return &capacityMutexPool[h.Sum32()%capacityMutexPoolSize]
 }
+
+// NotifyWaitlistPromotionFunc is called after a waitlisted attendee is
+// promoted to attending. It runs asynchronously.
+type NotifyWaitlistPromotionFunc func(ctx context.Context, eventID string, attendee *Attendee)
+
+// ValidateAndSaveAnswersFunc validates and saves question answers for an attendee.
+type ValidateAndSaveAnswersFunc func(ctx context.Context, attendeeID, eventID string, answers map[string]string) error
+
+// ListQuestionsFunc returns questions for an event (avoids import cycles).
+type ListQuestionsFunc func(ctx context.Context, eventID string) (any, error)
+
+// GetAnswersFunc returns answers for an attendee (avoids import cycles).
+type GetAnswersFunc func(ctx context.Context, attendeeID string) (any, error)
+
+// ExportQuestionsData holds structured data for CSV export of custom questions.
+type ExportQuestionsData struct {
+	Labels           []string                       // Question labels (for CSV header columns)
+	QuestionIDs      []string                       // Question IDs in order
+	AnswersByAttendee map[string]map[string]string   // attendeeID -> questionID -> answer
+}
+
+// GetExportQuestionsFunc returns question labels and answers for CSV export.
+type GetExportQuestionsFunc func(ctx context.Context, eventID string) (*ExportQuestionsData, error)
 
 // Service contains the business logic for the RSVP system.
 type Service struct {
-	store         *Store
-	eventService  *event.Service
-	inviteService *invite.Service
-	notifyRSVP    NotifyRSVPFunc
-	sendEmail     EmailSender
-	smsEnabled    bool
-	baseURL       string
+	store                     *Store
+	eventService              *event.Service
+	inviteService             *invite.Service
+	notifyRSVP                NotifyRSVPFunc
+	notifyWaitlistPromotion   NotifyWaitlistPromotionFunc
+	sendEmail                 EmailSender
+	smsEnabled                bool
+	baseURL                   string
+	validateAnswers           ValidateAndSaveAnswersFunc
+	listQuestions             ListQuestionsFunc
+	getAnswers                GetAnswersFunc
+	getExportQuestions        GetExportQuestionsFunc
 }
 
 // NewService creates a new RSVP Service.
@@ -90,6 +115,42 @@ func (s *Service) SetSMSEnabled(enabled bool) {
 	s.smsEnabled = enabled
 }
 
+// SetNotifyWaitlistPromotion registers the function that sends promotion
+// notifications when a waitlisted attendee is moved to attending.
+func (s *Service) SetNotifyWaitlistPromotion(fn NotifyWaitlistPromotionFunc) {
+	s.notifyWaitlistPromotion = fn
+}
+
+// SetValidateAnswers registers the function that validates and saves question
+// answers. Called after question layer wiring to break circular dependencies.
+func (s *Service) SetValidateAnswers(fn ValidateAndSaveAnswersFunc) {
+	s.validateAnswers = fn
+}
+
+// SetListQuestions registers the function that lists questions for an event.
+func (s *Service) SetListQuestions(fn ListQuestionsFunc) {
+	s.listQuestions = fn
+}
+
+// SetGetAnswers registers the function that gets answers for an attendee.
+func (s *Service) SetGetAnswers(fn GetAnswersFunc) {
+	s.getAnswers = fn
+}
+
+// SetGetExportQuestions registers the function that gets question data for CSV export.
+func (s *Service) SetGetExportQuestions(fn GetExportQuestionsFunc) {
+	s.getExportQuestions = fn
+}
+
+// GetExportQuestions returns question data for CSV export. Returns nil if no
+// question export function has been wired.
+func (s *Service) GetExportQuestions(ctx context.Context, eventID string) (*ExportQuestionsData, error) {
+	if s.getExportQuestions == nil {
+		return nil, nil
+	}
+	return s.getExportQuestions(ctx, eventID)
+}
+
 // PublicAttendance holds the attendance data visible on the public invite page.
 type PublicAttendance struct {
 	Headcount int      `json:"headcount"`
@@ -103,6 +164,7 @@ type PublicInviteData struct {
 	Event      *event.PublicEvent `json:"event"`
 	Invite     *invite.InviteCard `json:"invite"`
 	Attendance *PublicAttendance   `json:"attendance,omitempty"`
+	Questions  any                 `json:"questions,omitempty"`
 }
 
 // GetPublicInvite retrieves event and invite card data by share token for the
@@ -169,6 +231,14 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 		}
 	}
 
+	// Include custom questions for the public invite form.
+	if s.listQuestions != nil {
+		questions, err := s.listQuestions(ctx, ev.ID)
+		if err == nil && questions != nil {
+			data.Questions = questions
+		}
+	}
+
 	return data, nil
 }
 
@@ -182,8 +252,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	if req.RSVPStatus == "" {
 		return nil, fmt.Errorf("rsvpStatus is required")
 	}
-	if !isValidRSVPStatus(req.RSVPStatus) {
-		return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
+	// Public submissions may only use attending, maybe, or declined.
+	// waitlisted is assigned server-side when at capacity; pending is internal.
+	if req.RSVPStatus != "attending" && req.RSVPStatus != "maybe" && req.RSVPStatus != "declined" {
+		return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, or declined")
+	}
+	if req.PlusOnes < 0 {
+		return nil, fmt.Errorf("plusOnes must not be negative")
 	}
 	if req.ContactMethod == "" {
 		req.ContactMethod = "email"
@@ -278,7 +353,11 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			}
 			newContribution := 1 + req.PlusOnes
 			if stats.AttendingHeadcount-currentContribution+newContribution > *ev.MaxCapacity {
-				return nil, fmt.Errorf("Event is at capacity")
+				if ev.WaitlistEnabled {
+					req.RSVPStatus = "waitlisted"
+				} else {
+					return nil, fmt.Errorf("Event is at capacity")
+				}
 			}
 		}
 
@@ -296,6 +375,12 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		}
 		if err := s.store.Update(ctx, existing); err != nil {
 			return nil, err
+		}
+		// Validate and save question answers if provided.
+		if len(req.Answers) > 0 && s.validateAnswers != nil {
+			if err := s.validateAnswers(ctx, existing.ID, ev.ID, req.Answers); err != nil {
+				return nil, err
+			}
 		}
 		if s.notifyRSVP != nil {
 			go func() {
@@ -317,7 +402,11 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			return nil, fmt.Errorf("check capacity: %w", err)
 		}
 		if stats.AttendingHeadcount+1+req.PlusOnes > *ev.MaxCapacity {
-			return nil, fmt.Errorf("Event is at capacity")
+			if ev.WaitlistEnabled {
+				req.RSVPStatus = "waitlisted"
+			} else {
+				return nil, fmt.Errorf("Event is at capacity")
+			}
 		}
 	}
 
@@ -344,6 +433,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		return nil, err
 	}
 
+	// Validate and save question answers if provided.
+	if len(req.Answers) > 0 && s.validateAnswers != nil {
+		if err := s.validateAnswers(ctx, attendee.ID, ev.ID, req.Answers); err != nil {
+			return nil, err
+		}
+	}
+
 	if s.notifyRSVP != nil {
 		go func() {
 			defer func() {
@@ -361,10 +457,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 // RsvpWithEvent bundles an attendee with their event for the public RSVP page.
 // It uses PublicEvent to avoid leaking internal fields to unauthenticated users.
 type RsvpWithEvent struct {
-	Attendee   *Attendee            `json:"attendee"`
-	Event      *event.PublicEvent   `json:"event"`
-	Attendance *PublicAttendance     `json:"attendance,omitempty"`
-	ShareToken string               `json:"shareToken,omitempty"`
+	Attendee         *Attendee          `json:"attendee"`
+	Event            *event.PublicEvent `json:"event"`
+	Attendance       *PublicAttendance  `json:"attendance,omitempty"`
+	ShareToken       string             `json:"shareToken,omitempty"`
+	WaitlistPosition *int               `json:"waitlistPosition,omitempty"`
+	Questions        any                `json:"questions,omitempty"`
+	Answers          any                `json:"answers,omitempty"`
 }
 
 // GetByToken retrieves an attendee by their RSVP token.
@@ -432,6 +531,28 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 		}
 	}
 
+	// Include waitlist position for waitlisted attendees.
+	if a.RSVPStatus == "waitlisted" {
+		pos, err := s.store.GetWaitlistPosition(ctx, a.EventID, a.ID)
+		if err == nil {
+			result.WaitlistPosition = &pos
+		}
+	}
+
+	// Include custom questions and the attendee's answers.
+	if s.listQuestions != nil {
+		questions, err := s.listQuestions(ctx, a.EventID)
+		if err == nil && questions != nil {
+			result.Questions = questions
+		}
+	}
+	if s.getAnswers != nil {
+		answers, err := s.getAnswers(ctx, a.ID)
+		if err == nil && answers != nil {
+			result.Answers = answers
+		}
+	}
+
 	return result, nil
 }
 
@@ -454,12 +575,29 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		return nil, fmt.Errorf("RSVPs are closed")
 	}
 
+	// Public updates may only use attending, maybe, or declined.
+	if req.RSVPStatus != nil {
+		if *req.RSVPStatus != "attending" && *req.RSVPStatus != "maybe" && *req.RSVPStatus != "declined" {
+			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, or declined")
+		}
+	}
+	if req.PlusOnes != nil && *req.PlusOnes < 0 {
+		return nil, fmt.Errorf("plusOnes must not be negative")
+	}
+
+	// Prevent waitlisted guests from changing directly to attending.
+	if a.RSVPStatus == "waitlisted" && req.RSVPStatus != nil && *req.RSVPStatus == "attending" {
+		return nil, fmt.Errorf("waitlisted guests cannot change to attending directly")
+	}
+
 	// Capacity enforcement for UpdateByToken.
 	if ev.MaxCapacity != nil {
 		mu := getEventMutex(ev.ID)
 		mu.Lock()
 		defer mu.Unlock()
 	}
+
+	oldStatus := a.RSVPStatus
 
 	if req.RSVPStatus != nil && *req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
 		if a.RSVPStatus != "attending" {
@@ -502,9 +640,7 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		a.Name = *req.Name
 	}
 	if req.RSVPStatus != nil {
-		if !isValidRSVPStatus(*req.RSVPStatus) {
-			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
-		}
+		// Validation already done above — only attending/maybe/declined allowed.
 		a.RSVPStatus = *req.RSVPStatus
 	}
 	if req.DietaryNotes != nil {
@@ -519,6 +655,18 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 
 	if err := s.store.Update(ctx, a); err != nil {
 		return nil, err
+	}
+
+	// Validate and save question answers if provided.
+	if len(req.Answers) > 0 && s.validateAnswers != nil {
+		if err := s.validateAnswers(ctx, a.ID, a.EventID, req.Answers); err != nil {
+			return nil, err
+		}
+	}
+
+	// If a spot was freed (attending -> declined/maybe), promote from waitlist.
+	if oldStatus == "attending" && (a.RSVPStatus == "declined" || a.RSVPStatus == "maybe") {
+		s.promoteWaitlistLoop(ctx, a.EventID)
 	}
 
 	return a, nil
@@ -587,12 +735,31 @@ func (s *Service) RemoveAttendee(ctx context.Context, eventID, attendeeID string
 	if a.EventID != eventID {
 		return fmt.Errorf("attendee does not belong to this event")
 	}
-	return s.store.Delete(ctx, attendeeID)
+	wasAttending := a.RSVPStatus == "attending"
+
+	// Acquire per-event mutex when removing an attending attendee to prevent
+	// a race between the delete and waitlist promotion: without the lock, a
+	// concurrent SubmitRSVP could fill the freed slot AND promotion could also
+	// fill it, resulting in over-capacity.
+	if wasAttending {
+		mu := getEventMutex(eventID)
+		mu.Lock()
+		defer mu.Unlock()
+	}
+
+	if err := s.store.Delete(ctx, attendeeID); err != nil {
+		return err
+	}
+	// If an attending attendee was removed, promote from waitlist.
+	if wasAttending {
+		s.promoteWaitlistLoop(ctx, eventID)
+	}
+	return nil
 }
 
 // UpdateAttendeeAsOrganizer applies partial updates to an attendee as the
 // event organizer. Unlike attendee self-service, this allows editing contact
-// fields (email, phone).
+// fields (email, phone) and setting any valid RSVP status.
 func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attendeeID string, req OrganizerUpdateAttendeeRequest) (*Attendee, error) {
 	a, err := s.store.FindByID(ctx, attendeeID)
 	if err != nil {
@@ -604,6 +771,11 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	if a.EventID != eventID {
 		return nil, fmt.Errorf("attendee does not belong to this event")
 	}
+	if req.PlusOnes != nil && *req.PlusOnes < 0 {
+		return nil, fmt.Errorf("plusOnes must not be negative")
+	}
+
+	oldStatus := a.RSVPStatus
 
 	if req.Name != nil {
 		a.Name = *req.Name
@@ -616,7 +788,7 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	}
 	if req.RSVPStatus != nil {
 		if !isValidRSVPStatus(*req.RSVPStatus) {
-			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, or pending")
+			return nil, fmt.Errorf("invalid rsvpStatus: must be attending, maybe, declined, pending, or waitlisted")
 		}
 		a.RSVPStatus = *req.RSVPStatus
 	}
@@ -634,7 +806,105 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 		return nil, err
 	}
 
+	// If a spot was freed (attending -> non-attending), promote from waitlist.
+	if oldStatus == "attending" && a.RSVPStatus != "attending" {
+		s.promoteWaitlistLoop(ctx, eventID)
+	}
+
 	return a, nil
+}
+
+// PromoteAttendee manually promotes a waitlisted attendee to attending status.
+// This is an organizer-only action that bypasses capacity checks.
+func (s *Service) PromoteAttendee(ctx context.Context, eventID, attendeeID string) (*Attendee, error) {
+	a, err := s.store.FindByID(ctx, attendeeID)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, fmt.Errorf("attendee not found")
+	}
+	if a.EventID != eventID {
+		return nil, fmt.Errorf("attendee does not belong to this event")
+	}
+	if a.RSVPStatus != "waitlisted" {
+		return nil, fmt.Errorf("attendee is not waitlisted")
+	}
+
+	a.RSVPStatus = "attending"
+	a.UpdatedAt = time.Now().UTC()
+	if err := s.store.Update(ctx, a); err != nil {
+		return nil, err
+	}
+
+	if s.notifyWaitlistPromotion != nil {
+		go func(p *Attendee) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("recovered from panic in waitlist promotion notification: %v", r)
+				}
+			}()
+			s.notifyWaitlistPromotion(context.Background(), eventID, p)
+		}(a)
+	}
+
+	return a, nil
+}
+
+// promoteFromWaitlist promotes the first eligible waitlisted attendee to attending.
+func (s *Service) promoteFromWaitlist(ctx context.Context, eventID string) (*Attendee, error) {
+	ev, err := s.eventService.GetByID(ctx, eventID)
+	if err != nil || ev.MaxCapacity == nil || !ev.WaitlistEnabled {
+		return nil, nil
+	}
+
+	stats, err := s.store.GetStats(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+
+	if stats.AttendingHeadcount >= *ev.MaxCapacity {
+		return nil, nil // Still at capacity
+	}
+
+	waitlisted, err := s.store.FindFirstWaitlisted(ctx, eventID)
+	if err != nil || waitlisted == nil {
+		return nil, err
+	}
+
+	// Check if promoting this guest (with their plus-ones) would exceed capacity.
+	if stats.AttendingHeadcount+1+waitlisted.PlusOnes > *ev.MaxCapacity {
+		return nil, nil // This guest's party is too large, skip
+	}
+
+	waitlisted.RSVPStatus = "attending"
+	waitlisted.UpdatedAt = time.Now().UTC()
+	if err := s.store.Update(ctx, waitlisted); err != nil {
+		return nil, err
+	}
+
+	return waitlisted, nil
+}
+
+// promoteWaitlistLoop repeatedly promotes waitlisted attendees until no more
+// spots are available or no eligible attendees remain.
+func (s *Service) promoteWaitlistLoop(ctx context.Context, eventID string) {
+	for {
+		promoted, err := s.promoteFromWaitlist(ctx, eventID)
+		if err != nil || promoted == nil {
+			break
+		}
+		if s.notifyWaitlistPromotion != nil {
+			go func(p *Attendee) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("recovered from panic in waitlist promotion notification: %v", r)
+					}
+				}()
+				s.notifyWaitlistPromotion(context.Background(), eventID, p)
+			}(promoted)
+		}
+	}
 }
 
 // SendRSVPLookupEmail sends a magic link email to the attendee so they can
@@ -682,7 +952,7 @@ func (s *Service) SendRSVPLookupEmail(ctx context.Context, shareToken, email str
 // isValidRSVPStatus checks whether the given status is one of the allowed values.
 func isValidRSVPStatus(status string) bool {
 	switch status {
-	case "attending", "maybe", "declined", "pending":
+	case "attending", "maybe", "declined", "pending", "waitlisted":
 		return true
 	default:
 		return false

@@ -4,14 +4,16 @@
 	import { api } from '$lib/api/client';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import { formatDateTime } from '$lib/utils/dates';
-	import type { PublicEvent, InviteCard, PublicAttendance, ApiError } from '$lib/types';
+	import type { PublicEvent, InviteCard, PublicAttendance, EventQuestion, ApiError } from '$lib/types';
 	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
+	import QuestionRenderer from '$lib/components/questions/QuestionRenderer.svelte';
 	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
 
 	interface PublicInviteData {
 		event: PublicEvent;
 		invite: InviteCard;
 		attendance?: PublicAttendance;
+		questions?: EventQuestion[];
 	}
 
 	let loading = $state(true);
@@ -19,6 +21,7 @@
 	let eventData = $state<PublicEvent | null>(null);
 	let inviteData = $state<InviteCard | null>(null);
 	let attendance = $state<PublicAttendance | null>(null);
+	let eventQuestions = $state<EventQuestion[]>([]);
 	let showAllNames = $state(false);
 	const displayNames = $derived(
 		attendance?.names
@@ -33,6 +36,7 @@
 	let rsvpStatus = $state<'attending' | 'maybe' | 'declined'>('attending');
 	let dietaryNotes = $state('');
 	let plusOnes = $state(0);
+	let answers: Record<string, string> = $state({});
 	let honeypot = $state('');
 	let submitting = $state(false);
 	let submitError = $state('');
@@ -48,6 +52,7 @@
 			eventData = result.data.event;
 			inviteData = result.data.invite;
 			attendance = result.data.attendance ?? null;
+			eventQuestions = result.data.questions ?? [];
 		} catch (err) {
 			const apiErr = err as ApiError;
 			if (apiErr.status === 404) {
@@ -90,7 +95,10 @@
 	);
 
 	// When at capacity, default to 'maybe' instead of 'attending'
-	const attendingDisabled = $derived(eventData?.atCapacity === true);
+	const attendingDisabled = $derived(eventData?.atCapacity === true && !eventData?.waitlistEnabled);
+
+	// Waitlist mode: at capacity but waitlist is enabled
+	const showWaitlist = $derived(eventData?.atCapacity === true && eventData?.waitlistEnabled === true);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -133,14 +141,18 @@
 		submitError = '';
 
 		try {
-			const result = await api.post<{ data: { rsvpToken: string } }>(`/rsvp/public/${token}`, {
+			const payload: Record<string, unknown> = {
 				name: name.trim(),
 				email: email.trim(),
 				phone: phone.trim() || undefined,
 				rsvpStatus,
 				dietaryNotes: dietaryNotes.trim() || undefined,
 				plusOnes
-			});
+			};
+			if (Object.keys(answers).length > 0) {
+				payload.answers = answers;
+			}
+			const result = await api.post<{ data: { rsvpToken: string } }>(`/rsvp/public/${token}`, payload);
 			rsvpToken = result.data.rsvpToken;
 			submitted = true;
 
@@ -243,7 +255,13 @@
 		</div>
 
 		<!-- Capacity Display -->
-		{#if eventData.atCapacity}
+		{#if showWaitlist}
+			<div class="w-full max-w-lg mb-6">
+				<div class="rounded-lg bg-blue-50 border border-blue-200 p-4 text-center">
+					<p class="text-sm font-medium text-blue-800">This event is full. You can join the waitlist and we'll notify you if a spot opens up.</p>
+				</div>
+			</div>
+		{:else if eventData.atCapacity}
 			<div class="w-full max-w-lg mb-6">
 				<div class="rounded-lg bg-red-50 border border-red-200 p-4 text-center">
 					<p class="text-sm font-medium text-red-800">This event is at capacity</p>
@@ -529,6 +547,11 @@
 							</div>
 						{/if}
 
+						<!-- Custom Questions -->
+						{#if eventQuestions.length > 0}
+							<QuestionRenderer questions={eventQuestions} bind:answers />
+						{/if}
+
 						<!-- Error -->
 						{#if submitError}
 							<div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -551,7 +574,7 @@
 									Sending...
 								</span>
 							{:else}
-								Send RSVP
+								{showWaitlist ? 'Join Waitlist' : 'Send RSVP'}
 							{/if}
 						</button>
 					</form>

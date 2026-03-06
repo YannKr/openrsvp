@@ -1164,3 +1164,316 @@ func TestGetEventForCalendarUnpublished(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "event not found")
 }
+
+// --- Waitlist Management Tests ---
+
+func createPublishedEventWithCapacityAndWaitlist(t *testing.T, eventSvc *event.Service, orgID string, capacity int) *event.Event {
+	t.Helper()
+	ctx := context.Background()
+	wl := true
+	ev, err := eventSvc.Create(ctx, orgID, event.CreateEventRequest{
+		Title:            "Test Event",
+		EventDate:        "2026-06-15T14:00:00Z",
+		MaxCapacity:      &capacity,
+		WaitlistEnabled:  &wl,
+	})
+	require.NoError(t, err)
+	published, err := eventSvc.Publish(ctx, ev.ID, orgID)
+	require.NoError(t, err)
+	return published
+}
+
+func TestSubmitRSVP_AtCapacity_WaitlistEnabled(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 1 and waitlist enabled.
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// First attendee fills the event.
+	a1, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "attending", a1.RSVPStatus)
+
+	// Second attendee should be waitlisted (not rejected).
+	a2, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", a2.RSVPStatus)
+}
+
+func TestSubmitRSVP_AtCapacity_WaitlistDisabled(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Create event with capacity of 1 but NO waitlist.
+	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 1)
+
+	// First attendee fills the event.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Second attendee should be rejected with capacity error.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at capacity")
+}
+
+func TestPromoteFromWaitlist_SpotOpens(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	a1, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "attending", a1.RSVPStatus)
+
+	// Waitlist Bob.
+	a2, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", a2.RSVPStatus)
+
+	// Alice declines, freeing a spot.
+	updated, err := svc.UpdateByToken(ctx, a1.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: strPtr("declined"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "declined", updated.RSVPStatus)
+
+	// Bob should now be promoted to attending.
+	data, err := svc.GetByTokenWithEvent(ctx, a2.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "attending", data.Attendee.RSVPStatus)
+}
+
+func TestPromoteFromWaitlist_PlusOnesExceedCapacity(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	// Capacity of 2.
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 2)
+
+	// Fill to capacity with Alice and Carol.
+	a1, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "attending", a1.RSVPStatus)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", Email: strPtr("carol@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Bob tries attending with +2 (total 3) but event is full -> waitlisted.
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending", PlusOnes: 2,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	// Alice declines, freeing 1 spot. Headcount goes from 2 to 1, capacity = 2.
+	// Bob needs 3 spots (1 + 2 plus-ones) but only 1 spot is available.
+	// promoteFromWaitlist checks: 1 + 1 + 2 = 4 > 2, so Bob is skipped.
+	_, err = svc.UpdateByToken(ctx, a1.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: strPtr("declined"),
+	})
+	require.NoError(t, err)
+
+	// Bob should remain waitlisted because his party of 3 exceeds available capacity.
+	bobData, err := svc.GetByTokenWithEvent(ctx, bob.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bobData.Attendee.RSVPStatus, "Bob with +2 plus-ones should remain waitlisted since party of 3 exceeds capacity 2")
+}
+
+func TestWaitlistPosition(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Waitlist Bob (position 1) and Carol (position 2).
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	carol, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Carol", Email: strPtr("carol@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", carol.RSVPStatus)
+
+	// Check Bob's position via GetByTokenWithEvent.
+	bobData, err := svc.GetByTokenWithEvent(ctx, bob.RSVPToken)
+	require.NoError(t, err)
+	require.NotNil(t, bobData.WaitlistPosition)
+	assert.Equal(t, 1, *bobData.WaitlistPosition)
+
+	// Check Carol's position via GetByTokenWithEvent.
+	carolData, err := svc.GetByTokenWithEvent(ctx, carol.RSVPToken)
+	require.NoError(t, err)
+	require.NotNil(t, carolData.WaitlistPosition)
+	assert.Equal(t, 2, *carolData.WaitlistPosition)
+}
+
+func TestManualPromote_ByOrganizer(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Bob is waitlisted.
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	// Organizer manually promotes Bob (bypasses capacity check).
+	promoted, err := svc.PromoteAttendee(ctx, ev.ID, bob.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "attending", promoted.RSVPStatus)
+
+	// Verify the promotion persisted.
+	data, err := svc.GetByTokenWithEvent(ctx, bob.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "attending", data.Attendee.RSVPStatus)
+	assert.Nil(t, data.WaitlistPosition, "promoted attendee should have no waitlist position")
+}
+
+func TestWaitlistedCannotChangeToAttending(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Bob is waitlisted.
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	// Bob tries to change his status to attending via UpdateByToken.
+	_, err = svc.UpdateByToken(ctx, bob.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: strPtr("attending"),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "waitlisted guests cannot change to attending directly")
+}
+
+func TestWaitlistedCanDecline(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Bob is waitlisted.
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	// Bob should be able to decline.
+	updated, err := svc.UpdateByToken(ctx, bob.RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: strPtr("declined"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "declined", updated.RSVPStatus)
+}
+
+func TestRemoveAttendee_TriggersPromotion(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	// Fill the event.
+	alice, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+
+	// Bob is waitlisted.
+	bob, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Bob", Email: strPtr("bob@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+
+	// Organizer removes Alice.
+	err = svc.RemoveAttendee(ctx, ev.ID, alice.ID)
+	require.NoError(t, err)
+
+	// Bob should be automatically promoted to attending.
+	data, err := svc.GetByTokenWithEvent(ctx, bob.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "attending", data.Attendee.RSVPStatus)
+}

@@ -63,6 +63,7 @@ func (h *Handler) Routes() chi.Router {
 		auth.Get("/event/{eventId}/stats", h.handleStats)
 		auth.Get("/event/{eventId}/export", h.handleExportCSV)
 		auth.Patch("/event/{eventId}/{attendeeId}", h.handleUpdateAttendee)
+		auth.Post("/event/{eventId}/{attendeeId}/promote", h.handlePromoteAttendee)
 		auth.Delete("/event/{eventId}/{attendeeId}", h.handleRemoveAttendee)
 	})
 
@@ -205,7 +206,7 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	if status != "all" && !isValidRSVPStatus(status) {
 		writeError(w, http.StatusBadRequest, "bad_request",
-			"invalid status filter: must be all, attending, maybe, declined, or pending")
+			"invalid status filter: must be all, attending, maybe, declined, pending, or waitlisted")
 		return
 	}
 
@@ -237,6 +238,14 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 
 	filename := fmt.Sprintf("%s-guests-%s.csv", slugify(ev.Title), status)
 
+	// Fetch question data for CSV export.
+	exportData, err := h.service.GetExportQuestions(r.Context(), eventID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("event_id", eventID).Msg("failed to get questions for export")
+		// Non-fatal: continue without question columns.
+		exportData = nil
+	}
+
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition",
@@ -246,7 +255,13 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte{0xEF, 0xBB, 0xBF})
 
 	writer := csv.NewWriter(w)
-	writer.Write([]string{"Name", "Email", "Phone", "RSVP Status", "Dietary Notes", "Plus Ones", "RSVP Date"})
+
+	// Build header with optional question columns.
+	header := []string{"Name", "Email", "Phone", "RSVP Status", "Dietary Notes", "Plus Ones", "RSVP Date"}
+	if exportData != nil {
+		header = append(header, exportData.Labels...)
+	}
+	writer.Write(header)
 
 	for _, a := range attendees {
 		email := ""
@@ -257,7 +272,7 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		if a.Phone != nil {
 			phone = *a.Phone
 		}
-		writer.Write([]string{
+		row := []string{
 			a.Name,
 			email,
 			phone,
@@ -265,7 +280,21 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 			a.DietaryNotes,
 			strconv.Itoa(a.PlusOnes),
 			a.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}
+
+		// Append question answer columns.
+		if exportData != nil {
+			attendeeAnswers := exportData.AnswersByAttendee[a.ID]
+			for _, qID := range exportData.QuestionIDs {
+				answer := ""
+				if attendeeAnswers != nil {
+					answer = attendeeAnswers[qID]
+				}
+				row = append(row, answer)
+			}
+		}
+
+		writer.Write(row)
 	}
 
 	writer.Flush()
@@ -380,6 +409,34 @@ func (h *Handler) handleRemoveAttendee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"message": "attendee removed"}})
+}
+
+func (h *Handler) handlePromoteAttendee(w http.ResponseWriter, r *http.Request) {
+	organizerID, ok := h.organizerFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+	attendeeID := chi.URLParam(r, "attendeeId")
+
+	if err := h.checkEventOwner(r.Context(), eventID, organizerID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "event not found")
+		return
+	}
+
+	attendee, err := h.service.PromoteAttendee(r.Context(), eventID, attendeeID)
+	if err != nil {
+		if err.Error() == "attendee not found" || err.Error() == "attendee does not belong to this event" {
+			writeError(w, http.StatusNotFound, "not_found", err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": attendee})
 }
 
 // slugify converts a string to a URL-safe slug for filenames.

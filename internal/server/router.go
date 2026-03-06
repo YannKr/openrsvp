@@ -67,7 +67,15 @@ func (s *Server) routes() *chi.Mux {
 			auth.Mount("/", s.authHandler.Routes())
 		})
 
+		// Series routes must be mounted before event routes so that
+		// /events/series is not captured by the event handler's /{eventId} pattern.
+		api.Mount("/events/series", s.seriesHandler.Routes())
 		api.Mount("/events", s.eventHandler.Routes())
+
+		// Question routes nested under events (organizer-only).
+		api.Route("/events/{eventId}/questions", func(qr chi.Router) {
+			qr.Mount("/", s.questionHandler.Routes())
+		})
 
 		// RSVP routes with moderate rate limiting (30/min) and honeypot on public submissions.
 		api.Route("/rsvp", func(rsvpR chi.Router) {

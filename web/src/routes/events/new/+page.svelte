@@ -38,6 +38,7 @@
 	let showGuestList = $state(false);
 	let rsvpDeadline = $state('');
 	let maxCapacity = $state('');
+	let waitlistEnabled = $state(false);
 	let retentionDays = $state('30');
 	let showRetention = $state(false);
 
@@ -118,7 +119,10 @@
 			};
 			if (endDate) body.endDate = new Date(endDate).toISOString();
 			if (rsvpDeadline) body.rsvpDeadline = new Date(rsvpDeadline).toISOString();
-			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
+			if (maxCapacity) {
+				body.maxCapacity = parseInt(maxCapacity);
+				body.waitlistEnabled = waitlistEnabled;
+			}
 
 			const result = await api.post<{ data: Event }>('/events', body);
 			toast.success('Event created successfully!');
@@ -278,6 +282,20 @@
 						/>
 					</div>
 
+					{#if maxCapacity}
+						<label class="flex items-center gap-3 cursor-pointer">
+							<input
+								type="checkbox"
+								bind:checked={waitlistEnabled}
+								class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+							/>
+							<div>
+								<span class="text-sm text-slate-700">Enable waitlist</span>
+								<p class="text-xs text-slate-400">When at capacity, guests can join a waitlist instead of being turned away.</p>
+							</div>
+						</label>
+					{/if}
+
 					<div class="pt-2">
 						{#if showRetention}
 							<Input
@@ -365,7 +383,7 @@
 						{#if maxCapacity}
 							<div class="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
 								<dt class="text-sm font-medium text-slate-500">Max Attendees</dt>
-								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{maxCapacity}</dd>
+								<dd class="mt-1 text-sm text-slate-900 sm:col-span-2 sm:mt-0">{maxCapacity}{#if waitlistEnabled} (waitlist enabled){/if}</dd>
 							</div>
 						{/if}
 						{#if retentionDays !== '30'}
