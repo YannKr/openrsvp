@@ -89,6 +89,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		eventService, authMiddleware, event.OrganizerFromCtx(organizerFromCtx), logger,
 		event.WithCoHostStore(cohostStore),
 		event.WithOrganizerLookup(organizerLookupByEmail),
+		event.WithMaxCoHosts(cfg.MaxCoHostsPerEvent),
 	)
 
 	// Wire up event series layer.
