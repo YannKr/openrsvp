@@ -359,6 +359,10 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 **Fix:**
 - Fix timezone handling: event times now use the selected event timezone instead of the browser's local timezone for creation, editing, and display. Previously, entering 11:11 AM for a UTC-7 event from a UTC browser would store/display as 4:11 AM. Added `datetimeLocalToUTC` and `utcToDatetimeLocal` utilities; updated all event date formatting to pass the event timezone to `Intl.DateTimeFormat`.
+- Fix Go module path and all GitHub/GHCR references to use `github.com/yannkr/openrsvp`
+
+**CI:**
+- Skip CI workflow on tag pushes to avoid double Docker build with the Release workflow
 
 ### v1.3.0
 
