@@ -8,9 +8,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/config"
-	"github.com/openrsvp/openrsvp/internal/database"
-	"github.com/openrsvp/openrsvp/internal/server"
+	"github.com/yannkr/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/server"
 )
 
 func main() {

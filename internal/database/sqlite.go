@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/config"
 )
 
 // sqliteDB implements the DB interface for SQLite.

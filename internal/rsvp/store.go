@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/database"
 )
 
 // Store handles database operations for attendees/RSVPs.

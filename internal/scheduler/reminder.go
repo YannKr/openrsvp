@@ -7,10 +7,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/calendar"
-	"github.com/openrsvp/openrsvp/internal/database"
-	"github.com/openrsvp/openrsvp/internal/notification"
-	"github.com/openrsvp/openrsvp/internal/notification/templates"
+	"github.com/yannkr/openrsvp/internal/calendar"
+	"github.com/yannkr/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/notification"
+	"github.com/yannkr/openrsvp/internal/notification/templates"
 )
 
 // ReminderJob polls for due reminders and sends notifications to the

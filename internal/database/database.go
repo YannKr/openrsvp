@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/config"
 )
 
 // DB is the database interface used throughout the application. It wraps the

@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openrsvp/openrsvp/internal/auth"
-	"github.com/openrsvp/openrsvp/internal/event"
-	"github.com/openrsvp/openrsvp/internal/testutil"
+	"github.com/yannkr/openrsvp/internal/auth"
+	"github.com/yannkr/openrsvp/internal/event"
+	"github.com/yannkr/openrsvp/internal/testutil"
 )
 
 // setupReminder creates a test DB with an organizer and event, returning the

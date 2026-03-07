@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/database"
 )
 
 // LogEntry represents a row in the notification_log table.

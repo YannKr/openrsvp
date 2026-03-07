@@ -85,7 +85,7 @@
 						</svg>
 					</a>
 					<a
-						href="https://github.com/openrsvp"
+						href="https://github.com/yannkr/openrsvp"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3.5 text-lg font-semibold text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
@@ -297,7 +297,7 @@
 				</div>
 				<div class="flex items-center gap-6">
 					<a
-						href="https://github.com/openrsvp"
+						href="https://github.com/yannkr/openrsvp"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="hover:text-white transition-colors inline-flex items-center gap-2 text-sm"

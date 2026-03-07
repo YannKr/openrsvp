@@ -6,10 +6,10 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/config"
-	"github.com/openrsvp/openrsvp/internal/notification"
-	"github.com/openrsvp/openrsvp/internal/notification/email"
-	"github.com/openrsvp/openrsvp/internal/notification/sms"
+	"github.com/yannkr/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/notification"
+	"github.com/yannkr/openrsvp/internal/notification/email"
+	"github.com/yannkr/openrsvp/internal/notification/sms"
 )
 
 func buildNotificationRegistry(cfg *config.Config, logger zerolog.Logger) *notification.Registry {

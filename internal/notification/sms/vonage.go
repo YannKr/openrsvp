@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/openrsvp/openrsvp/internal/notification"
+	"github.com/yannkr/openrsvp/internal/notification"
 )
 
 // VonageProvider sends SMS messages via the Vonage (Nexmo) REST API using

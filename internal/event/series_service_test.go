@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openrsvp/openrsvp/internal/auth"
+	"github.com/yannkr/openrsvp/internal/auth"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/testutil"
+	"github.com/yannkr/openrsvp/internal/testutil"
 )
 
 func setupSeries(t *testing.T) (*SeriesService, *Service, *Store, *SeriesStore, *auth.Store) {

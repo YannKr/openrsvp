@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/security"
+	"github.com/yannkr/openrsvp/internal/security"
 )
 
 // routes builds and returns the chi router with all middleware and routes.

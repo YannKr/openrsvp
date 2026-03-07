@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/database"
 )
 
 // RetentionNotifyFunc is a callback invoked when an event is approaching its

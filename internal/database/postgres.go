@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/openrsvp/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/config"
 )
 
 // postgresDB implements the DB interface for PostgreSQL.
