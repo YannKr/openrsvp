@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openrsvp/openrsvp/internal/testutil"
+	"github.com/yannkr/openrsvp/internal/testutil"
 )
 
 func TestCleanupJobWarnExpiringNotifiesOrganizer(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openrsvp/openrsvp/internal/auth"
-	"github.com/openrsvp/openrsvp/internal/testutil"
+	"github.com/yannkr/openrsvp/internal/auth"
+	"github.com/yannkr/openrsvp/internal/testutil"
 )
 
 func feedbackOrgFromCtx() OrganizerFromCtx {

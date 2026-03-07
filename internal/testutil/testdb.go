@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/openrsvp/openrsvp/internal/config"
-	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/database"
 )
 
 // testDB wraps a *sql.DB to implement the database.DB interface for testing.

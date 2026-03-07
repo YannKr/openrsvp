@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/calendar"
-	"github.com/openrsvp/openrsvp/internal/event"
-	"github.com/openrsvp/openrsvp/internal/invite"
-	"github.com/openrsvp/openrsvp/internal/notification/templates"
-	"github.com/openrsvp/openrsvp/internal/security"
+	"github.com/yannkr/openrsvp/internal/calendar"
+	"github.com/yannkr/openrsvp/internal/event"
+	"github.com/yannkr/openrsvp/internal/invite"
+	"github.com/yannkr/openrsvp/internal/notification/templates"
+	"github.com/yannkr/openrsvp/internal/security"
 )
 
 // base62Chars is the alphabet used for generating RSVP tokens.

@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/openrsvp/openrsvp/internal/database"
+	"github.com/yannkr/openrsvp/internal/database"
 )
 
 // executor is a minimal interface satisfied by both database.DB and *sql.Tx,

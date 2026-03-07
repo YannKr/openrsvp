@@ -1,4 +1,4 @@
-module github.com/openrsvp/openrsvp
+module github.com/yannkr/openrsvp
 
 go 1.23.0
 

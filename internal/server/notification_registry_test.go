@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openrsvp/openrsvp/internal/config"
-	"github.com/openrsvp/openrsvp/internal/notification"
+	"github.com/yannkr/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/notification"
 )
 
 func TestBuildNotificationRegistrySMTPDefault(t *testing.T) {

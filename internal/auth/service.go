@@ -12,8 +12,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/config"
-	"github.com/openrsvp/openrsvp/internal/notification/templates"
+	"github.com/yannkr/openrsvp/internal/config"
+	"github.com/yannkr/openrsvp/internal/notification/templates"
 )
 
 var (

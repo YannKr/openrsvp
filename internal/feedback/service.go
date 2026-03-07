@@ -6,7 +6,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openrsvp/openrsvp/internal/notification/templates"
+	"github.com/yannkr/openrsvp/internal/notification/templates"
 )
 
 // Service orchestrates feedback submission via GitHub Issues or email fallback.

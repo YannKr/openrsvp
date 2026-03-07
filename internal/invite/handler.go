@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/errcode"
+	"github.com/yannkr/openrsvp/internal/errcode"
 )
 
 // OrganizerFromCtx extracts the organizer ID from the request context.

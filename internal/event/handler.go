@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"github.com/openrsvp/openrsvp/internal/errcode"
+	"github.com/yannkr/openrsvp/internal/errcode"
 )
 
 // coHostNotifyThrottle prevents spam by tracking recent co-host notification
