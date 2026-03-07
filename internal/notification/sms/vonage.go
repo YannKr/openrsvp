@@ -60,11 +60,12 @@ type vonageResponse struct {
 // vonageMessage represents a single message result in the Vonage response.
 type vonageMessage struct {
 	Status    string `json:"status"`
+	MessageID string `json:"message-id"`
 	ErrorText string `json:"error-text"`
 }
 
 // Send delivers a single SMS via the Vonage SMS API.
-func (p *VonageProvider) Send(ctx context.Context, msg *notification.Message) error {
+func (p *VonageProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
 	payload := vonageRequest{
 		APIKey:    p.apiKey,
 		APISecret: p.apiSecret,
@@ -75,52 +76,57 @@ func (p *VonageProvider) Send(ctx context.Context, msg *notification.Message) er
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("vonage marshal: %w", err)
+		return nil, fmt.Errorf("vonage marshal: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://rest.nexmo.com/sms/json", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("vonage create request: %w", err)
+		return nil, fmt.Errorf("vonage create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("vonage request: %w", err)
+		return nil, fmt.Errorf("vonage request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("vonage api error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("vonage api error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	// Parse the response to check individual message statuses.
 	var vonageResp vonageResponse
 	if err := json.NewDecoder(resp.Body).Decode(&vonageResp); err != nil {
-		return fmt.Errorf("vonage decode response: %w", err)
+		return nil, fmt.Errorf("vonage decode response: %w", err)
 	}
 
+	var messageID string
 	for _, m := range vonageResp.Messages {
 		// Status "0" means success in the Vonage API.
 		if m.Status != "0" {
-			return fmt.Errorf("vonage message error (status %s): %s", m.Status, m.ErrorText)
+			return nil, fmt.Errorf("vonage message error (status %s): %s", m.Status, m.ErrorText)
+		}
+		if m.MessageID != "" {
+			messageID = m.MessageID
 		}
 	}
 
-	return nil
+	return &notification.SendResult{MessageID: messageID}, nil
 }
 
 // SendBatch delivers multiple SMS messages by iterating and sending each
 // one individually.
-func (p *VonageProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *VonageProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
+	results := make([]*notification.SendResult, len(msgs))
 	errs := make([]error, len(msgs))
 	for i, msg := range msgs {
-		errs[i] = p.Send(ctx, msg)
+		results[i], errs[i] = p.Send(ctx, msg)
 	}
-	return errs
+	return results, errs
 }
 
 // HealthCheck verifies that the API key and secret are configured.

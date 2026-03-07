@@ -6,7 +6,7 @@
 	import { currentEvent } from '$lib/stores/events';
 	import { formatDateTime, toISOLocal } from '$lib/utils/dates';
 	import { currentUser } from '$lib/stores/auth';
-	import type { Event, Attendee, RSVPStats, Reminder, CoHost } from '$lib/types';
+	import type { Event, Attendee, RSVPStats, Reminder, CoHost, EventComment, EmailStats } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -40,6 +40,8 @@
 	let cohosts: CoHost[] = $state([]);
 	let cohostEmail = $state('');
 	let addingCohost = $state(false);
+	let eventComments: EventComment[] = $state([]);
+	let emailStats = $state<EmailStats | null>(null);
 
 	const eventId = $derived($page.params.eventId);
 	const currentUserId = $derived($currentUser?.id);
@@ -63,14 +65,16 @@
 
 		(async () => {
 			try {
-				const [eventResult, attendeeResult, statsResult, remindersResult, cohostsResult] = await Promise.all([
+				const [eventResult, attendeeResult, statsResult, remindersResult, cohostsResult, commentsResult, emailStatsResult] = await Promise.all([
 					api.get<{ data: Event }>(`/events/${eventId}`),
 					api.get<{ data: Attendee[] }>(`/rsvp/event/${eventId}`).catch(() => ({ data: [] })),
 					api.get<{ data: RSVPStats }>(`/rsvp/event/${eventId}/stats`).catch(() => ({
 						data: { attending: 0, attendingHeadcount: 0, maybe: 0, maybeHeadcount: 0, declined: 0, pending: 0, waitlisted: 0, total: 0, totalHeadcount: 0 }
 					})),
 					api.get<{ data: Reminder[] }>(`/reminders/event/${eventId}`).catch(() => ({ data: [] })),
-					api.get<{ data: CoHost[] }>(`/events/${eventId}/cohosts`).catch(() => ({ data: [] }))
+					api.get<{ data: CoHost[] }>(`/events/${eventId}/cohosts`).catch(() => ({ data: [] })),
+					api.get<{ data: EventComment[] }>(`/comments/event/${eventId}`).catch(() => ({ data: [] })),
+					api.get<{ data: EmailStats }>(`/notifications/event/${eventId}/stats`).catch(() => ({ data: null }))
 				]);
 				event = eventResult.data;
 				$currentEvent = event;
@@ -78,6 +82,8 @@
 				stats = statsResult.data;
 				reminders = remindersResult.data;
 				cohosts = cohostsResult.data;
+				eventComments = commentsResult.data;
+				emailStats = emailStatsResult.data;
 			} catch (err: unknown) {
 				const apiErr = err as { message?: string };
 				toast.error(apiErr.message || 'Failed to load event');
@@ -353,6 +359,18 @@
 		}
 	}
 
+	// Comment management
+	async function deleteComment(commentId: string) {
+		try {
+			await api.delete(`/comments/event/${eventId}/${commentId}`);
+			eventComments = eventComments.filter(c => c.id !== commentId);
+			toast.success('Comment deleted');
+		} catch (err: unknown) {
+			const apiErr = err as { message?: string };
+			toast.error(apiErr.message || 'Failed to delete comment');
+		}
+	}
+
 	// Editing reminders
 	let editingReminderId: string | null = $state(null);
 	let editRemindAt = $state('');
@@ -412,6 +430,8 @@
 				<Button variant="outline" size="sm" href="/events/{eventId}/invite">Design Invite</Button>
 				<Button variant="outline" size="sm" href="/events/{eventId}/share">Share</Button>
 				<Button variant="outline" size="sm" href="/events/{eventId}/messages">Send Message</Button>
+				<Button variant="outline" size="sm" href="/events/{eventId}/import">Import Guests</Button>
+				<Button variant="outline" size="sm" href="/events/{eventId}/webhooks">Webhooks</Button>
 				<Button variant="outline" size="sm" onclick={duplicateEvent}>Duplicate</Button>
 			</div>
 		</div>
@@ -886,6 +906,60 @@
 				{:else}
 					<p class="text-xs text-slate-400 mt-4">Maximum 10 co-hosts reached.</p>
 				{/if}
+			</Card>
+		{/if}
+
+		<!-- Comments -->
+		{#if event}
+			<Card class="mt-6">
+				{#snippet header()}
+					<h2 class="text-lg font-semibold text-slate-900">Comments ({eventComments.length})</h2>
+				{/snippet}
+				{#if eventComments.length === 0}
+					<p class="text-sm text-slate-500 text-center py-8">No comments yet.</p>
+				{:else}
+					<div class="divide-y divide-slate-200 -mx-6 -mb-4">
+						{#each eventComments as comment (comment.id)}
+							<div class="px-6 py-3 flex items-start justify-between">
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center gap-2">
+										<p class="text-sm font-medium text-slate-900">{comment.authorName}</p>
+										<span class="text-xs text-slate-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
+									</div>
+									<p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{comment.body}</p>
+								</div>
+								<Button size="sm" variant="ghost" onclick={() => deleteComment(comment.id)}>Delete</Button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</Card>
+		{/if}
+
+		<!-- Email Delivery Stats -->
+		{#if emailStats && emailStats.totalSent > 0}
+			<Card class="mt-6">
+				{#snippet header()}
+					<h2 class="text-lg font-semibold text-slate-900">Email Delivery</h2>
+				{/snippet}
+				<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+					<div class="text-center">
+						<p class="text-2xl font-bold text-slate-900">{emailStats.totalSent}</p>
+						<p class="text-xs text-slate-500">Sent</p>
+					</div>
+					<div class="text-center">
+						<p class="text-2xl font-bold text-green-600">{emailStats.delivered}</p>
+						<p class="text-xs text-slate-500">Delivered</p>
+					</div>
+					<div class="text-center">
+						<p class="text-2xl font-bold text-blue-600">{emailStats.opened}</p>
+						<p class="text-xs text-slate-500">Opened</p>
+					</div>
+					<div class="text-center">
+						<p class="text-2xl font-bold text-red-600">{emailStats.bounced}</p>
+						<p class="text-xs text-slate-500">Bounced</p>
+					</div>
+				</div>
 			</Card>
 		{/if}
 	{:else}

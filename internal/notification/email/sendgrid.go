@@ -76,7 +76,7 @@ type sendGridContent struct {
 }
 
 // Send delivers a single notification via the SendGrid v3 API.
-func (p *SendGridProvider) Send(ctx context.Context, msg *notification.Message) error {
+func (p *SendGridProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
 	content := []sendGridContent{}
 
 	// Add plain text part if available.
@@ -132,13 +132,13 @@ func (p *SendGridProvider) Send(ctx context.Context, msg *notification.Message) 
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("sendgrid marshal: %w", err)
+		return nil, fmt.Errorf("sendgrid marshal: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://api.sendgrid.com/v3/mail/send", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("sendgrid create request: %w", err)
+		return nil, fmt.Errorf("sendgrid create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
@@ -146,27 +146,31 @@ func (p *SendGridProvider) Send(ctx context.Context, msg *notification.Message) 
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("sendgrid request: %w", err)
+		return nil, fmt.Errorf("sendgrid request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// SendGrid returns 202 Accepted on success.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("sendgrid api error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("sendgrid api error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
-	return nil
+	// Capture X-Message-Id header for delivery tracking.
+	messageID := resp.Header.Get("X-Message-Id")
+
+	return &notification.SendResult{MessageID: messageID}, nil
 }
 
 // SendBatch delivers multiple notifications by iterating and sending each
 // one individually.
-func (p *SendGridProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *SendGridProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
+	results := make([]*notification.SendResult, len(msgs))
 	errs := make([]error, len(msgs))
 	for i, msg := range msgs {
-		errs[i] = p.Send(ctx, msg)
+		results[i], errs[i] = p.Send(ctx, msg)
 	}
-	return errs
+	return results, errs
 }
 
 // HealthCheck validates the API key format. A valid SendGrid API key starts

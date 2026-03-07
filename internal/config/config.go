@@ -65,6 +65,10 @@ type Config struct {
 
 	// Limits
 	MaxCoHostsPerEvent int
+
+	// Email Tracking
+	EmailOpenTrackingEnabled  bool
+	EmailClickTrackingEnabled bool
 }
 
 // Load reads environment variables (optionally from .env) and returns a Config.
@@ -180,6 +184,9 @@ func Load() (*Config, error) {
 		TrustedProxies: trustedProxies,
 
 		MaxCoHostsPerEvent: maxCoHosts,
+
+		EmailOpenTrackingEnabled:  getEnv("EMAIL_OPEN_TRACKING_ENABLED", "true") == "true",
+		EmailClickTrackingEnabled: getEnv("EMAIL_CLICK_TRACKING_ENABLED", "false") == "true",
 	}
 
 	return cfg, nil

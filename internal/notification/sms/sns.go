@@ -46,25 +46,30 @@ func (p *SNSProvider) Channel() notification.Channel {
 }
 
 // Send delivers a single SMS via Amazon SNS Publish.
-func (p *SNSProvider) Send(ctx context.Context, msg *notification.Message) error {
-	_, err := p.snsClient.Publish(ctx, &sns.PublishInput{
+func (p *SNSProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
+	output, err := p.snsClient.Publish(ctx, &sns.PublishInput{
 		PhoneNumber: aws.String(msg.To),
 		Message:     aws.String(msg.Body),
 	})
 	if err != nil {
-		return fmt.Errorf("sns publish: %w", err)
+		return nil, fmt.Errorf("sns publish: %w", err)
 	}
-	return nil
+	var messageID string
+	if output.MessageId != nil {
+		messageID = *output.MessageId
+	}
+	return &notification.SendResult{MessageID: messageID}, nil
 }
 
 // SendBatch delivers multiple SMS messages by iterating and sending each
 // one individually.
-func (p *SNSProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *SNSProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
+	results := make([]*notification.SendResult, len(msgs))
 	errs := make([]error, len(msgs))
 	for i, msg := range msgs {
-		errs[i] = p.Send(ctx, msg)
+		results[i], errs[i] = p.Send(ctx, msg)
 	}
-	return errs
+	return results, errs
 }
 
 // HealthCheck verifies the SNS credentials by fetching SMS attributes.

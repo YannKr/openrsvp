@@ -119,6 +119,50 @@ class ApiClient {
 		return this.request<T>(path, { method: 'DELETE' });
 	}
 
+	async uploadCSV<T>(path: string, file: File): Promise<T> {
+		const url = `${BASE_URL}${path}`;
+		const formData = new FormData();
+		formData.append('file', file);
+
+		const headers: Record<string, string> = {};
+		if (this.token) {
+			headers['Authorization'] = `Bearer ${this.token}`;
+		}
+
+		const csrfToken = getCookie(CSRF_COOKIE);
+		if (csrfToken) {
+			headers[CSRF_HEADER] = csrfToken;
+		}
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers,
+			body: formData
+		});
+
+		if (!response.ok) {
+			if (response.status === 429) {
+				const retryAfter = response.headers.get('Retry-After');
+				const error: ApiError = {
+					error: 'rate_limited',
+					message: retryAfter
+						? `Too many requests. Please wait ${retryAfter} seconds and try again.`
+						: 'Too many requests. Please wait a moment and try again.',
+					status: 429
+				};
+				throw error;
+			}
+			const error: ApiError = await response.json().catch(() => ({
+				error: 'unknown',
+				message: response.statusText,
+				status: response.status
+			}));
+			throw error;
+		}
+
+		return response.json();
+	}
+
 	async upload<T>(path: string, file: File): Promise<T> {
 		const url = `${BASE_URL}${path}`;
 		const formData = new FormData();

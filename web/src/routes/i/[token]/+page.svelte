@@ -4,7 +4,7 @@
 	import { api } from '$lib/api/client';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
 	import { formatDateTime } from '$lib/utils/dates';
-	import type { PublicEvent, InviteCard, PublicAttendance, EventQuestion, ApiError } from '$lib/types';
+	import type { PublicEvent, InviteCard, PublicAttendance, EventQuestion, ApiError, PublicComment, PaginatedComments } from '$lib/types';
 	import InviteCardPreview from '$lib/components/invite/InviteCardPreview.svelte';
 	import QuestionRenderer from '$lib/components/questions/QuestionRenderer.svelte';
 	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
@@ -43,7 +43,57 @@
 	let submitted = $state(false);
 	let rsvpToken = $state('');
 
+	// Guestbook state
+	let comments = $state<PublicComment[]>([]);
+	let commentsLoading = $state(false);
+	let commentsHasMore = $state(false);
+	let commentsCursor = $state('');
+	let newComment = $state('');
+	let submittingComment = $state(false);
+	let commentError = $state('');
+
 	const token = $derived($page.params.token ?? '');
+
+	async function loadComments(append = false) {
+		commentsLoading = true;
+		try {
+			const params = new URLSearchParams();
+			if (commentsCursor && append) params.set('cursor', commentsCursor);
+			params.set('limit', '20');
+			const result = await api.get<{ data: PaginatedComments }>(`/comments/public/${token}?${params}`);
+			if (append) {
+				comments = [...comments, ...result.data.comments];
+			} else {
+				comments = result.data.comments;
+			}
+			commentsHasMore = result.data.hasMore;
+			commentsCursor = result.data.nextCursor || '';
+		} catch {
+			// Silently fail - comments are non-critical
+		} finally {
+			commentsLoading = false;
+		}
+	}
+
+	async function submitComment() {
+		if (!newComment.trim()) return;
+		submittingComment = true;
+		commentError = '';
+		try {
+			const result = await api.request<{ data: PublicComment }>(`/comments/public/${token}`, {
+				method: 'POST',
+				headers: { 'X-RSVP-Token': rsvpToken },
+				body: JSON.stringify({ body: newComment.trim() })
+			});
+			comments = [result.data, ...comments];
+			newComment = '';
+		} catch (err) {
+			const apiErr = err as ApiError;
+			commentError = apiErr.message || 'Failed to post comment';
+		} finally {
+			submittingComment = false;
+		}
+	}
 
 	onMount(async () => {
 		await loadAppConfig();
@@ -53,6 +103,9 @@
 			inviteData = result.data.invite;
 			attendance = result.data.attendance ?? null;
 			eventQuestions = result.data.questions ?? [];
+			if (result.data.event.commentsEnabled) {
+				loadComments();
+			}
 		} catch (err) {
 			const apiErr = err as ApiError;
 			if (apiErr.status === 404) {
@@ -645,6 +698,67 @@
 						</form>
 					</div>
 				{/if}
+			</div>
+		{/if}
+
+		<!-- Guestbook -->
+		{#if eventData?.commentsEnabled}
+			<div class="w-full max-w-lg mt-8">
+				<div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow border border-slate-200/60 p-5">
+					<h3 class="text-lg font-semibold text-slate-900 mb-4">Guestbook</h3>
+
+					{#if submitted && rsvpToken}
+						<form onsubmit={(e) => { e.preventDefault(); submitComment(); }} class="mb-6">
+							<textarea
+								bind:value={newComment}
+								placeholder="Leave a message..."
+								rows="3"
+								maxlength="2000"
+								class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors resize-none"
+							></textarea>
+							{#if commentError}
+								<p class="text-xs text-red-600 mt-1">{commentError}</p>
+							{/if}
+							<div class="flex justify-end mt-2">
+								<button
+									type="submit"
+									disabled={submittingComment || !newComment.trim()}
+									class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+								>
+									{submittingComment ? 'Posting...' : 'Post Comment'}
+								</button>
+							</div>
+						</form>
+					{/if}
+
+					{#if comments.length === 0 && !commentsLoading}
+						<p class="text-sm text-slate-500 text-center py-4">No comments yet. Be the first!</p>
+					{:else}
+						<div class="space-y-4">
+							{#each comments as comment (comment.id)}
+								<div class="border-b border-slate-100 pb-3 last:border-0">
+									<div class="flex items-center justify-between mb-1">
+										<span class="text-sm font-medium text-slate-900">{comment.authorName}</span>
+										<span class="text-xs text-slate-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
+									</div>
+									<p class="text-sm text-slate-700 whitespace-pre-wrap">{comment.body}</p>
+								</div>
+							{/each}
+						</div>
+						{#if commentsHasMore}
+							<div class="mt-4 text-center">
+								<button
+									type="button"
+									onclick={() => loadComments(true)}
+									disabled={commentsLoading}
+									class="text-sm text-indigo-600 hover:text-indigo-700 font-medium disabled:opacity-50"
+								>
+									{commentsLoading ? 'Loading...' : 'Load more comments'}
+								</button>
+							</div>
+						{/if}
+					{/if}
+				</div>
 			</div>
 		{/if}
 

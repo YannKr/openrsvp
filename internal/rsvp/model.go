@@ -14,6 +14,7 @@ type Attendee struct {
 	ContactMethod string    `json:"contactMethod"`
 	DietaryNotes  string    `json:"dietaryNotes"`
 	PlusOnes      int       `json:"plusOnes"`
+	ImportSource  *string   `json:"importSource,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }

@@ -2,6 +2,7 @@ package sms
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,7 +43,7 @@ func (p *TwilioProvider) Channel() notification.Channel {
 }
 
 // Send delivers a single SMS via the Twilio Messages API.
-func (p *TwilioProvider) Send(ctx context.Context, msg *notification.Message) error {
+func (p *TwilioProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
 	apiURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", p.accountSID)
 
 	// Build form-encoded body.
@@ -54,7 +55,7 @@ func (p *TwilioProvider) Send(ctx context.Context, msg *notification.Message) er
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL,
 		strings.NewReader(form.Encode()))
 	if err != nil {
-		return fmt.Errorf("twilio create request: %w", err)
+		return nil, fmt.Errorf("twilio create request: %w", err)
 	}
 
 	req.SetBasicAuth(p.accountSID, p.authToken)
@@ -62,26 +63,35 @@ func (p *TwilioProvider) Send(ctx context.Context, msg *notification.Message) er
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("twilio request: %w", err)
+		return nil, fmt.Errorf("twilio request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("twilio api error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("twilio api error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
-	return nil
+	// Parse response to get message SID.
+	var twilioResp struct {
+		SID string `json:"sid"`
+	}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&twilioResp); decodeErr == nil {
+		return &notification.SendResult{MessageID: twilioResp.SID}, nil
+	}
+
+	return &notification.SendResult{}, nil
 }
 
 // SendBatch delivers multiple SMS messages by iterating and sending each
 // one individually.
-func (p *TwilioProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *TwilioProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
+	results := make([]*notification.SendResult, len(msgs))
 	errs := make([]error, len(msgs))
 	for i, msg := range msgs {
-		errs[i] = p.Send(ctx, msg)
+		results[i], errs[i] = p.Send(ctx, msg)
 	}
-	return errs
+	return results, errs
 }
 
 // HealthCheck verifies the Twilio credentials by fetching the account info.

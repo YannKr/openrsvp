@@ -14,6 +14,7 @@ import (
 
 	"github.com/yannkr/openrsvp/internal/auth"
 	"github.com/yannkr/openrsvp/internal/calendar"
+	"github.com/yannkr/openrsvp/internal/comment"
 	"github.com/yannkr/openrsvp/internal/config"
 	"github.com/yannkr/openrsvp/internal/database"
 	"github.com/yannkr/openrsvp/internal/event"
@@ -26,6 +27,7 @@ import (
 	"github.com/yannkr/openrsvp/internal/rsvp"
 	"github.com/yannkr/openrsvp/internal/scheduler"
 	"github.com/yannkr/openrsvp/internal/security"
+	"github.com/yannkr/openrsvp/internal/webhook"
 )
 
 // Server is the main HTTP server for OpenRSVP.
@@ -43,10 +45,53 @@ type Server struct {
 	questionHandler *question.Handler
 	feedbackHandler *feedback.Handler
 	reminderHandler *scheduler.Handler
+	commentHandler  *comment.Handler
+	webhookHandler  *webhook.Handler
+	notifHandler    *notification.Handler
 	notifService    *notification.Service
 	scheduler       *scheduler.Scheduler
 	securityMw      *security.Middleware
 	uploadsDir      string
+}
+
+// commentEventStoreAdapter adapts event.Service to comment.EventStore.
+type commentEventStoreAdapter struct {
+	svc *event.Service
+}
+
+func (a *commentEventStoreAdapter) FindByShareToken(ctx context.Context, shareToken string) (*comment.Event, error) {
+	ev, err := a.svc.GetByShareToken(ctx, shareToken)
+	if err != nil {
+		return nil, err
+	}
+	if ev == nil {
+		return nil, nil
+	}
+	return &comment.Event{
+		ID:              ev.ID,
+		Status:          ev.Status,
+		CommentsEnabled: ev.CommentsEnabled,
+	}, nil
+}
+
+// commentRSVPStoreAdapter adapts rsvp.Store to comment.RSVPStore.
+type commentRSVPStoreAdapter struct {
+	store *rsvp.Store
+}
+
+func (a *commentRSVPStoreAdapter) FindByToken(ctx context.Context, token string) (*comment.Attendee, error) {
+	att, err := a.store.FindByRSVPToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if att == nil {
+		return nil, nil
+	}
+	return &comment.Attendee{
+		ID:      att.ID,
+		EventID: att.EventID,
+		Name:    att.Name,
+	}, nil
 }
 
 // New creates a new Server instance.
@@ -177,9 +222,26 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		return data, nil
 	})
 
+	// Wire up comment/guestbook layer.
+	commentStore := comment.NewStore(db)
+	commentEventAdapter := &commentEventStoreAdapter{svc: eventService}
+	commentRSVPAdapter := &commentRSVPStoreAdapter{store: rsvpStore}
+	commentService := comment.NewService(commentStore, commentEventAdapter, commentRSVPAdapter)
+	commentHandler := comment.NewHandler(commentService, authMiddleware, comment.OrganizerFromCtx(organizerFromCtx), comment.EventOwnershipChecker(checkEventOwner), logger)
+
+	// Wire up webhook layer.
+	webhookStore := webhook.NewStore(db)
+	webhookService := webhook.NewService(webhookStore, logger)
+	webhookDispatcher := webhook.NewDispatcher(webhookStore, logger)
+	webhookHandler := webhook.NewHandler(webhookService, webhookDispatcher, authMiddleware, webhook.OrganizerFromCtx(organizerFromCtx), webhook.EventOwnershipChecker(checkEventOwner), logger)
+
 	// Wire up notification layer.
 	notifRegistry := buildNotificationRegistry(cfg, logger)
 	notifService := notification.NewService(notifRegistry, db, logger)
+
+	// Wire up notification tracking layer.
+	trackingService := notification.NewTrackingService(db, logger)
+	notifHandler := notification.NewHandler(trackingService, notifService, authMiddleware, notification.OrganizerFromCtx(organizerFromCtx), notification.EventOwnershipChecker(checkEventOwner), logger)
 
 	// Wire email sending into auth service (breaks circular dep via function).
 	if notifRegistry.Has(notification.ChannelEmail) {
@@ -188,12 +250,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if err != nil {
 				return err
 			}
-			return provider.Send(ctx, &notification.Message{
+			_, sendErr := provider.Send(ctx, &notification.Message{
 				To:      to,
 				Subject: subject,
 				Body:    htmlBody,
 				Plain:   plainBody,
 			})
+			return sendErr
 		})
 	}
 
@@ -204,12 +267,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if err != nil {
 				return err
 			}
-			return provider.Send(ctx, &notification.Message{
+			_, sendErr := provider.Send(ctx, &notification.Message{
 				To:      to,
 				Subject: subject,
 				Body:    htmlBody,
 				Plain:   plainBody,
 			})
+			return sendErr
 		})
 	}
 
@@ -221,6 +285,14 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				logger.Error().Err(err).Str("event_id", eventID).Msg("rsvp notify: failed to get event")
 				return
 			}
+
+			// Dispatch webhook for RSVP event.
+			go webhookDispatcher.Dispatch(context.Background(), eventID, "rsvp.created", map[string]any{
+				"attendeeId":   attendee.ID,
+				"attendeeName": attendee.Name,
+				"rsvpStatus":   attendee.RSVPStatus,
+				"eventId":      eventID,
+			})
 
 			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
 			location := ev.Location
@@ -307,6 +379,47 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				Plain:   plainBody,
 			}); err != nil {
 				logger.Error().Err(err).Str("organizer_email", organizer.Email).Msg("rsvp notify: failed to send organizer email")
+			}
+		})
+	}
+
+	// Wire import invitation emails into the RSVP service.
+	if notifRegistry.Has(notification.ChannelEmail) {
+		rsvpService.SetOnImportInvite(func(ctx context.Context, eventID string, attendee *rsvp.Attendee) {
+			ev, err := eventService.GetByID(ctx, eventID)
+			if err != nil {
+				logger.Error().Err(err).Str("event_id", eventID).Msg("import invite: failed to get event")
+				return
+			}
+
+			if attendee.Email == nil || *attendee.Email == "" {
+				return
+			}
+
+			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
+			location := ev.Location
+			if location == "" {
+				location = "TBD"
+			}
+			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+
+			htmlBody, plainBody, err := templates.RenderEventReminder(
+				ev.Title, eventDate, location,
+				"You've been invited! Click the link below to RSVP.",
+				inviteURL,
+			)
+			if err != nil {
+				logger.Error().Err(err).Str("attendee_id", attendee.ID).Msg("import invite: failed to render template")
+				return
+			}
+
+			if err := notifService.Send(ctx, eventID, attendee.ID, notification.ChannelEmail, &notification.Message{
+				To:      *attendee.Email,
+				Subject: "You're Invited — " + ev.Title,
+				Body:    htmlBody,
+				Plain:   plainBody,
+			}); err != nil {
+				logger.Error().Err(err).Str("attendee_email", *attendee.Email).Msg("import invite: failed to send email")
 			}
 		})
 	}
@@ -398,12 +511,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if err != nil {
 				return err
 			}
-			return provider.Send(ctx, &notification.Message{
+			_, sendErr := provider.Send(ctx, &notification.Message{
 				To:      to,
 				Subject: subject,
 				Body:    body,
 				Plain:   plain,
 			})
+			return sendErr
 		})
 	}
 	organizerEmailFromCtx := func(ctx context.Context) (string, bool) {
@@ -420,9 +534,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	secMw := security.NewMiddleware(security.SecurityConfig{
 		AuthRateLimit:    10,
 		RSVPRateLimit:    30,
-		GeneralRateLimit: 100,
+		GeneralRateLimit: 200,
 		RateWindow:       1 * time.Minute,
-		CSRFExcludePaths: []string{"/api/v1/rsvp/public/", "/api/v1/auth/"},
+		CSRFExcludePaths: []string{"/api/v1/rsvp/public/", "/api/v1/auth/", "/api/v1/comments/public/"},
 		IsProduction:     cfg.Env == "production",
 	})
 
@@ -578,6 +692,11 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Create default reminders (1 week and 3 days before) when an event is published.
 	eventService.SetOnPublish(func(ctx context.Context, e *event.Event) {
+		go webhookDispatcher.Dispatch(context.Background(), e.ID, "event.published", map[string]any{
+			"eventId": e.ID,
+			"title":   e.Title,
+		})
+
 		type defaultReminder struct {
 			offset  time.Duration
 			message string
@@ -624,6 +743,11 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	// Send cancellation notifications to attending/maybe attendees when an event is cancelled.
 	if notifRegistry.Has(notification.ChannelEmail) {
 		eventService.SetOnCancel(func(ctx context.Context, e *event.Event) {
+			go webhookDispatcher.Dispatch(context.Background(), e.ID, "event.cancelled", map[string]any{
+				"eventId": e.ID,
+				"title":   e.Title,
+			})
+
 			attendees, err := rsvpService.ListByEvent(ctx, e.ID)
 			if err != nil {
 				logger.Error().Err(err).Str("event_id", e.ID).Msg("cancel notify: failed to list attendees")
@@ -696,7 +820,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				return
 			}
 
-			if sendErr := provider.Send(ctx, &notification.Message{
+			if _, sendErr := provider.Send(ctx, &notification.Message{
 				To:      organizerEmail,
 				Subject: "Data Retention Notice — " + eventTitle,
 				Body:    htmlBody,
@@ -776,6 +900,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		questionHandler: questionHandler,
 		feedbackHandler: feedbackHandler,
 		reminderHandler: reminderHandler,
+		commentHandler:  commentHandler,
+		webhookHandler:  webhookHandler,
+		notifHandler:    notifHandler,
 		notifService:    notifService,
 		scheduler:       sched,
 		securityMw:      secMw,
