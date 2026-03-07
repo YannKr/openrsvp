@@ -418,6 +418,7 @@
 						eventDate={event?.eventDate || ''}
 						eventLocation={event?.location || ''}
 						customData={customDataJSON}
+						timezone={event?.timezone}
 					/>
 				</div>
 			</div>

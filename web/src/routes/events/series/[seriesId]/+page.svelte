@@ -381,7 +381,7 @@
 						{#if series.recurrenceEnd}
 							<div>
 								<dt class="text-slate-500">Ends</dt>
-								<dd class="font-medium text-slate-900">{formatDateTime(series.recurrenceEnd)}</dd>
+								<dd class="font-medium text-slate-900">{formatDateTime(series.recurrenceEnd, series.timezone)}</dd>
 							</div>
 						{/if}
 						{#if series.maxCapacity}
@@ -427,7 +427,7 @@
 										{/if}
 									</div>
 									<p class="mt-0.5 text-xs text-slate-500">
-										{formatDateTime(occurrence.eventDate)}
+										{formatDateTime(occurrence.eventDate, series.timezone)}
 										{#if occurrence.seriesIndex != null}
 											<span class="text-slate-400 ml-2">#{occurrence.seriesIndex}</span>
 										{/if}

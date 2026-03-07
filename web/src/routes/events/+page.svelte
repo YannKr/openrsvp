@@ -90,7 +90,7 @@
 								>
 									{event.title}
 								</h3>
-								<p class="mt-1 text-sm text-slate-600">{formatDateTime(event.eventDate)}</p>
+								<p class="mt-1 text-sm text-slate-600">{formatDateTime(event.eventDate, event.timezone)}</p>
 								{#if event.location}
 									<p class="mt-1 text-sm text-slate-500 flex items-center gap-1">
 										<svg

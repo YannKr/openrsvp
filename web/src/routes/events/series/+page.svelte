@@ -121,7 +121,7 @@
 							{#if series.maxOccurrences}
 								<span>{series.maxOccurrences} occurrences max</span>
 							{:else if series.recurrenceEnd}
-								<span>Until {formatDateTime(series.recurrenceEnd)}</span>
+								<span>Until {formatDateTime(series.recurrenceEnd, series.timezone)}</span>
 							{:else}
 								<span>No end date</span>
 							{/if}

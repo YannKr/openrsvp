@@ -5,7 +5,7 @@
 	import { currentUser } from '$lib/stores/auth';
 	import { toast } from '$lib/stores/toast';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
-	import { toISOLocal } from '$lib/utils/dates';
+	import { toISOLocal, datetimeLocalToUTC } from '$lib/utils/dates';
 	import { getTimezoneOptions, getTimezoneLabel } from '$lib/utils/timezones';
 	import type { Event } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
@@ -108,7 +108,7 @@
 		try {
 			const body: Record<string, unknown> = {
 				title: title.trim(),
-				eventDate: eventDate ? new Date(eventDate).toISOString() : eventDate,
+				eventDate: eventDate ? datetimeLocalToUTC(eventDate, timezone) : eventDate,
 				location: location.trim(),
 				timezone,
 				description: description.trim(),
@@ -117,8 +117,8 @@
 				showGuestList,
 				retentionDays: parseInt(retentionDays)
 			};
-			if (endDate) body.endDate = new Date(endDate).toISOString();
-			if (rsvpDeadline) body.rsvpDeadline = new Date(rsvpDeadline).toISOString();
+			if (endDate) body.endDate = datetimeLocalToUTC(endDate, timezone);
+			if (rsvpDeadline) body.rsvpDeadline = datetimeLocalToUTC(rsvpDeadline, timezone);
 			if (maxCapacity) {
 				body.maxCapacity = parseInt(maxCapacity);
 				body.waitlistEnabled = waitlistEnabled;

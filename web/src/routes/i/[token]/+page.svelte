@@ -84,7 +84,7 @@
 		if (hoursLeft < 1) return 'Less than 1 hour left to RSVP';
 		if (hoursLeft < 24) return `${Math.ceil(hoursLeft)} hours left to RSVP`;
 		if (hoursLeft < 48) return 'About 1 day left to RSVP';
-		return `RSVP by ${formatDateTime(eventData.rsvpDeadline)}`;
+		return `RSVP by ${formatDateTime(eventData.rsvpDeadline, eventData.timezone)}`;
 	});
 
 	// Capacity display logic
@@ -251,6 +251,7 @@
 				eventDate={eventData.eventDate}
 				eventLocation={eventData.location}
 				customData={typeof inviteData.customData === 'string' ? inviteData.customData : JSON.stringify(inviteData.customData || {})}
+				timezone={eventData.timezone}
 			/>
 		</div>
 
