@@ -21,7 +21,7 @@ func NewStore(db database.DB) *Store {
 }
 
 // eventColumns is the standard column list for event queries.
-const eventColumns = `id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, waitlist_enabled, series_id, series_index, series_override, created_at, updated_at`
+const eventColumns = `id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, waitlist_enabled, comments_enabled, series_id, series_index, series_override, created_at, updated_at`
 
 // Create inserts a new event into the database.
 func (s *Store) Create(ctx context.Context, e *Event) error {
@@ -41,11 +41,11 @@ func (s *Store) Create(ctx context.Context, e *Event) error {
 	}
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, waitlist_enabled, series_id, series_index, series_override, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO events (id, organizer_id, title, description, event_date, end_date, location, timezone, retention_days, status, share_token, contact_requirement, show_headcount, show_guest_list, rsvp_deadline, max_capacity, waitlist_enabled, comments_enabled, series_id, series_index, series_override, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.OrganizerID, e.Title, e.Description, eventDate, endDate,
 		e.Location, e.Timezone, e.RetentionDays, e.Status, e.ShareToken, e.ContactRequirement,
-		e.ShowHeadcount, e.ShowGuestList, rsvpDeadline, e.MaxCapacity, e.WaitlistEnabled,
+		e.ShowHeadcount, e.ShowGuestList, rsvpDeadline, e.MaxCapacity, e.WaitlistEnabled, e.CommentsEnabled,
 		e.SeriesID, e.SeriesIndex, e.SeriesOverride, now, now,
 	)
 	if err != nil {
@@ -157,11 +157,11 @@ func (s *Store) Update(ctx context.Context, e *Event) error {
 	}
 
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, contact_requirement = ?, show_headcount = ?, show_guest_list = ?, rsvp_deadline = ?, max_capacity = ?, waitlist_enabled = ?, series_id = ?, series_index = ?, series_override = ?, updated_at = ?
+		`UPDATE events SET title = ?, description = ?, event_date = ?, end_date = ?, location = ?, timezone = ?, retention_days = ?, status = ?, contact_requirement = ?, show_headcount = ?, show_guest_list = ?, rsvp_deadline = ?, max_capacity = ?, waitlist_enabled = ?, comments_enabled = ?, series_id = ?, series_index = ?, series_override = ?, updated_at = ?
 		 WHERE id = ?`,
 		e.Title, e.Description, eventDate, endDate, e.Location, e.Timezone,
 		e.RetentionDays, e.Status, e.ContactRequirement, e.ShowHeadcount, e.ShowGuestList,
-		rsvpDeadline, e.MaxCapacity, e.WaitlistEnabled,
+		rsvpDeadline, e.MaxCapacity, e.WaitlistEnabled, e.CommentsEnabled,
 		e.SeriesID, e.SeriesIndex, e.SeriesOverride, now, e.ID,
 	)
 	if err != nil {
@@ -195,7 +195,7 @@ func scanEvent(row *sql.Row) (*Event, error) {
 		&eventDate, &endDate, &e.Location, &e.Timezone,
 		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&e.ShowHeadcount, &e.ShowGuestList,
-		&rsvpDeadline, &maxCapacity, &e.WaitlistEnabled,
+		&rsvpDeadline, &maxCapacity, &e.WaitlistEnabled, &e.CommentsEnabled,
 		&seriesID, &seriesIndex, &e.SeriesOverride,
 		&createdAt, &updatedAt,
 	)
@@ -231,7 +231,7 @@ func scanEventRow(rows *sql.Rows) (*Event, error) {
 		&eventDate, &endDate, &e.Location, &e.Timezone,
 		&e.RetentionDays, &e.Status, &e.ShareToken, &e.ContactRequirement,
 		&e.ShowHeadcount, &e.ShowGuestList,
-		&rsvpDeadline, &maxCapacity, &e.WaitlistEnabled,
+		&rsvpDeadline, &maxCapacity, &e.WaitlistEnabled, &e.CommentsEnabled,
 		&seriesID, &seriesIndex, &e.SeriesOverride,
 		&createdAt, &updatedAt,
 	)

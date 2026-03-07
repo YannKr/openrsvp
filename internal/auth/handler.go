@@ -30,11 +30,24 @@ func NewHandler(service *Service, cfg *config.Config, logger zerolog.Logger) *Ha
 }
 
 // Routes returns a chi.Router with all auth routes mounted.
-func (h *Handler) Routes() chi.Router {
+// An optional loginRateLimit middleware is applied only to the login
+// endpoints (magic-link, verify) to prevent brute-force attacks without
+// penalising session management calls (/me, /logout) that the SPA
+// issues on every page load.
+func (h *Handler) Routes(loginRateLimit ...func(http.Handler) http.Handler) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/magic-link", h.handleMagicLink)
-	r.Post("/verify", h.handleVerify)
+	if len(loginRateLimit) > 0 && loginRateLimit[0] != nil {
+		r.Group(func(rl chi.Router) {
+			rl.Use(loginRateLimit[0])
+			rl.Post("/magic-link", h.handleMagicLink)
+			rl.Post("/verify", h.handleVerify)
+		})
+	} else {
+		r.Post("/magic-link", h.handleMagicLink)
+		r.Post("/verify", h.handleVerify)
+	}
+
 	r.Post("/logout", h.handleLogout)
 	r.With(RequireAuth(h.service)).Get("/me", h.handleMe)
 	r.With(RequireAuth(h.service)).Patch("/me", h.handleUpdateMe)
@@ -108,6 +121,18 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Clear the pre-login CSRF token so the CSRF middleware issues a fresh
+	// session-bound token on the next GET request.
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: false,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	writeJSON(w, http.StatusOK, resp)

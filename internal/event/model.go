@@ -21,6 +21,7 @@ type Event struct {
 	RSVPDeadline       *time.Time `json:"rsvpDeadline,omitempty"`
 	MaxCapacity        *int       `json:"maxCapacity,omitempty"`
 	WaitlistEnabled    bool       `json:"waitlistEnabled"`
+	CommentsEnabled    bool       `json:"commentsEnabled"`
 	SeriesID           *string    `json:"seriesId,omitempty"`
 	SeriesIndex        *int       `json:"seriesIndex,omitempty"`
 	SeriesOverride     bool       `json:"seriesOverride"`
@@ -43,6 +44,7 @@ type CreateEventRequest struct {
 	RSVPDeadline       *string `json:"rsvpDeadline,omitempty"`
 	MaxCapacity        *int    `json:"maxCapacity,omitempty"`
 	WaitlistEnabled    *bool   `json:"waitlistEnabled,omitempty"`
+	CommentsEnabled    *bool   `json:"commentsEnabled,omitempty"`
 }
 
 // PublicEvent is a stripped-down event representation for unauthenticated
@@ -63,6 +65,7 @@ type PublicEvent struct {
 	SpotsLeft          *int   `json:"spotsLeft,omitempty"`
 	AtCapacity         bool   `json:"atCapacity"`
 	WaitlistEnabled    bool   `json:"waitlistEnabled"`
+	CommentsEnabled    bool   `json:"commentsEnabled"`
 }
 
 // ToPublic converts an Event to a PublicEvent, stripping internal fields.
@@ -75,6 +78,7 @@ func (e *Event) ToPublic() *PublicEvent {
 		Timezone:           e.Timezone,
 		ContactRequirement: e.ContactRequirement,
 		WaitlistEnabled:    e.WaitlistEnabled,
+		CommentsEnabled:    e.CommentsEnabled,
 	}
 	if e.EndDate != nil {
 		p.EndDate = e.EndDate.Format("2006-01-02T15:04:05Z07:00")
@@ -103,4 +107,5 @@ type UpdateEventRequest struct {
 	RSVPDeadline       *string `json:"rsvpDeadline,omitempty"`
 	MaxCapacity        *int    `json:"maxCapacity,omitempty"`
 	WaitlistEnabled    *bool   `json:"waitlistEnabled,omitempty"`
+	CommentsEnabled    *bool   `json:"commentsEnabled,omitempty"`
 }

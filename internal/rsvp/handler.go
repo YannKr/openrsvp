@@ -66,6 +66,9 @@ func (h *Handler) Routes() chi.Router {
 		auth.Patch("/event/{eventId}/{attendeeId}", h.handleUpdateAttendee)
 		auth.Post("/event/{eventId}/{attendeeId}/promote", h.handlePromoteAttendee)
 		auth.Delete("/event/{eventId}/{attendeeId}", h.handleRemoveAttendee)
+		auth.Get("/import/template", h.handleImportTemplate)
+		auth.Post("/event/{eventId}/import/preview", h.handleImportPreview)
+		auth.Post("/event/{eventId}/import", h.handleImportExecute)
 	})
 
 	return r

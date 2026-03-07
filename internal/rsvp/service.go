@@ -91,6 +91,7 @@ type Service struct {
 	listQuestions             ListQuestionsFunc
 	getAnswers                GetAnswersFunc
 	getExportQuestions        GetExportQuestionsFunc
+	onImportInvite            ImportInviteFunc
 	logger                    zerolog.Logger
 	notifSem                  chan struct{} // bounds concurrent notification goroutines
 }

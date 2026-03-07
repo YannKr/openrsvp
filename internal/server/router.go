@@ -67,11 +67,14 @@ func (s *Server) routes() *chi.Mux {
 			})
 		})
 
-		// Auth routes with stricter rate limiting (10/min).
-		api.Route("/auth", func(auth chi.Router) {
-			auth.Use(security.RateLimitMiddleware(s.securityMw.AuthRateLimiter))
-			auth.Mount("/", s.authHandler.Routes())
-		})
+		// Auth routes: the stricter rate limiter (10/min) is passed into
+		// Routes() and applied only to magic-link and verify.  Session
+		// management endpoints (/me, /logout) fall under the general API
+		// rate limiter so SPA page-load calls to /auth/me don't exhaust
+		// the auth rate budget.
+		api.Mount("/auth", s.authHandler.Routes(
+			security.RateLimitMiddleware(s.securityMw.AuthRateLimiter),
+		))
 
 		// Series routes must be mounted before event routes so that
 		// /events/series is not captured by the event handler's /{eventId} pattern.
@@ -113,6 +116,9 @@ func (s *Server) routes() *chi.Mux {
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())
 		api.Mount("/feedback", s.feedbackHandler.Routes())
+		api.Mount("/comments", s.commentHandler.Routes())
+		api.Mount("/webhooks", s.webhookHandler.Routes())
+		api.Mount("/notifications", s.notifHandler.Routes())
 	})
 
 	// --- Static files / SPA fallback ---

@@ -55,7 +55,7 @@ func (p *SMTPProvider) Channel() notification.Channel {
 //	  attachment(s)
 //
 // Without attachments, the structure is just multipart/alternative.
-func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) error {
+func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
 	addr := net.JoinHostPort(p.host, p.port)
 
 	var buf bytes.Buffer
@@ -120,10 +120,10 @@ func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) erro
 
 	to := []string{msg.To}
 	if err := smtp.SendMail(addr, auth, p.from, to, buf.Bytes()); err != nil {
-		return fmt.Errorf("smtp send: %w", err)
+		return nil, fmt.Errorf("smtp send: %w", err)
 	}
 
-	return nil
+	return &notification.SendResult{}, nil
 }
 
 // writeAlternativeParts writes the text/plain and text/html MIME parts inside
@@ -157,12 +157,13 @@ func writeAlternativeParts(buf *bytes.Buffer, msg *notification.Message, boundar
 
 // SendBatch delivers multiple notifications by iterating and sending each
 // one individually.
-func (p *SMTPProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *SMTPProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
+	results := make([]*notification.SendResult, len(msgs))
 	errs := make([]error, len(msgs))
 	for i, msg := range msgs {
-		errs[i] = p.Send(ctx, msg)
+		results[i], errs[i] = p.Send(ctx, msg)
 	}
-	return errs
+	return results, errs
 }
 
 // HealthCheck dials the SMTP server to verify connectivity.

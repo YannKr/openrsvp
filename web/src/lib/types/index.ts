@@ -25,6 +25,7 @@ export interface Event {
 	rsvpDeadline?: string;
 	maxCapacity?: number;
 	waitlistEnabled: boolean;
+	commentsEnabled: boolean;
 	seriesId?: string;
 	seriesIndex?: number;
 	seriesOverride?: boolean;
@@ -135,6 +136,7 @@ export interface PublicEvent {
 	spotsLeft?: number;
 	atCapacity: boolean;
 	waitlistEnabled: boolean;
+	commentsEnabled: boolean;
 }
 
 export interface PublicAttendance {
@@ -197,3 +199,113 @@ export type InviteTemplate = {
 	description: string;
 	previewImage: string;
 };
+
+export interface PublicComment {
+	id: string;
+	authorName: string;
+	body: string;
+	createdAt: string;
+}
+
+export interface EventComment {
+	id: string;
+	eventId: string;
+	attendeeId: string;
+	authorName: string;
+	body: string;
+	createdAt: string;
+}
+
+export interface PaginatedComments {
+	comments: PublicComment[];
+	hasMore: boolean;
+	nextCursor?: string;
+}
+
+export interface Webhook {
+	id: string;
+	eventId: string;
+	url: string;
+	secret?: string;
+	eventTypes: string[];
+	description: string;
+	enabled: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface WebhookWithSecret extends Webhook {
+	secret: string;
+}
+
+export interface WebhookDelivery {
+	id: string;
+	webhookId: string;
+	eventType: string;
+	payload: string;
+	responseStatus?: number;
+	responseBody?: string;
+	error?: string;
+	attempt: number;
+	deliveredAt?: string;
+	createdAt: string;
+}
+
+export interface CSVImportRow {
+	name: string;
+	email: string;
+	phone: string;
+	dietaryNotes: string;
+	plusOnes: number;
+	error?: string;
+	duplicate?: boolean;
+}
+
+export interface CSVPreviewResponse {
+	rows: CSVImportRow[];
+	totalRows: number;
+	validRows: number;
+	errorRows: number;
+	duplicates: number;
+}
+
+export interface CSVImportResult {
+	imported: number;
+	skipped: number;
+	failed: number;
+	duplicates: number;
+	invited: number;
+}
+
+export interface EmailStats {
+	totalSent: number;
+	delivered: number;
+	opened: number;
+	clicked: number;
+	bounced: number;
+	complained: number;
+	failed: number;
+	pending: number;
+}
+
+export interface NotificationLogEntry {
+	id: string;
+	eventId: string;
+	attendeeId: string;
+	channel: string;
+	provider: string;
+	status: string;
+	deliveryStatus: string;
+	error: string;
+	recipient: string;
+	subject: string;
+	messageId: string;
+	sentAt?: string;
+	deliveredAt?: string;
+	openedAt?: string;
+	clickedAt?: string;
+	bouncedAt?: string;
+	bounceType: string;
+	complaintAt?: string;
+	createdAt: string;
+}

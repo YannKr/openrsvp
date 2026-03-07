@@ -1,0 +1,1 @@
+ALTER TABLE events ADD COLUMN comments_enabled INTEGER NOT NULL DEFAULT 1;

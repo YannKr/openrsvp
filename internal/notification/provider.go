@@ -26,16 +26,21 @@ type Message struct {
 	Attachments []Attachment // file attachments (email only)
 }
 
+// SendResult is returned by a provider after a successful send.
+type SendResult struct {
+	MessageID string // Provider-assigned message ID for delivery tracking correlation.
+}
+
 // Provider is the interface all notification providers must implement.
 type Provider interface {
 	// Name returns the provider identifier (e.g., "smtp", "sendgrid").
 	Name() string
 	// Channel returns which channel this provider serves.
 	Channel() Channel
-	// Send delivers a single notification.
-	Send(ctx context.Context, msg *Message) error
+	// Send delivers a single notification and returns a result with the provider message ID.
+	Send(ctx context.Context, msg *Message) (*SendResult, error)
 	// SendBatch delivers multiple notifications. Default implementations can loop.
-	SendBatch(ctx context.Context, msgs []*Message) []error
+	SendBatch(ctx context.Context, msgs []*Message) ([]*SendResult, []error)
 	// HealthCheck verifies the provider is operational.
 	HealthCheck(ctx context.Context) error
 }

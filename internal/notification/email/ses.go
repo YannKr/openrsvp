@@ -34,12 +34,12 @@ func (p *SESProvider) Channel() notification.Channel {
 }
 
 // Send delivers a single notification via the SES SMTP interface.
-func (p *SESProvider) Send(ctx context.Context, msg *notification.Message) error {
+func (p *SESProvider) Send(ctx context.Context, msg *notification.Message) (*notification.SendResult, error) {
 	return p.smtp.Send(ctx, msg)
 }
 
 // SendBatch delivers multiple notifications via the SES SMTP interface.
-func (p *SESProvider) SendBatch(ctx context.Context, msgs []*notification.Message) []error {
+func (p *SESProvider) SendBatch(ctx context.Context, msgs []*notification.Message) ([]*notification.SendResult, []error) {
 	return p.smtp.SendBatch(ctx, msgs)
 }
 

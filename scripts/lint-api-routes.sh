@@ -45,7 +45,10 @@ extract_routes() {
   extract_routes invite    /invite
   extract_routes message   /messages
   extract_routes scheduler /reminders
-  extract_routes feedback  /feedback
+  extract_routes feedback     /feedback
+  extract_routes comment      /comments
+  extract_routes webhook      /webhooks
+  extract_routes notification /notifications
 
   # Inline routes defined directly in router.go (not via handler.go).
   grep -E 'api\.(Get|Post|Put|Patch|Delete)\("/' "$ROOT/internal/server/router.go" 2>/dev/null | while IFS= read -r line; do
@@ -110,8 +113,8 @@ grep -rn -E 'api\.(get|post|put|patch|delete|upload)\b' "$ROOT/web/src/" \
 
   [ -z "$path" ] && continue
 
-  # Normalize ${expr} → :p
-  norm=$(echo "$path" | sed -E 's/\$\{[^}]+\}/:p/g')
+  # Normalize ${expr} → :p, then strip query strings (?...).
+  norm=$(echo "$path" | sed -E 's/\$\{[^}]+\}/:p/g' | sed -E 's/\?.*//')
 
   rel="${file#"$ROOT"/}"
   echo "${method} ${norm} ${rel}:${lineno}"

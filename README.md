@@ -10,6 +10,10 @@ A self-hosted, privacy-first alternative to Evite. Create beautiful event invita
 - 📬 **Notifications** — Pluggable email (SMTP, SendGrid, SES) and SMS (Twilio, Vonage, SNS) providers
 - 💬 **Messaging** — Two-way communication between organizers and attendees
 - ⏰ **Scheduled Reminders** — Automatic event reminders to guests
+- 📝 **Guestbook** — Attendees can leave comments on event pages with organizer moderation
+- 📥 **CSV Import** — Bulk import guest lists from CSV files with validation and duplicate detection
+- 🔗 **Webhooks** — Real-time HTTP callbacks for RSVP and event lifecycle events with HMAC signing
+- 📊 **Email Tracking** — Delivery status, open tracking, and per-event email statistics
 - 🛡️ **Privacy by Design** — Data auto-deletes after a configurable retention period (default 30 days post-event)
 - 🤖 **Bot Protection** — Honeypot fields and IP-based rate limiting
 - 🏠 **Self-Hosted** — Single Docker container, you own your data
@@ -89,6 +93,8 @@ openrsvp/
 │   ├── rsvp/                      # RSVP system
 │   ├── invite/                    # Invite card templates + customization
 │   ├── message/                   # Organizer-attendee messaging
+│   ├── comment/                   # Event page guestbook/comments
+│   ├── webhook/                   # Webhook endpoints + SSRF-safe dispatcher
 │   ├── notification/              # Email/SMS provider interface + implementations
 │   ├── scheduler/                 # Background jobs (reminders, cleanup)
 │   ├── security/                  # Rate limiting, honeypot, CSRF, sanitization
@@ -243,6 +249,45 @@ All API endpoints are under `/api/v1`. The server also provides:
 | PUT | `/api/v1/reminders/:reminderId` | Update reminder |
 | DELETE | `/api/v1/reminders/:reminderId` | Cancel reminder |
 
+### 📝 Comments / Guestbook
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/comments/public/:shareToken` | List public comments (paginated) |
+| POST | `/api/v1/comments/public/:shareToken` | Post comment (requires `X-RSVP-Token` header) |
+| DELETE | `/api/v1/comments/public/:commentId` | Delete own comment (requires `X-RSVP-Token`) |
+| GET | `/api/v1/comments/event/:eventId` | List all comments (organizer) |
+| DELETE | `/api/v1/comments/event/:eventId/:commentId` | Delete any comment (organizer) |
+
+### 🔗 Webhooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/webhooks/event/:eventId` | Create webhook |
+| GET | `/api/v1/webhooks/event/:eventId` | List webhooks |
+| GET | `/api/v1/webhooks/:webhookId` | Get webhook |
+| PUT | `/api/v1/webhooks/:webhookId` | Update webhook |
+| DELETE | `/api/v1/webhooks/:webhookId` | Delete webhook |
+| POST | `/api/v1/webhooks/:webhookId/rotate-secret` | Rotate signing secret |
+| GET | `/api/v1/webhooks/:webhookId/deliveries` | Delivery history |
+| POST | `/api/v1/webhooks/:webhookId/test` | Send test webhook |
+
+### 📥 CSV Import
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/rsvp/import/template` | Download CSV template |
+| POST | `/api/v1/rsvp/event/:eventId/import/preview` | Preview CSV upload |
+| POST | `/api/v1/rsvp/event/:eventId/import` | Execute confirmed import |
+
+### 📊 Email Tracking
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/notifications/track/open/:logId` | Tracking pixel (public) |
+| GET | `/api/v1/notifications/event/:eventId/stats` | Email delivery stats (organizer) |
+| GET | `/api/v1/notifications/event/:eventId` | Delivery log (organizer) |
+
 ## 🏠 Self-Hosting Guide
 
 ### 🐳 Docker (recommended)
@@ -354,6 +399,28 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.4.0
+
+**Features:**
+- Add event guestbook/comments — authenticated attendees can post comments on public event pages with cursor-based pagination, rate limiting (5/hour), bluemonday sanitization, and organizer moderation
+- Add webhooks/API events — organizers can register webhook endpoints per event, with HMAC-SHA256 payload signing, SSRF-safe delivery (private IP blocking, no redirects), exponential backoff retries, delivery history, test endpoints, and secret rotation
+- Add CSV guest list import — upload CSV files with flexible column aliases (e.g. "full name" → name), preview with validation, duplicate detection, and optional invitation sending. Includes downloadable CSV template
+- Add email delivery tracking — tracking pixel for open detection, delivery status progression (unknown → delivered → opened → clicked), bounce/complaint handling, and per-event email statistics dashboard
+- Add comments_enabled toggle on events (enabled by default)
+- Add import_source field on attendees to track CSV-imported guests
+
+**Frontend:**
+- Add guestbook section on public invite page with comment posting and pagination
+- Add comments section on organizer event detail page with moderation (delete)
+- Add CSV Import page with drag-and-drop upload, preview table, and step-by-step wizard
+- Add Webhook management page with create/edit/delete, delivery history, test webhook, and secret rotation
+- Add email delivery stats section on organizer event detail page
+
+**Backend:**
+- 5 new database migrations (000024–000028): notification tracking columns, event_comments table, comments_enabled column, webhooks + webhook_deliveries tables, attendee import_source column
+- Webhook dispatch integrated into RSVP created, event published, and event cancelled callbacks
+- Notification service extended with SendResult.MessageID capture for delivery tracking correlation
 
 ### v1.3.1
 
