@@ -117,6 +117,7 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `FEEDBACK_GITHUB_REPO` | _(empty)_ | Target repo for Issues, e.g. `owner/repo` |
 | `FEEDBACK_EMAIL` | _(empty)_ | Email address to receive feedback (fallback) |
 | `TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of trusted reverse proxies (e.g. `10.0.0.0/8,172.16.0.0/12`). When set, `X-Forwarded-For` / `X-Real-IP` headers are trusted to determine client IP. When empty (default), only `RemoteAddr` is used, which prevents IP spoofing. **Set this when running behind a reverse proxy (Nginx, Caddy, etc.)** |
+| `MAX_COHOSTS_PER_EVENT` | `10` | Maximum number of co-hosts allowed per event |
 
 ### 📧 Email Providers
 
@@ -353,6 +354,30 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.3.0
+
+**Features:**
+- Add event series with recurring event support (daily, weekly, monthly frequencies)
+- Add co-host management — invite other organizers to manage your event
+- Add waitlist with automatic promotion when spots open up
+- Add custom RSVP questions (text, select, checkbox types) with drag-and-drop reordering
+- Add co-host email notification when added to an event
+- Add event date to organizer RSVP notification email subject for recurring event disambiguation
+
+**Security:**
+- Add `X-Content-Type-Options: nosniff`, `Content-Security-Policy`, and `X-Frame-Options` headers on uploaded file serving
+- Add email and phone format validation via `security.ValidateEmail` / `security.ValidatePhone`
+- Add field length limits: name (200), email (254), phone (20), dietary notes (500), event title (200), description (5,000), location (500), message subject (200), message body (10,000)
+- Add message rate limiting: 1 per minute for organizers, 1 per 5 minutes for attendees
+- Fix RSVP concurrency: per-event mutex on `RemoveAttendee` and `UpdateAttendeeAsOrganizer` to prevent capacity over-subscription
+- Add notification semaphore (cap 100) to bound concurrent notification goroutines
+- Add error reference codes (ERR-XXXXXXXX) — 500 responses no longer leak internal error details; codes correlate with server logs
+- Add co-host notification throttle (1 per hour per event:email pair) to prevent spam
+- Add per-event mutex on co-host add to prevent TOCTOU race on count check
+- Add 200ms timing floor on co-host add endpoint to prevent email enumeration via timing side channel
+- Add per-IP rate limiter (10/min) on co-host add endpoint
+- Make co-host limit configurable via `MAX_COHOSTS_PER_EVENT` env var (default 10)
 
 ### v1.2
 
