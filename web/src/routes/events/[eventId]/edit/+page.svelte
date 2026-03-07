@@ -4,7 +4,7 @@
 	import { api } from '$lib/api/client';
 	import { toast } from '$lib/stores/toast';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
-	import { toISOLocal } from '$lib/utils/dates';
+	import { toISOLocal, datetimeLocalToUTC, utcToDatetimeLocal } from '$lib/utils/dates';
 	import { getTimezoneOptions } from '$lib/utils/timezones';
 	import type { Event, RSVPStats } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
@@ -71,8 +71,8 @@
 			]);
 			const e = eventResult.data;
 			title = e.title;
-			eventDate = e.eventDate ? toISOLocal(new Date(e.eventDate)) : '';
-			endDate = e.endDate ? toISOLocal(new Date(e.endDate)) : '';
+			eventDate = e.eventDate ? utcToDatetimeLocal(e.eventDate, e.timezone) : '';
+			endDate = e.endDate ? utcToDatetimeLocal(e.endDate, e.timezone) : '';
 			location = e.location;
 			timezone = e.timezone;
 			tzOptions = getTimezoneOptions(e.timezone);
@@ -80,7 +80,7 @@
 			contactRequirement = e.contactRequirement || 'email_or_phone';
 			showHeadcount = e.showHeadcount ?? false;
 			showGuestList = e.showGuestList ?? false;
-			rsvpDeadline = e.rsvpDeadline ? toISOLocal(new Date(e.rsvpDeadline)) : '';
+			rsvpDeadline = e.rsvpDeadline ? utcToDatetimeLocal(e.rsvpDeadline, e.timezone) : '';
 			maxCapacity = e.maxCapacity ? String(e.maxCapacity) : '';
 			retentionDays = String(e.retentionDays);
 			showRetention = e.retentionDays !== 30;
@@ -121,7 +121,7 @@
 		try {
 			const body: Record<string, unknown> = {
 				title: title.trim(),
-				eventDate: eventDate ? new Date(eventDate).toISOString() : eventDate,
+				eventDate: eventDate ? datetimeLocalToUTC(eventDate, timezone) : eventDate,
 				location: location.trim(),
 				timezone,
 				description: description.trim(),
@@ -130,8 +130,8 @@
 				showGuestList,
 				retentionDays: parseInt(retentionDays)
 			};
-			if (endDate) body.endDate = new Date(endDate).toISOString();
-			if (rsvpDeadline) body.rsvpDeadline = new Date(rsvpDeadline).toISOString();
+			if (endDate) body.endDate = datetimeLocalToUTC(endDate, timezone);
+			if (rsvpDeadline) body.rsvpDeadline = datetimeLocalToUTC(rsvpDeadline, timezone);
 			else body.rsvpDeadline = '';
 			if (maxCapacity) {
 				body.maxCapacity = parseInt(maxCapacity);

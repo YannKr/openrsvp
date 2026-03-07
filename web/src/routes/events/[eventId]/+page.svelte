@@ -436,9 +436,9 @@
 			<div class="flex items-start justify-between">
 				<div>
 					<h1 class="text-2xl font-bold text-slate-900">{event.title}</h1>
-					<p class="mt-2 text-sm text-slate-600">{formatDateTime(event.eventDate)}</p>
+					<p class="mt-2 text-sm text-slate-600">{formatDateTime(event.eventDate, event.timezone)}</p>
 					{#if event.endDate}
-						<p class="text-sm text-slate-500">Ends: {formatDateTime(event.endDate)}</p>
+						<p class="text-sm text-slate-500">Ends: {formatDateTime(event.endDate, event.timezone)}</p>
 					{/if}
 					{#if event.location}
 						<p class="mt-1 text-sm text-slate-500 flex items-center gap-1">
@@ -582,7 +582,7 @@
 				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 				</svg>
-				RSVP Deadline: {formatDateTime(event.rsvpDeadline)}
+				RSVP Deadline: {formatDateTime(event.rsvpDeadline, event.timezone)}
 				{#if new Date(event.rsvpDeadline) < new Date()}
 					<Badge variant="warning">Closed</Badge>
 				{/if}

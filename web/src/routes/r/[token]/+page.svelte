@@ -190,18 +190,20 @@
 		}
 	}
 
-	function formatDate(dateStr: string): string {
+	function formatDate(dateStr: string, timezone?: string): string {
 		if (!dateStr) return '';
 		try {
 			const date = new Date(dateStr);
-			return date.toLocaleDateString('en-US', {
+			const opts: Intl.DateTimeFormatOptions = {
 				weekday: 'long',
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric',
 				hour: 'numeric',
 				minute: '2-digit'
-			});
+			};
+			if (timezone) opts.timeZone = timezone;
+			return date.toLocaleDateString('en-US', opts);
 		} catch {
 			return dateStr;
 		}
@@ -293,7 +295,7 @@
 			<!-- Event Info Header -->
 			<div class="text-center mb-6">
 				<h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">{eventData.title}</h1>
-				<p class="text-slate-500 text-sm">{formatDate(eventData.eventDate)}</p>
+				<p class="text-slate-500 text-sm">{formatDate(eventData.eventDate, eventData.timezone)}</p>
 				{#if eventData.location}
 					<p class="text-slate-500 text-sm">{eventData.location}</p>
 				{/if}

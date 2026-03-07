@@ -5,6 +5,7 @@
 	import { currentUser } from '$lib/stores/auth';
 	import { toast } from '$lib/stores/toast';
 	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
+	import { datetimeLocalToUTC } from '$lib/utils/dates';
 	import { getTimezoneOptions, getTimezoneLabel } from '$lib/utils/timezones';
 	import type { EventSeries } from '$lib/types';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
@@ -128,7 +129,7 @@
 			};
 			if (durationMinutes) body.durationMinutes = parseInt(durationMinutes);
 			if (endCondition === 'count' && maxOccurrences) body.maxOccurrences = parseInt(maxOccurrences);
-			if (endCondition === 'date' && recurrenceEnd) body.recurrenceEnd = new Date(recurrenceEnd + 'T23:59:59').toISOString();
+			if (endCondition === 'date' && recurrenceEnd) body.recurrenceEnd = datetimeLocalToUTC(recurrenceEnd + 'T23:59:59', timezone);
 			if (rsvpDeadlineOffsetHours) body.rsvpDeadlineOffsetHours = parseInt(rsvpDeadlineOffsetHours);
 			if (maxCapacity) body.maxCapacity = parseInt(maxCapacity);
 

@@ -11,6 +11,7 @@
 		eventDate: string;
 		eventLocation: string;
 		customData?: string;
+		timezone?: string;
 	}
 
 	let {
@@ -24,7 +25,8 @@
 		eventTitle,
 		eventDate,
 		eventLocation,
-		customData = '{}'
+		customData = '{}',
+		timezone
 	}: Props = $props();
 
 	const parsedCustomData = $derived.by(() => {
@@ -147,14 +149,16 @@
 		if (!dateStr) return '';
 		try {
 			const date = new Date(dateStr);
-			return date.toLocaleDateString('en-US', {
+			const opts: Intl.DateTimeFormatOptions = {
 				weekday: 'long',
 				year: 'numeric',
 				month: 'long',
 				day: 'numeric',
 				hour: 'numeric',
 				minute: '2-digit'
-			});
+			};
+			if (timezone) opts.timeZone = timezone;
+			return date.toLocaleDateString('en-US', opts);
 		} catch {
 			return dateStr;
 		}
