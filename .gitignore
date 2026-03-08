@@ -31,5 +31,8 @@ web/build/
 .DS_Store
 Thumbs.db
 
+# Claude
+.claude/
+
 # Temp
 tmp/
