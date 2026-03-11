@@ -30,6 +30,7 @@ func (s *Server) routes() *chi.Mux {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	r.Use(middleware.Compress(5, "text/html", "text/css", "application/javascript", "application/json", "image/svg+xml", "text/plain"))
 	r.Use(zerologMiddleware(s.logger))
 	r.Use(middleware.Recoverer)
 	// Only trust X-Forwarded-For / X-Real-IP when TRUSTED_PROXIES is
@@ -170,9 +171,10 @@ func (s *Server) mountStaticFiles(r *chi.Mux) {
 	if staticFS != nil {
 		fileServer := http.FileServer(http.FS(staticFS))
 
-		// Pre-read index.html for SPA fallback so we don't go through
-		// http.FileServer (which redirects /index.html to ./).
-		indexHTML, _ := fs.ReadFile(staticFS, "index.html")
+		// Pre-read the SPA fallback page (200.html) for client-side routing.
+		// This is separate from index.html so that prerendered pages
+		// (like the landing page) aren't overwritten by the SPA shell.
+		fallbackHTML, _ := fs.ReadFile(staticFS, "200.html")
 
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			// Try to serve the actual file first.
@@ -185,14 +187,21 @@ func (s *Server) mountStaticFiles(r *chi.Mux) {
 				info, statErr := f.Stat()
 				f.Close()
 				if statErr == nil && !info.IsDir() {
+					// Vite-hashed assets are safe to cache forever.
+					if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
+						w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					} else {
+						w.Header().Set("Cache-Control", "no-cache")
+					}
 					fileServer.ServeHTTP(w, r)
 					return
 				}
 			}
 			// SPA fallback: serve index.html directly for client-side routing.
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			w.Write(indexHTML)
+			w.Write(fallbackHTML)
 		})
 	} else {
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {

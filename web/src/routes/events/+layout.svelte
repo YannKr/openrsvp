@@ -11,6 +11,10 @@
 	let { children } = $props();
 </script>
 
-{#if $currentUser}
+{#if $isLoading}
+	<div class="flex items-center justify-center min-h-screen">
+		<div class="loading-spinner"></div>
+	</div>
+{:else if $currentUser}
 	{@render children()}
 {/if}

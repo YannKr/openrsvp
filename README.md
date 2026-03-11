@@ -400,6 +400,17 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ## 📝 Changelog
 
+### v1.4.1
+
+**Performance:**
+- Prerender landing page — full HTML delivered on first byte instead of blank SPA shell (19KB prerendered vs 1.2KB empty)
+- Remove auth-blocking spinner from public pages — landing, invite, and RSVP pages render instantly without waiting for `/auth/me`
+- Move auth loading gate to `/events` layout only, where it belongs
+- Add gzip compression middleware (level 5) for HTML, CSS, JS, JSON, and SVG responses
+- Add `Cache-Control` headers — `immutable` for Vite-hashed assets, `no-cache` for HTML to ensure safe updates
+- Add inline critical CSS and fallback meta tags to `app.html` for faster first paint and SEO
+- Enable SSR for prerenderable routes; separate SPA fallback (`200.html`) from prerendered `index.html`
+
 ### v1.4.0
 
 **Features:**

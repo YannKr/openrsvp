@@ -36,13 +36,7 @@
 </script>
 
 <div class="min-h-screen bg-slate-50">
-	{#if $isLoading}
-		<div class="flex items-center justify-center min-h-screen">
-			<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-		</div>
-	{:else}
-		{@render children()}
-	{/if}
+	{@render children()}
 
 	<!-- Toast container -->
 	{#if $toast.length > 0}
