@@ -16,6 +16,7 @@ A self-hosted, privacy-first alternative to Evite. Create beautiful event invita
 - 📊 **Email Tracking** — Delivery status, open tracking, and per-event email statistics
 - 🛡️ **Privacy by Design** — Data auto-deletes after a configurable retention period (default 30 days post-event)
 - 🤖 **Bot Protection** — Honeypot fields and IP-based rate limiting
+- 📈 **Instance Admin** — Aggregate dashboard for instance-wide statistics (events, guests, RSVP rates, notification health, feature adoption) — privacy-first, no individual tracking
 - 🏠 **Self-Hosted** — Single Docker container, you own your data
 - 🗄️ **SQLite or PostgreSQL** — SQLite by default, PostgreSQL for larger deployments
 
@@ -98,6 +99,7 @@ openrsvp/
 │   ├── notification/              # Email/SMS provider interface + implementations
 │   ├── scheduler/                 # Background jobs (reminders, cleanup)
 │   ├── security/                  # Rate limiting, honeypot, CSRF, sanitization
+│   ├── stats/                     # Instance admin statistics (aggregate-only)
 │   └── server/                    # HTTP server, router, embedded frontend
 ├── web/                           # SvelteKit frontend (Tailwind CSS)
 ├── Dockerfile                     # Multi-stage build
@@ -124,6 +126,7 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `FEEDBACK_EMAIL` | _(empty)_ | Email address to receive feedback (fallback) |
 | `TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of trusted reverse proxies (e.g. `10.0.0.0/8,172.16.0.0/12`). When set, `X-Forwarded-For` / `X-Real-IP` headers are trusted to determine client IP. When empty (default), only `RemoteAddr` is used, which prevents IP spoofing. **Set this when running behind a reverse proxy (Nginx, Caddy, etc.)** |
 | `MAX_COHOSTS_PER_EVENT` | `10` | Maximum number of co-hosts allowed per event |
+| `ADMIN_EMAILS` | _(empty)_ | Comma-separated list of instance admin emails (e.g. `admin@example.com,ops@example.com`). Admin status is synced on every page load — add or remove emails and changes take effect immediately without requiring re-login |
 
 ### 📧 Email Providers
 
@@ -280,6 +283,12 @@ All API endpoints are under `/api/v1`. The server also provides:
 | POST | `/api/v1/rsvp/event/:eventId/import/preview` | Preview CSV upload |
 | POST | `/api/v1/rsvp/event/:eventId/import` | Execute confirmed import |
 
+### 🔑 Instance Admin
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/stats` | Instance-wide aggregate statistics (admin only) |
+
 ### 📊 Email Tracking
 
 | Method | Path | Description |
@@ -399,6 +408,25 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.4.2
+
+**Features:**
+- Add instance admin dashboard with aggregate statistics — total events, guests, organizers, RSVP distribution, notification health, and feature adoption metrics
+- Add `ADMIN_EMAILS` env var for instance admin role — comma-separated list of admin email addresses, synced on every page load (no re-login required to grant or revoke)
+- Add `RequireAdmin` middleware — admin endpoints return 403 for non-admin users
+- Privacy by design: all statistics are aggregate-only (COUNT, AVG, SUM) — no individual user data or PII is ever returned
+
+**Backend:**
+- New `internal/stats/` package with model, store, service (5-minute in-memory cache), and handler
+- New database migration (000029): adds `is_admin` column to organizers table
+- `GET /api/v1/admin/stats` endpoint with auth + admin middleware
+- Admin status synced from `ADMIN_EMAILS` on session validation (not just login)
+
+**Frontend:**
+- New `/admin` dashboard page with metric cards, bar charts, notification health grid, and feature adoption breakdown
+- Conditional "Admin" link in navbar (visible only to admins)
+- Admin layout with auth + admin guard (redirects non-admins to /events)
 
 ### v1.4.1
 

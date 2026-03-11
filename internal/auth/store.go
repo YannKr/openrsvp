@@ -36,7 +36,7 @@ func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
 // FindOrganizerByEmail retrieves an organizer by their email address.
 func (s *Store) FindOrganizerByEmail(ctx context.Context, email string) (*Organizer, error) {
 	row := s.db.QueryRowContext(ctx,
-		"SELECT id, email, name, timezone, created_at, updated_at FROM organizers WHERE email = ?",
+		"SELECT id, email, name, timezone, is_admin, created_at, updated_at FROM organizers WHERE email = ?",
 		email,
 	)
 
@@ -55,7 +55,7 @@ func (s *Store) FindOrganizerByIDTx(ctx context.Context, tx *sql.Tx, id string) 
 
 func findOrganizerByID(ctx context.Context, exec executor, id string) (*Organizer, error) {
 	row := exec.QueryRowContext(ctx,
-		"SELECT id, email, name, timezone, created_at, updated_at FROM organizers WHERE id = ?",
+		"SELECT id, email, name, timezone, is_admin, created_at, updated_at FROM organizers WHERE id = ?",
 		id,
 	)
 
@@ -267,12 +267,24 @@ func (s *Store) DeleteExpiredMagicLinks(ctx context.Context) error {
 	return nil
 }
 
+// SetAdminStatus updates the is_admin flag for an organizer.
+func (s *Store) SetAdminStatus(ctx context.Context, id string, isAdmin bool) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE organizers SET is_admin = ? WHERE id = ?",
+		isAdmin, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set admin status: %w", err)
+	}
+	return nil
+}
+
 // scanOrganizer scans a single row into an Organizer.
 func scanOrganizer(row *sql.Row) (*Organizer, error) {
 	var o Organizer
 	var createdAt, updatedAt string
 
-	err := row.Scan(&o.ID, &o.Email, &o.Name, &o.Timezone, &createdAt, &updatedAt)
+	err := row.Scan(&o.ID, &o.Email, &o.Name, &o.Timezone, &o.IsAdmin, &createdAt, &updatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

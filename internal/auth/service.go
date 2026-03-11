@@ -177,6 +177,16 @@ func (s *Service) VerifyMagicLink(ctx context.Context, rawToken string) (*AuthRe
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
+	// Sync admin status from ADMIN_EMAILS env var on every login.
+	shouldBeAdmin := s.cfg.IsAdminEmail(organizer.Email)
+	if organizer.IsAdmin != shouldBeAdmin {
+		if err := s.store.SetAdminStatus(ctx, organizer.ID, shouldBeAdmin); err != nil {
+			s.logger.Error().Err(err).Str("organizer_id", organizer.ID).Msg("failed to sync admin status")
+		} else {
+			organizer.IsAdmin = shouldBeAdmin
+		}
+	}
+
 	return &AuthResponse{
 		Token:     sessionTokenHex,
 		Organizer: organizer,
@@ -206,6 +216,16 @@ func (s *Service) ValidateSession(ctx context.Context, rawToken string) (*Organi
 	organizer, err := s.store.FindOrganizerByID(ctx, session.OrganizerID)
 	if err != nil {
 		return nil, fmt.Errorf("find organizer: %w", err)
+	}
+
+	// Sync admin status on every session validation so that changes to
+	// ADMIN_EMAILS take effect without requiring re-login.
+	if shouldBeAdmin := s.cfg.IsAdminEmail(organizer.Email); organizer.IsAdmin != shouldBeAdmin {
+		if err := s.store.SetAdminStatus(ctx, organizer.ID, shouldBeAdmin); err != nil {
+			s.logger.Error().Err(err).Str("organizer_id", organizer.ID).Msg("failed to sync admin status")
+		} else {
+			organizer.IsAdmin = shouldBeAdmin
+		}
 	}
 
 	return organizer, nil

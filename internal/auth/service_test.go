@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -185,6 +187,89 @@ func TestLogout(t *testing.T) {
 	organizer, err := svc.ValidateSession(ctx, rawToken)
 	assert.ErrorIs(t, err, ErrSessionNotFound)
 	assert.Nil(t, organizer)
+}
+
+func TestVerifyMagicLinkSyncsAdminStatus(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	store := NewStore(db)
+	cfg := testutil.TestConfig()
+	cfg.AdminEmails = []string{"admin@example.com"}
+	svc := NewService(store, cfg, zerolog.Nop())
+	ctx := context.Background()
+
+	// Create organizer with admin email.
+	org, err := store.CreateOrganizer(ctx, "admin@example.com")
+	require.NoError(t, err)
+	assert.False(t, org.IsAdmin) // not admin yet
+
+	// Create magic link and verify.
+	rawToken := "1111111111111111111111111111111111111111111111111111111111111111"
+	tokenHash := testHash(rawToken)
+	expiresAt := time.Now().UTC().Add(15 * time.Minute)
+	err = store.CreateMagicLink(ctx, tokenHash, org.ID, expiresAt)
+	require.NoError(t, err)
+
+	resp, err := svc.VerifyMagicLink(ctx, rawToken)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Organizer.IsAdmin, "admin status should be synced on login")
+
+	// Verify in DB.
+	updated, err := store.FindOrganizerByID(ctx, org.ID)
+	require.NoError(t, err)
+	assert.True(t, updated.IsAdmin)
+}
+
+func TestVerifyMagicLinkRevokesAdmin(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	store := NewStore(db)
+	cfg := testutil.TestConfig()
+	cfg.AdminEmails = []string{} // no admins
+	svc := NewService(store, cfg, zerolog.Nop())
+	ctx := context.Background()
+
+	// Create organizer and manually set admin.
+	org, err := store.CreateOrganizer(ctx, "former-admin@example.com")
+	require.NoError(t, err)
+	err = store.SetAdminStatus(ctx, org.ID, true)
+	require.NoError(t, err)
+
+	// Create magic link and verify.
+	rawToken := "2222222222222222222222222222222222222222222222222222222222222222"
+	tokenHash := testHash(rawToken)
+	expiresAt := time.Now().UTC().Add(15 * time.Minute)
+	err = store.CreateMagicLink(ctx, tokenHash, org.ID, expiresAt)
+	require.NoError(t, err)
+
+	resp, err := svc.VerifyMagicLink(ctx, rawToken)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.False(t, resp.Organizer.IsAdmin, "admin status should be revoked when email removed from ADMIN_EMAILS")
+}
+
+func TestRequireAdminMiddleware(t *testing.T) {
+	// Non-admin gets 403.
+	org := &Organizer{ID: "test-id", Email: "user@test.com", IsAdmin: false}
+	ctx := ContextWithOrganizer(context.Background(), org)
+
+	handler := RequireAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/admin/stats", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+
+	// Admin gets 200.
+	adminOrg := &Organizer{ID: "admin-id", Email: "admin@test.com", IsAdmin: true}
+	ctx = ContextWithOrganizer(context.Background(), adminOrg)
+	req = httptest.NewRequest("GET", "/admin/stats", nil)
+	req = req.WithContext(ctx)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestUpdateProfile(t *testing.T) {

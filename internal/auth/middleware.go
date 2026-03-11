@@ -45,3 +45,18 @@ func OrganizerFromContext(ctx context.Context) *Organizer {
 	organizer, _ := ctx.Value(organizerContextKey).(*Organizer)
 	return organizer
 }
+
+// RequireAdmin returns middleware that checks the organizer in context is an
+// instance admin. Must be chained after RequireAuth.
+func RequireAdmin() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			organizer := OrganizerFromContext(r.Context())
+			if organizer == nil || !organizer.IsAdmin {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentUser } from '$lib/stores/auth';
+	import { currentUser, isAdmin } from '$lib/stores/auth';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let mobileMenuOpen = $state(false);
@@ -24,6 +24,14 @@
 					>
 						Create Event
 					</a>
+					{#if $isAdmin}
+						<a
+							href="/admin"
+							class="px-3 py-2 rounded-lg text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors"
+						>
+							Admin
+						</a>
+					{/if}
 				</div>
 			</div>
 
@@ -81,6 +89,14 @@
 				>
 					Create Event
 				</a>
+				{#if $isAdmin}
+					<a
+						href="/admin"
+						class="block px-3 py-2 rounded-lg text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+					>
+						Admin
+					</a>
+				{/if}
 			</div>
 			<div class="border-t border-slate-200 px-4 py-3">
 				{#if $currentUser}

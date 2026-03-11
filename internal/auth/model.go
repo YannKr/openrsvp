@@ -8,6 +8,7 @@ type Organizer struct {
 	Email     string    `json:"email"`
 	Name      string    `json:"name"`
 	Timezone  string    `json:"timezone"`
+	IsAdmin   bool      `json:"isAdmin"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

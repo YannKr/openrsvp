@@ -27,6 +27,7 @@ import (
 	"github.com/yannkr/openrsvp/internal/rsvp"
 	"github.com/yannkr/openrsvp/internal/scheduler"
 	"github.com/yannkr/openrsvp/internal/security"
+	"github.com/yannkr/openrsvp/internal/stats"
 	"github.com/yannkr/openrsvp/internal/webhook"
 )
 
@@ -49,6 +50,7 @@ type Server struct {
 	webhookHandler  *webhook.Handler
 	notifHandler    *notification.Handler
 	notifService    *notification.Service
+	statsHandler    *stats.Handler
 	scheduler       *scheduler.Scheduler
 	securityMw      *security.Middleware
 	uploadsDir      string
@@ -887,6 +889,12 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 	seriesJob := scheduler.NewSeriesGeneratorJob(seriesService, logger)
 	sched.Register(seriesJob)
 
+	// Wire up admin stats layer.
+	statsStore := stats.NewStore(db)
+	statsService := stats.NewService(statsStore, logger)
+	adminMiddleware := auth.RequireAdmin()
+	statsHandler := stats.NewHandler(statsService, authMiddleware, adminMiddleware, logger)
+
 	s := &Server{
 		cfg:             cfg,
 		db:              db,
@@ -904,6 +912,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		webhookHandler:  webhookHandler,
 		notifHandler:    notifHandler,
 		notifService:    notifService,
+		statsHandler:    statsHandler,
 		scheduler:       sched,
 		securityMw:      secMw,
 		uploadsDir:      uploadsDir,

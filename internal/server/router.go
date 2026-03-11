@@ -120,6 +120,7 @@ func (s *Server) routes() *chi.Mux {
 		api.Mount("/comments", s.commentHandler.Routes())
 		api.Mount("/webhooks", s.webhookHandler.Routes())
 		api.Mount("/notifications", s.notifHandler.Routes())
+		api.Mount("/admin", s.statsHandler.Routes())
 	})
 
 	// --- Static files / SPA fallback ---

@@ -69,6 +69,9 @@ type Config struct {
 	// Email Tracking
 	EmailOpenTrackingEnabled  bool
 	EmailClickTrackingEnabled bool
+
+	// Admin
+	AdminEmails []string
 }
 
 // Load reads environment variables (optionally from .env) and returns a Config.
@@ -189,7 +192,28 @@ func Load() (*Config, error) {
 		EmailClickTrackingEnabled: getEnv("EMAIL_CLICK_TRACKING_ENABLED", "false") == "true",
 	}
 
+	// Parse ADMIN_EMAILS (comma-separated list of admin email addresses).
+	if raw := getEnv("ADMIN_EMAILS", ""); raw != "" {
+		for _, email := range strings.Split(raw, ",") {
+			email = strings.TrimSpace(strings.ToLower(email))
+			if email != "" {
+				cfg.AdminEmails = append(cfg.AdminEmails, email)
+			}
+		}
+	}
+
 	return cfg, nil
+}
+
+// IsAdminEmail returns true if the given email is in the ADMIN_EMAILS list.
+func (c *Config) IsAdminEmail(email string) bool {
+	email = strings.ToLower(email)
+	for _, ae := range c.AdminEmails {
+		if ae == email {
+			return true
+		}
+	}
+	return false
 }
 
 // IsDevelopment returns true if the environment is development.

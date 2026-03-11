@@ -3,6 +3,7 @@ export interface Organizer {
 	email: string;
 	name: string;
 	timezone: string;
+	isAdmin: boolean;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -286,6 +287,46 @@ export interface EmailStats {
 	complained: number;
 	failed: number;
 	pending: number;
+}
+
+export interface InstanceStats {
+	events: {
+		total: number;
+		draft: number;
+		published: number;
+		cancelled: number;
+		archived: number;
+	};
+	attendees: {
+		total: number;
+		totalHeadcount: number;
+		attending: number;
+		maybe: number;
+		declined: number;
+		pending: number;
+		waitlisted: number;
+		avgPerEvent: number;
+	};
+	organizers: {
+		total: number;
+	};
+	features: {
+		waitlistEvents: number;
+		commentsEnabledEvents: number;
+		cohostedEvents: number;
+		eventsWithQuestions: number;
+		eventsWithCapacity: number;
+		seriesEvents: number;
+	};
+	notifications: {
+		total: number;
+		sent: number;
+		failed: number;
+		delivered: number;
+		opened: number;
+		bounced: number;
+		complained: number;
+	};
 }
 
 export interface NotificationLogEntry {
