@@ -43,6 +43,17 @@ func RunMigrations(db DB) error {
 		return fmt.Errorf("migrate instance: %w", err)
 	}
 
+	// Recover from dirty migration state. When a previous migration was
+	// interrupted the schema_migrations table is left with dirty=true,
+	// which causes Up() to refuse to proceed. Force the current version
+	// to clear the dirty flag so the migration can be retried.
+	version, dirty, verr := m.Version()
+	if verr == nil && dirty {
+		if ferr := m.Force(int(version)); ferr != nil {
+			return fmt.Errorf("force dirty version %d: %w", version, ferr)
+		}
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate up: %w", err)
 	}
