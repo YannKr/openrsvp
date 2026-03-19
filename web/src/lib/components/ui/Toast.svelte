@@ -2,10 +2,10 @@
 	import { toast } from '$lib/stores/toast';
 
 	const typeClasses: Record<string, string> = {
-		success: 'bg-green-600',
-		error: 'bg-red-600',
-		info: 'bg-blue-600',
-		warning: 'bg-yellow-600'
+		success: 'bg-success',
+		error: 'bg-error',
+		info: 'bg-info',
+		warning: 'bg-warning'
 	};
 
 	const typeIcons: Record<string, string> = {
@@ -20,7 +20,7 @@
 	<div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
 		{#each $toast as t (t.id)}
 			<div
-				class="px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm {typeClasses[t.type]}"
+				class="px-4 py-3 rounded-md shadow-lg text-white text-sm max-w-sm {typeClasses[t.type]}"
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="flex items-center gap-2">

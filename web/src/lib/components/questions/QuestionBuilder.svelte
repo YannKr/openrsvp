@@ -203,11 +203,11 @@
 </script>
 
 <div class="mt-8">
-	<h2 class="text-lg font-semibold text-slate-900 mb-4">Custom RSVP Questions</h2>
+	<h2 class="text-lg font-display font-semibold text-neutral-900 mb-4">Custom RSVP Questions</h2>
 
 	{#if loading}
 		<div class="flex items-center justify-center py-8">
-			<Spinner size="md" class="text-indigo-500" />
+			<Spinner size="md" class="text-primary" />
 		</div>
 	{:else}
 		<!-- Existing questions -->
@@ -216,7 +216,7 @@
 				{#each questions as question, index (question.id)}
 					{#if editingId === question.id}
 						<!-- Inline edit mode -->
-						<div class="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-4">
+						<div class="bg-neutral-50 rounded-md border border-neutral-200 p-4 space-y-4">
 							<Input
 								label="Question Label"
 								name="edit-question-label"
@@ -234,7 +234,7 @@
 
 							{#if editType === 'select' || editType === 'checkbox'}
 								<div>
-									<span class="block text-sm font-medium text-slate-700 mb-2">Options</span>
+									<span class="block text-sm font-medium text-neutral-700 mb-2">Options</span>
 									<div class="space-y-2">
 										{#each editOptions as option, optIndex}
 											<div class="flex items-center gap-2">
@@ -243,13 +243,13 @@
 													value={option}
 													oninput={(e) => updateEditOption(optIndex, (e.target as HTMLInputElement).value)}
 													placeholder="Option {optIndex + 1}"
-													class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+													class="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
 												/>
 												{#if editOptions.length > 1}
 													<button
 														type="button"
 														onclick={() => removeEditOption(optIndex)}
-														class="text-slate-400 hover:text-red-500 transition-colors p-1"
+														class="text-neutral-400 hover:text-error transition-colors duration-short ease-out p-1"
 														aria-label="Remove option"
 													>
 														<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -263,7 +263,7 @@
 									<button
 										type="button"
 										onclick={addEditOption}
-										class="mt-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+										class="mt-2 text-sm text-primary hover:text-primary-hover font-medium"
 									>
 										+ Add option
 									</button>
@@ -274,9 +274,9 @@
 								<input
 									type="checkbox"
 									bind:checked={editRequired}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Required</span>
+								<span class="text-sm text-neutral-700">Required</span>
 							</label>
 
 							<div class="flex items-center justify-end gap-2 pt-2">
@@ -286,18 +286,18 @@
 						</div>
 					{:else}
 						<!-- Display mode -->
-						<div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+						<div class="bg-neutral-50 rounded-md border border-neutral-200 p-4">
 							<div class="flex items-start justify-between">
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center gap-2 mb-1">
-										<p class="text-sm font-medium text-slate-900">{question.label}</p>
+										<p class="text-sm font-medium text-neutral-900">{question.label}</p>
 										{#if question.required}
 											<Badge variant="info">Required</Badge>
 										{/if}
 									</div>
-									<p class="text-xs text-slate-500">{typeLabel(question.type)}</p>
+									<p class="text-xs text-neutral-500">{typeLabel(question.type)}</p>
 									{#if question.options && question.options.length > 0}
-										<p class="text-xs text-slate-400 mt-1">
+										<p class="text-xs text-neutral-400 mt-1">
 											Options: {question.options.join(', ')}
 										</p>
 									{/if}
@@ -307,7 +307,7 @@
 										type="button"
 										onclick={() => moveQuestion(index, 'up')}
 										disabled={index === 0}
-										class="p-1 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+										class="p-1 text-neutral-400 hover:text-neutral-600 transition-colors duration-short ease-out disabled:opacity-30 disabled:cursor-not-allowed"
 										aria-label="Move up"
 									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -318,7 +318,7 @@
 										type="button"
 										onclick={() => moveQuestion(index, 'down')}
 										disabled={index === questions.length - 1}
-										class="p-1 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+										class="p-1 text-neutral-400 hover:text-neutral-600 transition-colors duration-short ease-out disabled:opacity-30 disabled:cursor-not-allowed"
 										aria-label="Move down"
 									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -327,7 +327,7 @@
 									</button>
 									<Button size="sm" variant="ghost" onclick={() => startEdit(question)}>Edit</Button>
 									<Button size="sm" variant="ghost" onclick={() => deleteQuestion(question.id)}>
-										<span class="text-red-500">Delete</span>
+										<span class="text-error">Delete</span>
 									</Button>
 								</div>
 							</div>
@@ -339,8 +339,8 @@
 
 		<!-- Add question form -->
 		{#if !atLimit}
-			<div class="border border-dashed border-slate-300 rounded-lg p-4 space-y-4">
-				<p class="text-sm font-medium text-slate-700">Add a Question</p>
+			<div class="border border-dashed border-neutral-300 rounded-md p-4 space-y-4">
+				<p class="text-sm font-medium text-neutral-700">Add a Question</p>
 
 				<Input
 					label="Question Label"
@@ -359,7 +359,7 @@
 
 				{#if newType === 'select' || newType === 'checkbox'}
 					<div>
-						<span class="block text-sm font-medium text-slate-700 mb-2">Options</span>
+						<span class="block text-sm font-medium text-neutral-700 mb-2">Options</span>
 						<div class="space-y-2">
 							{#each newOptions as option, optIndex}
 								<div class="flex items-center gap-2">
@@ -368,13 +368,13 @@
 										value={option}
 										oninput={(e) => updateOption(optIndex, (e.target as HTMLInputElement).value)}
 										placeholder="Option {optIndex + 1}"
-										class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+										class="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
 									/>
 									{#if newOptions.length > 1}
 										<button
 											type="button"
 											onclick={() => removeOption(optIndex)}
-											class="text-slate-400 hover:text-red-500 transition-colors p-1"
+											class="text-neutral-400 hover:text-error transition-colors duration-short ease-out p-1"
 											aria-label="Remove option"
 										>
 											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -388,7 +388,7 @@
 						<button
 							type="button"
 							onclick={addOption}
-							class="mt-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+							class="mt-2 text-sm text-primary hover:text-primary-hover font-medium"
 						>
 							+ Add option
 						</button>
@@ -399,9 +399,9 @@
 					<input
 						type="checkbox"
 						bind:checked={newRequired}
-						class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+						class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 					/>
-					<span class="text-sm text-slate-700">Required</span>
+					<span class="text-sm text-neutral-700">Required</span>
 				</label>
 
 				<div class="flex justify-end">
@@ -409,11 +409,11 @@
 				</div>
 			</div>
 		{:else}
-			<p class="text-xs text-slate-400 text-center py-2">Maximum of 10 questions reached.</p>
+			<p class="text-xs text-neutral-400 text-center py-2">Maximum of 10 questions reached.</p>
 		{/if}
 
 		{#if questions.length > 0}
-			<p class="text-xs text-slate-400 mt-3">{questions.length} / 10 questions</p>
+			<p class="text-xs text-neutral-400 mt-3">{questions.length} / 10 questions</p>
 		{/if}
 	{/if}
 </div>

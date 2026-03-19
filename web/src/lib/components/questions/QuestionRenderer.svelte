@@ -48,10 +48,10 @@
 		{#each questions as question (question.id)}
 			<div>
 				{#if question.type === 'text'}
-					<label for="question-{question.id}" class="block text-sm font-medium text-slate-700 mb-1.5">
+					<label for="question-{question.id}" class="block text-sm font-medium text-neutral-700 mb-1.5">
 						{question.label}
 						{#if question.required}
-							<span class="text-red-500">*</span>
+							<span class="text-error">*</span>
 						{/if}
 					</label>
 					<input
@@ -62,14 +62,14 @@
 						maxlength={1000}
 						required={question.required}
 						placeholder="Your answer"
-						class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-colors"
+						class="w-full rounded-md border border-neutral-300 px-4 py-2.5 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors duration-short ease-out"
 					/>
 				{:else if question.type === 'select'}
 					<fieldset>
-						<legend class="block text-sm font-medium text-slate-700 mb-1.5">
+						<legend class="block text-sm font-medium text-neutral-700 mb-1.5">
 							{question.label}
 							{#if question.required}
-								<span class="text-red-500">*</span>
+								<span class="text-error">*</span>
 							{/if}
 						</legend>
 						<div class="space-y-2 mt-1">
@@ -82,19 +82,19 @@
 										checked={answers[question.id] === option}
 										onchange={() => handleRadioChange(question.id, option)}
 										required={question.required}
-										class="border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+										class="border-neutral-300 text-primary focus:ring-primary/40"
 									/>
-									<span class="text-sm text-slate-700">{option}</span>
+									<span class="text-sm text-neutral-700">{option}</span>
 								</label>
 							{/each}
 						</div>
 					</fieldset>
 				{:else if question.type === 'checkbox'}
 					<fieldset>
-						<legend class="block text-sm font-medium text-slate-700 mb-1.5">
+						<legend class="block text-sm font-medium text-neutral-700 mb-1.5">
 							{question.label}
 							{#if question.required}
-								<span class="text-red-500">*</span>
+								<span class="text-error">*</span>
 							{/if}
 						</legend>
 						<div class="space-y-2 mt-1">
@@ -104,9 +104,9 @@
 										type="checkbox"
 										checked={isCheckboxChecked(question.id, option)}
 										onchange={(e) => handleCheckboxChange(question.id, option, (e.target as HTMLInputElement).checked)}
-										class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+										class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 									/>
-									<span class="text-sm text-slate-700">{option}</span>
+									<span class="text-sm text-neutral-700">{option}</span>
 								</label>
 							{/each}
 						</div>

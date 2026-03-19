@@ -41,20 +41,20 @@
 
 <div class="min-h-screen flex items-center justify-center px-4">
 	<div class="w-full max-w-md text-center">
-		<a href="/" class="text-2xl font-bold text-indigo-600">OpenRSVP</a>
+		<a href="/" class="text-2xl font-bold text-primary">OpenRSVP</a>
 
 		{#if verifying}
-			<h1 class="mt-4 text-2xl font-semibold text-slate-900">Verifying your login</h1>
+			<h1 class="font-display mt-4 text-2xl font-semibold text-neutral-900">Verifying your login</h1>
 			<div class="mt-6 flex flex-col items-center">
-				<Spinner size="md" class="text-indigo-500" />
-				<p class="mt-4 text-slate-600">Please wait while we verify your magic link...</p>
+				<Spinner size="md" class="text-primary" />
+				<p class="mt-4 text-neutral-600">Please wait while we verify your magic link...</p>
 			</div>
 		{:else if error}
 			<div class="mt-6">
 				<div
-					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4"
+					class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-error-light mb-4"
 				>
-					<svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg class="h-6 w-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -63,8 +63,8 @@
 						/>
 					</svg>
 				</div>
-				<h2 class="text-lg font-semibold text-slate-900 mb-2">Verification failed</h2>
-				<p class="text-sm text-slate-600 mb-6">{error}</p>
+				<h2 class="font-display text-lg font-semibold text-neutral-900 mb-2">Verification failed</h2>
+				<p class="text-sm text-neutral-600 mb-6">{error}</p>
 				<Button href="/auth/login">Try again</Button>
 			</div>
 		{/if}

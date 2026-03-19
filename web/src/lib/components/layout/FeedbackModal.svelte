@@ -32,7 +32,7 @@
 <button
 	type="button"
 	onclick={() => (open = true)}
-	class="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+	class="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-primary-hover transition-colors duration-short ease-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
 	aria-label="Send feedback"
 >
 	<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -44,11 +44,11 @@
 	<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 		<div class="space-y-4">
 			<div>
-				<label for="feedback-type" class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+				<label for="feedback-type" class="block text-sm font-medium text-neutral-700 mb-1">Type</label>
 				<select
 					id="feedback-type"
 					bind:value={feedbackType}
-					class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+					class="block w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
 				>
 					<option value="bug">Bug Report</option>
 					<option value="feature">Feature Request</option>
@@ -57,7 +57,7 @@
 			</div>
 
 			<div>
-				<label for="feedback-message" class="block text-sm font-medium text-slate-700 mb-1">Message</label>
+				<label for="feedback-message" class="block text-sm font-medium text-neutral-700 mb-1">Message</label>
 				<textarea
 					id="feedback-message"
 					bind:value={message}
@@ -65,18 +65,18 @@
 					maxlength="2000"
 					required
 					placeholder="Describe your feedback..."
-					class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+					class="block w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm placeholder:text-neutral-400 focus:border-primary focus:ring-1 focus:ring-primary"
 				></textarea>
-				<p class="mt-1 text-xs text-slate-500">{message.length}/2000</p>
+				<p class="mt-1 text-xs text-neutral-500">{message.length}/2000</p>
 			</div>
 
 			<label class="flex items-start gap-3 cursor-pointer">
 				<input
 					type="checkbox"
 					bind:checked={allowFollowUp}
-					class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+					class="mt-0.5 rounded border-neutral-300 text-primary focus:ring-primary/40"
 				/>
-				<span class="text-sm text-slate-600">You can follow up with me about this feedback</span>
+				<span class="text-sm text-neutral-600">You can follow up with me about this feedback</span>
 			</label>
 		</div>
 
@@ -84,14 +84,14 @@
 			<button
 				type="button"
 				onclick={() => (open = false)}
-				class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+				class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors duration-short ease-out"
 			>
 				Cancel
 			</button>
 			<button
 				type="submit"
 				disabled={submitting || !message.trim()}
-				class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+				class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-short ease-out"
 			>
 				{submitting ? 'Submitting...' : 'Submit'}
 			</button>

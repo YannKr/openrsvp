@@ -200,11 +200,11 @@
 <AppShell>
 	{#if loading}
 		<div class="flex items-center justify-center py-16">
-			<Spinner size="lg" class="text-indigo-500" />
+			<Spinner size="lg" class="text-primary" />
 		</div>
 	{:else if series}
 		<div class="mb-6 flex items-center justify-between">
-			<a href="/events/series" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to series</a>
+			<a href="/events/series" class="text-sm text-primary hover:text-primary-hover">&larr; Back to series</a>
 			<div class="flex items-center gap-2">
 				{#if !editing}
 					<Button variant="outline" size="sm" onclick={startEdit}>Edit</Button>
@@ -223,7 +223,7 @@
 					onsubmit={(e) => { e.preventDefault(); saveEdit(); }}
 					class="space-y-6"
 				>
-					<h2 class="text-lg font-semibold text-slate-900">Edit Series</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Edit Series</h2>
 
 					<Input
 						label="Title"
@@ -257,8 +257,8 @@
 
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<div class="space-y-1">
-							<label for="editEventTime" class="block text-sm font-medium text-slate-700">
-								Event Time <span class="text-red-500">*</span>
+							<label for="editEventTime" class="block text-sm font-medium text-neutral-700">
+								Event Time <span class="text-error">*</span>
 							</label>
 							<input
 								id="editEventTime"
@@ -266,11 +266,11 @@
 								bind:value={editEventTime}
 								required
 								class="block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 {editErrors.eventTime
-									? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
-									: 'border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500'}"
+									? 'border-error text-error focus:border-error focus:ring-error'
+									: 'border-neutral-300 text-neutral-900 focus:border-primary focus:ring-primary'}"
 							/>
 							{#if editErrors.eventTime}
-								<p class="text-sm text-red-600">{editErrors.eventTime}</p>
+								<p class="text-sm text-error">{editErrors.eventTime}</p>
 							{/if}
 						</div>
 						<Input
@@ -290,23 +290,23 @@
 					/>
 
 					<fieldset class="pt-2">
-						<legend class="text-sm font-medium text-slate-700 mb-3">Guest Visibility</legend>
+						<legend class="text-sm font-medium text-neutral-700 mb-3">Guest Visibility</legend>
 						<div class="space-y-2">
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={editShowHeadcount}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show attendance count</span>
+								<span class="text-sm text-neutral-700">Show attendance count</span>
 							</label>
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={editShowGuestList}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show guest names</span>
+								<span class="text-sm text-neutral-700">Show guest names</span>
 							</label>
 						</div>
 					</fieldset>
@@ -328,7 +328,7 @@
 						/>
 					</div>
 
-					<div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+					<div class="flex items-center justify-end gap-2 border-t border-neutral-200 pt-4">
 						<Button variant="outline" onclick={cancelEdit}>Cancel</Button>
 						<Button type="submit" loading={saving}>Save Changes</Button>
 					</div>
@@ -339,12 +339,12 @@
 			<Card class="mb-6">
 				<div class="flex items-start justify-between">
 					<div>
-						<h1 class="text-2xl font-bold text-slate-900">{series.title}</h1>
-						<p class="mt-2 text-sm text-slate-600">
+						<h1 class="text-2xl font-bold font-display text-neutral-900">{series.title}</h1>
+						<p class="mt-2 text-sm text-neutral-600">
 							{recurrenceLabels[series.recurrenceRule] || series.recurrenceRule} at {series.eventTime}
 						</p>
 						{#if series.location}
-							<p class="mt-1 text-sm text-slate-500 flex items-center gap-1">
+							<p class="mt-1 text-sm text-neutral-500 flex items-center gap-1">
 								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -353,47 +353,47 @@
 							</p>
 						{/if}
 						{#if series.description}
-							<p class="mt-3 text-sm text-slate-700 whitespace-pre-wrap">{series.description}</p>
+							<p class="mt-3 text-sm text-neutral-700 whitespace-pre-wrap">{series.description}</p>
 						{/if}
 					</div>
 					<Badge variant={statusVariant(series.seriesStatus)}>
 						{series.seriesStatus}
 					</Badge>
 				</div>
-				<div class="mt-4 pt-4 border-t border-slate-200">
+				<div class="mt-4 pt-4 border-t border-neutral-200">
 					<dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
 						<div>
-							<dt class="text-slate-500">Timezone</dt>
-							<dd class="font-medium text-slate-900">{getTimezoneLabel(series.timezone)}</dd>
+							<dt class="text-neutral-500">Timezone</dt>
+							<dd class="font-medium text-neutral-900">{getTimezoneLabel(series.timezone)}</dd>
 						</div>
 						{#if series.durationMinutes}
 							<div>
-								<dt class="text-slate-500">Duration</dt>
-								<dd class="font-medium text-slate-900">{series.durationMinutes} min</dd>
+								<dt class="text-neutral-500">Duration</dt>
+								<dd class="font-medium text-neutral-900">{series.durationMinutes} min</dd>
 							</div>
 						{/if}
 						{#if series.maxOccurrences}
 							<div>
-								<dt class="text-slate-500">Max Occurrences</dt>
-								<dd class="font-medium text-slate-900">{series.maxOccurrences}</dd>
+								<dt class="text-neutral-500">Max Occurrences</dt>
+								<dd class="font-medium text-neutral-900">{series.maxOccurrences}</dd>
 							</div>
 						{/if}
 						{#if series.recurrenceEnd}
 							<div>
-								<dt class="text-slate-500">Ends</dt>
-								<dd class="font-medium text-slate-900">{formatDateTime(series.recurrenceEnd, series.timezone)}</dd>
+								<dt class="text-neutral-500">Ends</dt>
+								<dd class="font-medium text-neutral-900">{formatDateTime(series.recurrenceEnd, series.timezone)}</dd>
 							</div>
 						{/if}
 						{#if series.maxCapacity}
 							<div>
-								<dt class="text-slate-500">Max Capacity</dt>
-								<dd class="font-medium text-slate-900">{series.maxCapacity} per occurrence</dd>
+								<dt class="text-neutral-500">Max Capacity</dt>
+								<dd class="font-medium text-neutral-900">{series.maxCapacity} per occurrence</dd>
 							</div>
 						{/if}
 						{#if series.rsvpDeadlineOffsetHours}
 							<div>
-								<dt class="text-slate-500">RSVP Closes</dt>
-								<dd class="font-medium text-slate-900">{series.rsvpDeadlineOffsetHours}h before event</dd>
+								<dt class="text-neutral-500">RSVP Closes</dt>
+								<dd class="font-medium text-neutral-900">{series.rsvpDeadlineOffsetHours}h before event</dd>
 							</div>
 						{/if}
 					</dl>
@@ -404,32 +404,32 @@
 		<!-- Occurrences list -->
 		<Card>
 			{#snippet header()}
-				<h2 class="text-lg font-semibold text-slate-900">Occurrences ({occurrences.length})</h2>
+				<h2 class="text-lg font-semibold font-display text-neutral-900">Occurrences ({occurrences.length})</h2>
 			{/snippet}
 
 			{#if occurrences.length === 0}
-				<p class="text-sm text-slate-500 text-center py-8">
+				<p class="text-sm text-neutral-500 text-center py-8">
 					No occurrences generated yet. They will appear here as they are created.
 				</p>
 			{:else}
-				<div class="divide-y divide-slate-200 -mx-6 -mb-4">
+				<div class="divide-y divide-neutral-200 -mx-6 -mb-4">
 					{#each occurrences as occurrence (occurrence.id)}
 						<a
 							href="/events/{occurrence.id}"
-							class="block px-6 py-4 hover:bg-slate-50 transition-colors {isInPast(occurrence.eventDate) ? 'opacity-50' : ''}"
+							class="block px-6 py-4 hover:bg-neutral-50 transition-colors {isInPast(occurrence.eventDate) ? 'opacity-50' : ''}"
 						>
 							<div class="flex items-center justify-between">
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center gap-2">
-										<p class="text-sm font-medium text-slate-900 truncate">{occurrence.title}</p>
+										<p class="text-sm font-medium text-neutral-900 truncate">{occurrence.title}</p>
 										{#if occurrence.seriesOverride}
 											<Badge variant="warning">Modified</Badge>
 										{/if}
 									</div>
-									<p class="mt-0.5 text-xs text-slate-500">
+									<p class="mt-0.5 text-xs text-neutral-500">
 										{formatDateTime(occurrence.eventDate, series.timezone)}
 										{#if occurrence.seriesIndex != null}
-											<span class="text-slate-400 ml-2">#{occurrence.seriesIndex}</span>
+											<span class="text-neutral-400 ml-2">#{occurrence.seriesIndex}</span>
 										{/if}
 									</p>
 								</div>
@@ -443,7 +443,7 @@
 
 		<!-- Stop Series Modal -->
 		<Modal bind:open={showStopModal} title="Stop Series">
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-neutral-600">
 				Are you sure you want to stop <strong>{series.title}</strong>? No new occurrences will be generated, but existing occurrences will remain.
 			</p>
 			{#snippet actions()}
@@ -454,7 +454,7 @@
 
 		<!-- Delete Series Modal -->
 		<Modal bind:open={showDeleteModal} title="Delete Series">
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-neutral-600">
 				Are you sure you want to delete <strong>{series.title}</strong>? The series will be removed, but existing events will remain as standalone events.
 			</p>
 			{#snippet actions()}
@@ -464,7 +464,7 @@
 		</Modal>
 	{:else}
 		<Card>
-			<p class="text-center text-slate-500 py-8">Series not found.</p>
+			<p class="text-center text-neutral-500 py-8">Series not found.</p>
 		</Card>
 	{/if}
 </AppShell>

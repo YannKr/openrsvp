@@ -55,7 +55,7 @@
 		onclick={() => (open = !open)}
 		aria-expanded={open}
 		aria-haspopup="true"
-		class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-colors"
+		class="inline-flex items-center gap-2 rounded-md border border-neutral-300 bg-surface px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors duration-short ease-out"
 	>
 		<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 			<path
@@ -68,7 +68,7 @@
 	</button>
 	{#if open}
 		<div
-			class="absolute left-0 z-10 mt-1 w-56 rounded-lg bg-white shadow-lg border border-slate-200 py-1"
+			class="absolute left-0 z-10 mt-1 w-56 rounded-md bg-surface shadow-lg border border-neutral-200 py-1"
 			role="menu"
 			aria-label="Calendar options"
 		>
@@ -77,9 +77,9 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				role="menuitem"
-				class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+				class="flex items-center gap-3 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none"
 			>
-				<svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+				<svg class="h-4 w-4 text-neutral-400" viewBox="0 0 24 24" fill="currentColor">
 					<path
 						d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
 					/>
@@ -90,9 +90,9 @@
 				href={icsUrl}
 				download
 				role="menuitem"
-				class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+				class="flex items-center gap-3 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none"
 			>
-				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<svg class="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
@@ -105,9 +105,9 @@
 				href={icsUrl}
 				download
 				role="menuitem"
-				class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+				class="flex items-center gap-3 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none"
 			>
-				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<svg class="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"

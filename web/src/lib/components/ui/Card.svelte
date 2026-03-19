@@ -10,9 +10,9 @@
 	let { class: className = '', children, header }: Props = $props();
 </script>
 
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 {className}">
+<div class="bg-surface rounded-lg shadow-sm border border-neutral-200 transition-all duration-short ease-out hover:-translate-y-0.5 hover:shadow-md {className}">
 	{#if header}
-		<div class="border-b border-slate-200 px-6 py-4">
+		<div class="border-b border-neutral-200 px-6 py-4">
 			{@render header()}
 		</div>
 	{/if}

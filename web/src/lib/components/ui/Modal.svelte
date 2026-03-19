@@ -41,14 +41,14 @@
 		></button>
 
 		<!-- Panel -->
-		<div class="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+		<div class="relative bg-surface rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
 			{#if title}
-				<div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-					<h2 class="text-lg font-semibold text-slate-900">{title}</h2>
+				<div class="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
+					<h2 class="text-lg font-display font-semibold text-neutral-900">{title}</h2>
 					<button
 						type="button"
 						onclick={() => (open = false)}
-						class="text-slate-400 hover:text-slate-600 transition-colors"
+						class="text-neutral-400 hover:text-neutral-600 transition-colors duration-short ease-out"
 						aria-label="Close"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -68,7 +68,7 @@
 			</div>
 
 			{#if actions}
-				<div class="border-t border-slate-200 px-6 py-4 flex justify-end gap-3">
+				<div class="border-t border-neutral-200 px-6 py-4 flex justify-end gap-3">
 					{@render actions()}
 				</div>
 			{/if}

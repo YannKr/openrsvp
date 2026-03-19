@@ -175,7 +175,7 @@
 
 <AppShell>
 	<div class="mb-6">
-		<a href="/events/{eventId}" class="text-sm text-indigo-600 hover:text-indigo-500 font-medium">
+		<a href="/events/{eventId}" class="text-sm text-primary hover:text-primary-hover font-medium">
 			&larr; Back to event
 		</a>
 	</div>
@@ -189,10 +189,10 @@
 						<span
 							class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium
 								{stepNumber > s.num
-									? 'bg-indigo-600 text-white'
+									? 'bg-primary text-white'
 									: stepNumber === s.num
-										? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-600'
-										: 'bg-slate-100 text-slate-400'}"
+										? 'bg-primary-lighter text-primary ring-2 ring-primary'
+										: 'bg-neutral-100 text-neutral-400'}"
 						>
 							{#if stepNumber > s.num}
 								<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -203,14 +203,14 @@
 							{/if}
 						</span>
 						<span
-							class="font-medium {stepNumber >= s.num ? 'text-slate-900' : 'text-slate-400'}"
+							class="font-medium {stepNumber >= s.num ? 'text-neutral-900' : 'text-neutral-400'}"
 						>
 							{s.label}
 						</span>
 					</li>
 					{#if s.num < 4}
 						<li class="flex-1 mx-1">
-							<div class="h-px {stepNumber > s.num ? 'bg-indigo-600' : 'bg-slate-200'}"></div>
+							<div class="h-px {stepNumber > s.num ? 'bg-primary' : 'bg-neutral-200'}"></div>
 						</li>
 					{/if}
 				{/each}
@@ -220,8 +220,8 @@
 
 	<!-- Error banner -->
 	{#if error}
-		<div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-			<svg class="h-5 w-5 text-red-400 shrink-0 mt-0" viewBox="0 0 20 20" fill="currentColor">
+		<div class="mb-6 rounded-lg bg-error-light border border-error px-4 py-3 text-sm text-error flex items-start gap-2">
+			<svg class="h-5 w-5 text-error shrink-0 mt-0" viewBox="0 0 20 20" fill="currentColor">
 				<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
 			</svg>
 			<span>{error}</span>
@@ -233,10 +233,10 @@
 		<Card>
 			{#snippet header()}
 				<div class="flex items-center justify-between">
-					<h1 class="text-xl font-bold text-slate-900">Import Guest List</h1>
+					<h1 class="text-xl font-bold font-display text-neutral-900">Import Guest List</h1>
 					<button
 						onclick={downloadTemplate}
-						class="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+						class="text-sm text-primary hover:text-primary font-medium"
 					>
 						Download CSV Template
 					</button>
@@ -244,7 +244,7 @@
 			{/snippet}
 
 			<div class="space-y-6">
-				<p class="text-sm text-slate-600">
+				<p class="text-sm text-neutral-600">
 					Upload a CSV file with your guest list. The file must include a <strong>Name</strong> column.
 					Optional columns: Email, Phone, Dietary Notes, Plus Ones. Maximum file size is 1MB.
 				</p>
@@ -256,8 +256,8 @@
 					aria-label="Drop CSV file here or click to browse"
 					class="relative rounded-lg border-2 border-dashed p-8 text-center transition-colors
 						{dragging
-							? 'border-indigo-400 bg-indigo-50'
-							: 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'}"
+							? 'border-primary-light bg-primary-lighter'
+							: 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50'}"
 					ondragover={handleDragOver}
 					ondragleave={handleDragLeave}
 					ondrop={handleDrop}
@@ -266,23 +266,23 @@
 				>
 					{#if uploading}
 						<div class="flex flex-col items-center gap-3">
-							<Spinner size="lg" class="text-indigo-600" />
-							<p class="text-sm text-slate-600">Parsing CSV file...</p>
+							<Spinner size="lg" class="text-primary" />
+							<p class="text-sm text-neutral-600">Parsing CSV file...</p>
 						</div>
 					{:else}
 						<div class="flex flex-col items-center gap-3">
-							<svg class="h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+							<svg class="h-10 w-10 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
 							</svg>
 							<div>
-								<p class="text-sm font-medium text-slate-700">
+								<p class="text-sm font-medium text-neutral-700">
 									{#if dragging}
 										Drop your CSV file here
 									{:else}
 										Drag and drop your CSV file here
 									{/if}
 								</p>
-								<p class="mt-1 text-xs text-slate-500">or click to browse (CSV, max 1MB)</p>
+								<p class="mt-1 text-xs text-neutral-500">or click to browse (CSV, max 1MB)</p>
 							</div>
 						</div>
 					{/if}
@@ -303,8 +303,8 @@
 		<Card>
 			{#snippet header()}
 				<div class="flex items-center justify-between">
-					<h1 class="text-xl font-bold text-slate-900">Preview Import</h1>
-					<span class="text-sm text-slate-500">
+					<h1 class="text-xl font-bold font-display text-neutral-900">Preview Import</h1>
+					<span class="text-sm text-neutral-500">
 						{selectedFile?.name}
 					</span>
 				</div>
@@ -313,41 +313,41 @@
 			<div class="space-y-6">
 				<!-- Summary stats -->
 				<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-					<div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
-						<p class="text-2xl font-bold text-slate-900">{preview.totalRows}</p>
-						<p class="text-xs text-slate-500 mt-1">Total Rows</p>
+					<div class="rounded-lg bg-neutral-50 border border-neutral-200 p-3 text-center">
+						<p class="text-2xl font-bold text-neutral-900">{preview.totalRows}</p>
+						<p class="text-xs text-neutral-500 mt-1">Total Rows</p>
 					</div>
-					<div class="rounded-lg bg-green-50 border border-green-200 p-3 text-center">
-						<p class="text-2xl font-bold text-green-700">{preview.validRows}</p>
-						<p class="text-xs text-green-600 mt-1">Valid</p>
+					<div class="rounded-lg bg-success-light border border-success p-3 text-center">
+						<p class="text-2xl font-bold text-success">{preview.validRows}</p>
+						<p class="text-xs text-success mt-1">Valid</p>
 					</div>
-					<div class="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
-						<p class="text-2xl font-bold text-red-700">{preview.errorRows}</p>
-						<p class="text-xs text-red-600 mt-1">Errors</p>
+					<div class="rounded-lg bg-error-light border border-error p-3 text-center">
+						<p class="text-2xl font-bold text-error">{preview.errorRows}</p>
+						<p class="text-xs text-error mt-1">Errors</p>
 					</div>
-					<div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-center">
-						<p class="text-2xl font-bold text-amber-700">{preview.duplicates}</p>
-						<p class="text-xs text-amber-600 mt-1">Duplicates</p>
+					<div class="rounded-lg bg-warning-light border border-warning p-3 text-center">
+						<p class="text-2xl font-bold text-warning">{preview.duplicates}</p>
+						<p class="text-xs text-warning mt-1">Duplicates</p>
 					</div>
 				</div>
 
 				<!-- Preview table -->
-				<div class="border border-slate-200 rounded-lg overflow-hidden">
+				<div class="border border-neutral-200 rounded-lg overflow-hidden">
 					<div class="overflow-x-auto max-h-96">
 						<table class="w-full text-sm">
-							<thead class="bg-slate-50 sticky top-0">
+							<thead class="bg-neutral-50 sticky top-0">
 								<tr>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Phone</th>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dietary Notes</th>
-									<th class="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">+Ones</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Name</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Email</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Phone</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Dietary Notes</th>
+									<th class="px-4 py-2.5 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">+Ones</th>
 								</tr>
 							</thead>
-							<tbody class="divide-y divide-slate-100">
+							<tbody class="divide-y divide-neutral-100">
 								{#each preview.rows as row}
-									<tr class="{row.error ? 'bg-red-50' : row.duplicate ? 'bg-amber-50' : 'hover:bg-slate-50'}">
+									<tr class="{row.error ? 'bg-error-light' : row.duplicate ? 'bg-warning-light' : 'hover:bg-neutral-50'}">
 										<td class="px-4 py-2.5 whitespace-nowrap">
 											{#if row.error}
 												<Badge variant="error">Error</Badge>
@@ -357,15 +357,15 @@
 												<Badge variant="success">Valid</Badge>
 											{/if}
 										</td>
-										<td class="px-4 py-2.5 text-slate-900 font-medium">{row.name || '—'}</td>
-										<td class="px-4 py-2.5 text-slate-600">{row.email || '—'}</td>
-										<td class="px-4 py-2.5 text-slate-600">{row.phone || '—'}</td>
-										<td class="px-4 py-2.5 text-slate-600">{row.dietaryNotes || '—'}</td>
-										<td class="px-4 py-2.5 text-slate-600">{row.plusOnes || 0}</td>
+										<td class="px-4 py-2.5 text-neutral-900 font-medium">{row.name || '—'}</td>
+										<td class="px-4 py-2.5 text-neutral-600">{row.email || '—'}</td>
+										<td class="px-4 py-2.5 text-neutral-600">{row.phone || '—'}</td>
+										<td class="px-4 py-2.5 text-neutral-600">{row.dietaryNotes || '—'}</td>
+										<td class="px-4 py-2.5 text-neutral-600">{row.plusOnes || 0}</td>
 									</tr>
 									{#if row.error}
-										<tr class="bg-red-50">
-											<td colspan="6" class="px-4 py-1.5 text-xs text-red-600 italic">
+										<tr class="bg-error-light">
+											<td colspan="6" class="px-4 py-1.5 text-xs text-error italic">
 												{row.error}
 											</td>
 										</tr>
@@ -386,7 +386,7 @@
 							Continue with {preview.validRows} Valid Guest{preview.validRows !== 1 ? 's' : ''}
 						</Button>
 					{:else}
-						<p class="text-sm text-red-600 font-medium">
+						<p class="text-sm text-error font-medium">
 							No valid rows to import. Please fix your CSV and try again.
 						</p>
 					{/if}
@@ -398,12 +398,12 @@
 	{:else if step === 'confirm' && preview}
 		<Card>
 			{#snippet header()}
-				<h1 class="text-xl font-bold text-slate-900">Confirm Import</h1>
+				<h1 class="text-xl font-bold font-display text-neutral-900">Confirm Import</h1>
 			{/snippet}
 
 			<div class="space-y-6">
-				<div class="rounded-lg bg-indigo-50 border border-indigo-200 p-4">
-					<p class="text-sm text-indigo-800">
+				<div class="rounded-lg bg-primary-lighter border border-primary-light p-4">
+					<p class="text-sm text-primary">
 						You are about to import <strong>{preview.validRows}</strong> guest{preview.validRows !== 1 ? 's' : ''} into this event.
 						{#if preview.errorRows > 0}
 							<strong>{preview.errorRows}</strong> row{preview.errorRows !== 1 ? 's' : ''} with errors will be skipped.
@@ -414,16 +414,16 @@
 					</p>
 				</div>
 
-				<div class="border border-slate-200 rounded-lg p-4">
+				<div class="border border-neutral-200 rounded-lg p-4">
 					<label class="flex items-start gap-3 cursor-pointer">
 						<input
 							type="checkbox"
 							bind:checked={sendInvitations}
-							class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+							class="mt-0.5 rounded border-neutral-300 text-primary focus:ring-primary/40"
 						/>
 						<div>
-							<span class="text-sm font-medium text-slate-900">Send invitation emails</span>
-							<p class="text-xs text-slate-500 mt-0.5">
+							<span class="text-sm font-medium text-neutral-900">Send invitation emails</span>
+							<p class="text-xs text-neutral-500 mt-0.5">
 								Each imported guest with an email address will receive an invitation to RSVP.
 							</p>
 						</div>
@@ -449,37 +449,37 @@
 	{:else if step === 'result' && result}
 		<Card>
 			{#snippet header()}
-				<h1 class="text-xl font-bold text-slate-900">Import Complete</h1>
+				<h1 class="text-xl font-bold font-display text-neutral-900">Import Complete</h1>
 			{/snippet}
 
 			<div class="space-y-6">
-				<div class="rounded-lg bg-green-50 border border-green-200 p-6">
+				<div class="rounded-lg bg-success-light border border-success p-6">
 					<div class="flex items-center gap-2 mb-4">
-						<svg class="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+						<svg class="h-6 w-6 text-success" viewBox="0 0 20 20" fill="currentColor">
 							<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
 						</svg>
-						<h3 class="text-lg font-semibold text-green-800">Import Successful</h3>
+						<h3 class="text-lg font-semibold font-display text-success">Import Successful</h3>
 					</div>
 					<div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
 						<div class="text-center">
-							<p class="text-2xl font-bold text-green-700">{result.imported}</p>
-							<p class="text-xs text-green-600 mt-1">Imported</p>
+							<p class="text-2xl font-bold text-success">{result.imported}</p>
+							<p class="text-xs text-success mt-1">Imported</p>
 						</div>
 						<div class="text-center">
-							<p class="text-2xl font-bold text-slate-600">{result.skipped}</p>
-							<p class="text-xs text-slate-500 mt-1">Skipped</p>
+							<p class="text-2xl font-bold text-neutral-600">{result.skipped}</p>
+							<p class="text-xs text-neutral-500 mt-1">Skipped</p>
 						</div>
 						<div class="text-center">
-							<p class="text-2xl font-bold text-red-600">{result.failed}</p>
-							<p class="text-xs text-red-500 mt-1">Failed</p>
+							<p class="text-2xl font-bold text-error">{result.failed}</p>
+							<p class="text-xs text-error mt-1">Failed</p>
 						</div>
 						<div class="text-center">
-							<p class="text-2xl font-bold text-amber-600">{result.duplicates}</p>
-							<p class="text-xs text-amber-500 mt-1">Duplicates</p>
+							<p class="text-2xl font-bold text-warning">{result.duplicates}</p>
+							<p class="text-xs text-warning mt-1">Duplicates</p>
 						</div>
 						<div class="text-center">
-							<p class="text-2xl font-bold text-blue-600">{result.invited}</p>
-							<p class="text-xs text-blue-500 mt-1">Invited</p>
+							<p class="text-2xl font-bold text-info">{result.invited}</p>
+							<p class="text-xs text-info mt-1">Invited</p>
 						</div>
 					</div>
 				</div>

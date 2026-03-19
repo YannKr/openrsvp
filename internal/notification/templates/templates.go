@@ -39,6 +39,7 @@ func init() {
 type magicLinkData struct {
 	URL           string
 	ExpiryMinutes int
+	Colors        EmailColors
 }
 
 // rsvpConfirmationData holds the template data for an RSVP confirmation email.
@@ -48,6 +49,7 @@ type rsvpConfirmationData struct {
 	Location   string
 	RSVPStatus string
 	ModifyURL  string
+	Colors     EmailColors
 }
 
 // eventReminderData holds the template data for an event reminder email.
@@ -57,6 +59,7 @@ type eventReminderData struct {
 	Location   string
 	Message    string
 	InviteURL  string
+	Colors     EmailColors
 }
 
 // retentionWarningData holds the template data for a retention warning email.
@@ -64,6 +67,7 @@ type retentionWarningData struct {
 	EventTitle   string
 	ExpiresAt    string
 	DashboardURL string
+	Colors       EmailColors
 }
 
 // organizerRSVPNotificationData holds the template data for notifying an
@@ -76,6 +80,7 @@ type organizerRSVPNotificationData struct {
 	GuestPhone   string
 	PlusOnes     int
 	DashboardURL string
+	Colors       EmailColors
 }
 
 // displayStatus returns a human-friendly label for an RSVP status value.
@@ -104,6 +109,7 @@ func RenderMagicLink(baseURL, token string, expiryMinutes int) (html, plain stri
 	data := magicLinkData{
 		URL:           url,
 		ExpiryMinutes: expiryMinutes,
+		Colors:        DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -129,6 +135,7 @@ func RenderRSVPConfirmation(eventTitle, eventDate, location, rsvpStatus, modifyU
 		Location:   location,
 		RSVPStatus: label,
 		ModifyURL:  modifyURL,
+		Colors:     DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -156,6 +163,7 @@ func RenderEventReminder(eventTitle, eventDate, location, message, inviteURL str
 		Location:   location,
 		Message:    message,
 		InviteURL:  inviteURL,
+		Colors:     DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -183,6 +191,7 @@ func RenderRetentionWarning(eventTitle, expiresAt, dashboardURL string) (html, p
 		EventTitle:   eventTitle,
 		ExpiresAt:    expiresAt,
 		DashboardURL: dashboardURL,
+		Colors:       DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -213,6 +222,7 @@ func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEma
 		GuestPhone:   guestPhone,
 		PlusOnes:     plusOnes,
 		DashboardURL: dashboardURL,
+		Colors:       DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -243,6 +253,7 @@ func RenderOrganizerRSVPNotification(eventTitle, guestName, rsvpStatus, guestEma
 type rsvpLookupData struct {
 	EventTitle string
 	ModifyURL  string
+	Colors     EmailColors
 }
 
 // RenderRSVPLookup renders the RSVP lookup magic link email template and
@@ -251,6 +262,7 @@ func RenderRSVPLookup(eventTitle, modifyURL string) (html, plain string, err err
 	data := rsvpLookupData{
 		EventTitle: eventTitle,
 		ModifyURL:  modifyURL,
+		Colors:     DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -270,6 +282,7 @@ func RenderRSVPLookup(eventTitle, modifyURL string) (html, plain string, err err
 type feedbackConfirmationData struct {
 	FeedbackType  string
 	AllowFollowUp bool
+	Colors        EmailColors
 }
 
 // RenderFeedbackConfirmation renders the feedback confirmation email template
@@ -278,6 +291,7 @@ func RenderFeedbackConfirmation(feedbackType string, allowFollowUp bool) (htmlBo
 	data := feedbackConfirmationData{
 		FeedbackType:  feedbackType,
 		AllowFollowUp: allowFollowUp,
+		Colors:        DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -303,6 +317,7 @@ type cohostInvitationData struct {
 	Location     string
 	AddedByName  string
 	DashboardURL string
+	Colors       EmailColors
 }
 
 // RenderCoHostInvitation renders the co-host invitation email template and
@@ -314,6 +329,7 @@ func RenderCoHostInvitation(eventTitle, eventDate, location, addedByName, dashbo
 		Location:     location,
 		AddedByName:  addedByName,
 		DashboardURL: dashboardURL,
+		Colors:       DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer
@@ -338,6 +354,7 @@ type waitlistPromotionData struct {
 	EventDate  string
 	Location   string
 	ModifyURL  string
+	Colors     EmailColors
 }
 
 // RenderWaitlistPromotion renders the waitlist promotion email template and
@@ -348,6 +365,7 @@ func RenderWaitlistPromotion(eventTitle, eventDate, location, modifyURL string) 
 		EventDate:  eventDate,
 		Location:   location,
 		ModifyURL:  modifyURL,
+		Colors:     DefaultEmailColors(),
 	}
 
 	var buf bytes.Buffer

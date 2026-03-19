@@ -245,16 +245,16 @@
 
 <AppShell>
 	<div class="mb-6">
-		<a href="/events/{eventId}" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to event</a>
-		<h1 class="mt-2 text-2xl font-bold text-slate-900">Invite Designer</h1>
+		<a href="/events/{eventId}" class="text-sm text-primary hover:text-primary-hover">&larr; Back to event</a>
+		<h1 class="mt-2 text-2xl font-bold font-display text-neutral-900">Invite Designer</h1>
 		{#if event}
-			<p class="text-sm text-slate-500">{event.title}</p>
+			<p class="text-sm text-neutral-500">{event.title}</p>
 		{/if}
 	</div>
 
 	{#if loading}
 		<div class="flex items-center justify-center py-16">
-			<Spinner size="lg" class="text-indigo-500" />
+			<Spinner size="lg" class="text-primary" />
 		</div>
 	{:else}
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -263,7 +263,7 @@
 				<!-- Template picker -->
 				<Card>
 					{#snippet header()}
-						<h2 class="text-lg font-semibold text-slate-900">Choose a Template</h2>
+						<h2 class="text-lg font-semibold font-display text-neutral-900">Choose a Template</h2>
 					{/snippet}
 
 					<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -271,13 +271,13 @@
 							<button
 								type="button"
 								class="relative rounded-lg border-2 p-3 text-center transition-all {selectedTemplate === template.id
-									? 'border-indigo-600 ring-2 ring-indigo-200'
-									: 'border-slate-200 hover:border-slate-300'}"
+									? 'border-primary ring-2 ring-primary-light'
+									: 'border-neutral-200 hover:border-neutral-300'}"
 								onclick={() => (selectedTemplate = template.id)}
 							>
 								<div class="text-2xl mb-1">{template.emoji}</div>
-								<p class="text-xs font-medium text-slate-900">{template.name}</p>
-								<p class="text-xs text-slate-500 mt-0.5">{template.description}</p>
+								<p class="text-xs font-medium text-neutral-900">{template.name}</p>
+								<p class="text-xs text-neutral-500 mt-0.5">{template.description}</p>
 							</button>
 						{/each}
 					</div>
@@ -286,7 +286,7 @@
 				<!-- Customization form -->
 				<Card>
 					{#snippet header()}
-						<h2 class="text-lg font-semibold text-slate-900">Customize</h2>
+						<h2 class="text-lg font-semibold font-display text-neutral-900">Customize</h2>
 					{/snippet}
 
 					<div class="space-y-4">
@@ -304,21 +304,21 @@
 
 						<div class="grid grid-cols-2 gap-4">
 							<div class="space-y-1">
-								<label for="primaryColor" class="block text-sm font-medium text-slate-700">Primary Color</label>
+								<label for="primaryColor" class="block text-sm font-medium text-neutral-700">Primary Color</label>
 								<input
 									id="primaryColor"
 									type="color"
 									bind:value={primaryColor}
-									class="h-10 w-full rounded-lg border border-slate-300 cursor-pointer"
+									class="h-10 w-full rounded-lg border border-neutral-300 cursor-pointer"
 								/>
 							</div>
 							<div class="space-y-1">
-								<label for="secondaryColor" class="block text-sm font-medium text-slate-700">Secondary Color</label>
+								<label for="secondaryColor" class="block text-sm font-medium text-neutral-700">Secondary Color</label>
 								<input
 									id="secondaryColor"
 									type="color"
 									bind:value={secondaryColor}
-									class="h-10 w-full rounded-lg border border-slate-300 cursor-pointer"
+									class="h-10 w-full rounded-lg border border-neutral-300 cursor-pointer"
 								/>
 							</div>
 						</div>
@@ -327,14 +327,14 @@
 
 						<!-- Background Image Upload -->
 						<div class="space-y-2">
-							<label for="bg-image-input" class="block text-sm font-medium text-slate-700">Background Image</label>
+							<label for="bg-image-input" class="block text-sm font-medium text-neutral-700">Background Image</label>
 							{#if backgroundImageUrl}
-								<div class="relative rounded-lg border border-slate-200 overflow-hidden">
+								<div class="relative rounded-lg border border-neutral-200 overflow-hidden">
 									<img src={backgroundImageUrl} alt="Background preview" class="w-full h-24 object-cover" />
 									<button
 										type="button"
 										onclick={removeBackgroundImage}
-										class="absolute top-1 right-1 rounded-full bg-white/90 p-1 text-slate-500 hover:text-red-500 shadow-sm transition-colors"
+										class="absolute top-1 right-1 rounded-full bg-surface/90 p-1 text-neutral-500 hover:text-error shadow-sm transition-colors"
 										aria-label="Remove background image"
 									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -345,7 +345,7 @@
 							{:else}
 								<!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div
-									class="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center hover:border-indigo-400 transition-colors cursor-pointer"
+									class="rounded-lg border-2 border-dashed border-neutral-300 p-4 text-center hover:border-primary-light transition-colors cursor-pointer"
 									ondragover={(e) => e.preventDefault()}
 									ondrop={handleDrop}
 								>
@@ -358,16 +358,16 @@
 									/>
 									<label for="bg-image-input" class="cursor-pointer">
 										{#if uploading}
-											<div class="flex items-center justify-center gap-2 text-indigo-500">
+											<div class="flex items-center justify-center gap-2 text-primary">
 												<Spinner size="sm" />
 												<span class="text-sm">Uploading...</span>
 											</div>
 										{:else}
-											<svg class="w-8 h-8 mx-auto text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+											<svg class="w-8 h-8 mx-auto text-neutral-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
 											</svg>
-											<p class="text-xs text-slate-500">Drop an image or click to upload</p>
-											<p class="text-xs text-slate-400 mt-0.5">JPEG, PNG, or WebP (max 2MB)</p>
+											<p class="text-xs text-neutral-500">Drop an image or click to upload</p>
+											<p class="text-xs text-neutral-400 mt-0.5">JPEG, PNG, or WebP (max 2MB)</p>
 										{/if}
 									</label>
 								</div>
@@ -381,13 +381,13 @@
 				{#if saved}
 					<Card class="mt-4">
 						<div class="text-center space-y-3">
-							<div class="flex items-center justify-center gap-2 text-green-600">
+							<div class="flex items-center justify-center gap-2 text-success">
 								<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 								</svg>
 								<span class="text-sm font-medium">Design saved</span>
 							</div>
-							<p class="text-xs text-slate-500">What would you like to do next?</p>
+							<p class="text-xs text-neutral-500">What would you like to do next?</p>
 							<div class="flex flex-col gap-2">
 								{#if event && event.status === 'draft'}
 									<Button onclick={() => publishAndGo('share')} loading={publishing} variant="primary" size="sm" class="w-full">Publish & Share</Button>
@@ -405,7 +405,7 @@
 			<!-- Right: Live preview -->
 			<div>
 				<div class="sticky top-8">
-					<h2 class="text-lg font-semibold text-slate-900 mb-4">Preview</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900 mb-4">Preview</h2>
 					<InviteCardPreview
 						templateId={selectedTemplate}
 						{heading}

@@ -152,9 +152,9 @@
 <AppShell>
 	<div class="max-w-3xl mx-auto">
 		<div class="mb-8">
-			<a href="/events/series" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to series</a>
-			<h1 class="mt-2 text-2xl font-bold text-slate-900">Create Recurring Series</h1>
-			<p class="mt-1 text-sm text-slate-500">Set up a template that automatically generates recurring events.</p>
+			<a href="/events/series" class="text-sm text-primary hover:text-primary-hover">&larr; Back to series</a>
+			<h1 class="mt-2 text-2xl font-bold font-display text-neutral-900">Create Recurring Series</h1>
+			<p class="mt-1 text-sm text-neutral-500">Set up a template that automatically generates recurring events.</p>
 		</div>
 
 		<form
@@ -162,7 +162,7 @@
 		>
 			<Card class="mb-6">
 				<div class="space-y-6">
-					<h2 class="text-lg font-semibold text-slate-900">Event Details</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Event Details</h2>
 
 					<Input
 						label="Series Title"
@@ -199,8 +199,8 @@
 
 					<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 						<div class="space-y-1">
-							<label for="startDate" class="block text-sm font-medium text-slate-700">
-								Start Date <span class="text-red-500">*</span>
+							<label for="startDate" class="block text-sm font-medium text-neutral-700">
+								Start Date <span class="text-error">*</span>
 							</label>
 							<input
 								id="startDate"
@@ -209,17 +209,17 @@
 								min={today}
 								required
 								class="block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 {errors.startDate
-									? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
-									: 'border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500'}"
+									? 'border-error text-error focus:border-error focus:ring-error'
+									: 'border-neutral-300 text-neutral-900 focus:border-primary focus:ring-primary'}"
 							/>
 							{#if errors.startDate}
-								<p class="text-sm text-red-600">{errors.startDate}</p>
+								<p class="text-sm text-error">{errors.startDate}</p>
 							{/if}
 						</div>
 
 						<div class="space-y-1">
-							<label for="eventTime" class="block text-sm font-medium text-slate-700">
-								Event Time <span class="text-red-500">*</span>
+							<label for="eventTime" class="block text-sm font-medium text-neutral-700">
+								Event Time <span class="text-error">*</span>
 							</label>
 							<input
 								id="eventTime"
@@ -227,11 +227,11 @@
 								bind:value={eventTime}
 								required
 								class="block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 {errors.eventTime
-									? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
-									: 'border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500'}"
+									? 'border-error text-error focus:border-error focus:ring-error'
+									: 'border-neutral-300 text-neutral-900 focus:border-primary focus:ring-primary'}"
 							/>
 							{#if errors.eventTime}
-								<p class="text-sm text-red-600">{errors.eventTime}</p>
+								<p class="text-sm text-error">{errors.eventTime}</p>
 							{/if}
 						</div>
 
@@ -249,7 +249,7 @@
 
 			<Card class="mb-6">
 				<div class="space-y-6">
-					<h2 class="text-lg font-semibold text-slate-900">Recurrence</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Recurrence</h2>
 
 					<Select
 						label="Repeat"
@@ -260,7 +260,7 @@
 					/>
 
 					<fieldset>
-						<legend class="text-sm font-medium text-slate-700 mb-3">End Condition</legend>
+						<legend class="text-sm font-medium text-neutral-700 mb-3">End Condition</legend>
 						<div class="space-y-3">
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
@@ -268,9 +268,9 @@
 									name="endCondition"
 									value="none"
 									bind:group={endCondition}
-									class="text-indigo-600 focus:ring-indigo-500/40"
+									class="text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">No end date (runs indefinitely)</span>
+								<span class="text-sm text-neutral-700">No end date (runs indefinitely)</span>
 							</label>
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
@@ -278,9 +278,9 @@
 									name="endCondition"
 									value="count"
 									bind:group={endCondition}
-									class="text-indigo-600 focus:ring-indigo-500/40"
+									class="text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">End after a number of occurrences</span>
+								<span class="text-sm text-neutral-700">End after a number of occurrences</span>
 							</label>
 							{#if endCondition === 'count'}
 								<div class="ml-7">
@@ -299,9 +299,9 @@
 									name="endCondition"
 									value="date"
 									bind:group={endCondition}
-									class="text-indigo-600 focus:ring-indigo-500/40"
+									class="text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">End on a specific date</span>
+								<span class="text-sm text-neutral-700">End on a specific date</span>
 							</label>
 							{#if endCondition === 'date'}
 								<div class="ml-7 space-y-1">
@@ -310,11 +310,11 @@
 										bind:value={recurrenceEnd}
 										min={startDate || today}
 										class="block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 {errors.recurrenceEnd
-											? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
-											: 'border-slate-300 text-slate-900 focus:border-indigo-500 focus:ring-indigo-500'}"
+											? 'border-error text-error focus:border-error focus:ring-error'
+											: 'border-neutral-300 text-neutral-900 focus:border-primary focus:ring-primary'}"
 									/>
 									{#if errors.recurrenceEnd}
-										<p class="text-sm text-red-600">{errors.recurrenceEnd}</p>
+										<p class="text-sm text-error">{errors.recurrenceEnd}</p>
 									{/if}
 								</div>
 							{/if}
@@ -325,7 +325,7 @@
 
 			<Card class="mb-6">
 				<div class="space-y-6">
-					<h2 class="text-lg font-semibold text-slate-900">RSVP Settings</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">RSVP Settings</h2>
 
 					<Select
 						label="RSVP Contact Requirement"
@@ -335,24 +335,24 @@
 					/>
 
 					<fieldset class="pt-2">
-						<legend class="text-sm font-medium text-slate-700 mb-3">Guest Visibility</legend>
-						<p class="text-xs text-slate-400 mb-3">Control what attendance info is shown on the public invite page.</p>
+						<legend class="text-sm font-medium text-neutral-700 mb-3">Guest Visibility</legend>
+						<p class="text-xs text-neutral-400 mb-3">Control what attendance info is shown on the public invite page.</p>
 						<div class="space-y-2">
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={showHeadcount}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show attendance count</span>
+								<span class="text-sm text-neutral-700">Show attendance count</span>
 							</label>
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={showGuestList}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show guest names</span>
+								<span class="text-sm text-neutral-700">Show guest names</span>
 							</label>
 						</div>
 					</fieldset>
@@ -389,11 +389,11 @@
 								error={errors.retentionDays || ''}
 							/>
 						{:else}
-							<p class="text-xs text-slate-400">
+							<p class="text-xs text-neutral-400">
 								Guest data will be automatically deleted 30 days after each occurrence.
 								<button
 									type="button"
-									class="text-indigo-500 hover:text-indigo-600 underline underline-offset-2"
+									class="text-primary hover:text-primary-hover underline underline-offset-2"
 									onclick={() => (showRetention = true)}
 								>
 									Specify custom data retention

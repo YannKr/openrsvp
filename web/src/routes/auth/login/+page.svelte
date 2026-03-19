@@ -44,20 +44,20 @@
 <div class="min-h-screen flex items-center justify-center px-4">
 	<div class="w-full max-w-md">
 		<div class="text-center mb-8">
-			<a href="/" class="text-2xl font-bold text-indigo-600">OpenRSVP</a>
-			<h1 class="mt-4 text-2xl font-semibold text-slate-900">Sign in to your account</h1>
-			<p class="mt-2 text-slate-600">Enter your email to receive a magic link</p>
+			<a href="/" class="text-2xl font-bold text-primary">OpenRSVP</a>
+			<h1 class="font-display mt-4 text-2xl font-semibold text-neutral-900">Sign in to your account</h1>
+			<p class="mt-2 text-neutral-600">Enter your email to receive a magic link</p>
 		</div>
 
-		<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+		<div class="bg-surface rounded-lg shadow-sm border border-neutral-200 p-8">
 			{#if sent}
 				<!-- Success state -->
 				<div class="text-center">
 					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4"
+						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success-light mb-4"
 					>
 						<svg
-							class="h-6 w-6 text-green-600"
+							class="h-6 w-6 text-success"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -70,12 +70,12 @@
 							/>
 						</svg>
 					</div>
-					<h2 class="text-lg font-semibold text-slate-900 mb-2">Check your email</h2>
-					<p class="text-sm text-slate-600 mb-4">
+					<h2 class="text-lg font-semibold text-neutral-900 mb-2">Check your email</h2>
+					<p class="text-sm text-neutral-600 mb-4">
 						We sent a magic link to <strong>{email}</strong>. Click the link in the email to sign
 						in.
 					</p>
-					<p class="text-xs text-slate-500 mb-6">
+					<p class="text-xs text-neutral-500 mb-6">
 						Did not receive the email? Check your spam folder or try again.
 					</p>
 					<Button
@@ -107,7 +107,7 @@
 				</form>
 
 				<div class="mt-6 text-center">
-					<a href="/" class="text-sm text-indigo-600 hover:text-indigo-500">
+					<a href="/" class="text-sm text-primary hover:text-primary-hover">
 						Back to home
 					</a>
 				</div>

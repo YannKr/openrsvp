@@ -419,12 +419,12 @@
 <AppShell>
 	{#if loading}
 		<div class="flex items-center justify-center py-16">
-			<Spinner size="lg" class="text-indigo-500" />
+			<Spinner size="lg" class="text-primary" />
 		</div>
 	{:else if event}
 		<!-- Back link + actions -->
 		<div class="mb-6 flex items-center justify-between">
-			<a href="/events" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to events</a>
+			<a href="/events" class="text-sm text-primary hover:text-primary-hover">&larr; Back to events</a>
 			<div class="flex items-center gap-2">
 				<Button variant="outline" size="sm" href="/events/{eventId}/edit">Edit</Button>
 				<Button variant="outline" size="sm" href="/events/{eventId}/invite">Design Invite</Button>
@@ -438,14 +438,14 @@
 
 		<!-- Series banner -->
 		{#if event.seriesId}
-			<div class="mb-4 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+			<div class="mb-4 flex items-center gap-2 rounded-lg border border-primary-light bg-primary-lighter px-4 py-3 text-sm text-primary">
 				<svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
 				</svg>
 				<span>
-					Part of a <a href="/events/series/{event.seriesId}" class="font-medium underline underline-offset-2 hover:text-indigo-800">recurring series</a>
+					Part of a <a href="/events/series/{event.seriesId}" class="font-medium underline underline-offset-2 hover:text-primary-hover">recurring series</a>
 					{#if event.seriesOverride}
-						<span class="text-yellow-700 font-medium">(Modified)</span>
+						<span class="text-warning font-medium">(Modified)</span>
 					{/if}
 				</span>
 			</div>
@@ -455,13 +455,13 @@
 		<Card class="mb-6">
 			<div class="flex items-start justify-between">
 				<div>
-					<h1 class="text-2xl font-bold text-slate-900">{event.title}</h1>
-					<p class="mt-2 text-sm text-slate-600">{formatDateTime(event.eventDate, event.timezone)}</p>
+					<h1 class="text-2xl font-bold font-display text-neutral-900">{event.title}</h1>
+					<p class="mt-2 text-sm text-neutral-600">{formatDateTime(event.eventDate, event.timezone)}</p>
 					{#if event.endDate}
-						<p class="text-sm text-slate-500">Ends: {formatDateTime(event.endDate, event.timezone)}</p>
+						<p class="text-sm text-neutral-500">Ends: {formatDateTime(event.endDate, event.timezone)}</p>
 					{/if}
 					{#if event.location}
-						<p class="mt-1 text-sm text-slate-500 flex items-center gap-1">
+						<p class="mt-1 text-sm text-neutral-500 flex items-center gap-1">
 							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -470,7 +470,7 @@
 						</p>
 					{/if}
 					{#if event.description}
-						<p class="mt-3 text-sm text-slate-700 whitespace-pre-wrap">{event.description}</p>
+						<p class="mt-3 text-sm text-neutral-700 whitespace-pre-wrap">{event.description}</p>
 					{/if}
 				</div>
 				<div class="flex flex-col items-end gap-2">
@@ -489,13 +489,13 @@
 				</div>
 			</div>
 			{#if event.showHeadcount || event.showGuestList}
-				<div class="mt-4 pt-4 border-t border-slate-200">
+				<div class="mt-4 pt-4 border-t border-neutral-200">
 					<div class="flex items-center gap-2">
-						<svg class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 							<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
 						</svg>
-						<p class="text-xs text-slate-500">
+						<p class="text-xs text-neutral-500">
 							Public visibility:
 							{#if event.showHeadcount && event.showGuestList}
 								attendance count and guest names
@@ -504,24 +504,24 @@
 							{:else}
 								guest names
 							{/if}
-							<a href="/events/{eventId}/edit" class="text-indigo-500 hover:text-indigo-600 underline underline-offset-2 ml-1">Edit</a>
+							<a href="/events/{eventId}/edit" class="text-primary hover:text-primary underline underline-offset-2 ml-1">Edit</a>
 						</p>
 					</div>
 				</div>
 			{/if}
 			{#if event.shareToken}
-				<div class="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
-					<p class="text-xs text-slate-500">
-						Share link: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600">{$page.url.origin}/i/{event.shareToken}</code>
+				<div class="mt-4 pt-4 border-t border-neutral-200 flex items-center gap-2">
+					<p class="text-xs text-neutral-500">
+						Share link: <code class="bg-neutral-100 px-1.5 py-0.5 rounded font-mono text-primary">{$page.url.origin}/i/{event.shareToken}</code>
 					</p>
 					<button
 						type="button"
 						onclick={copyShareLink}
-						class="inline-flex items-center justify-center rounded p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+						class="inline-flex items-center justify-center rounded p-1 text-neutral-400 hover:text-primary hover:bg-neutral-100 transition-colors"
 						title="Copy share link"
 					>
 						{#if copied}
-							<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<svg class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
 							</svg>
 						{:else}
@@ -536,54 +536,54 @@
 
 		<!-- RSVP Stats -->
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-			<div class="rounded-xl border border-slate-200 p-4 bg-green-50">
+			<div class="rounded-lg border border-neutral-200 p-4 bg-success-light">
 				<div class="flex items-baseline gap-2">
-					<p class="text-2xl font-bold text-green-600">{stats.attendingHeadcount}</p>
+					<p class="text-2xl font-bold font-mono text-success">{stats.attendingHeadcount}</p>
 					{#if stats.attendingHeadcount !== stats.attending}
-						<p class="text-xs text-green-600/70">({stats.attending} + {stats.attendingHeadcount - stats.attending} guests)</p>
+						<p class="text-xs text-success/70">({stats.attending} + {stats.attendingHeadcount - stats.attending} guests)</p>
 					{/if}
 				</div>
-				<p class="text-xs font-medium text-green-600 mt-1">Attending</p>
+				<p class="text-xs font-medium text-success mt-1">Attending</p>
 			</div>
-			<div class="rounded-xl border border-slate-200 p-4 bg-yellow-50">
+			<div class="rounded-lg border border-neutral-200 p-4 bg-warning-light">
 				<div class="flex items-baseline gap-2">
-					<p class="text-2xl font-bold text-yellow-600">{stats.maybeHeadcount}</p>
+					<p class="text-2xl font-bold font-mono text-warning">{stats.maybeHeadcount}</p>
 					{#if stats.maybeHeadcount !== stats.maybe}
-						<p class="text-xs text-yellow-600/70">({stats.maybe} + {stats.maybeHeadcount - stats.maybe} guests)</p>
+						<p class="text-xs text-warning/70">({stats.maybe} + {stats.maybeHeadcount - stats.maybe} guests)</p>
 					{/if}
 				</div>
-				<p class="text-xs font-medium text-yellow-600 mt-1">Maybe</p>
+				<p class="text-xs font-medium text-warning mt-1">Maybe</p>
 			</div>
-			<div class="rounded-xl border border-slate-200 p-4 bg-red-50">
-				<p class="text-2xl font-bold text-red-600">{stats.declined}</p>
-				<p class="text-xs font-medium text-red-600 mt-1">Declined</p>
+			<div class="rounded-lg border border-neutral-200 p-4 bg-error-light">
+				<p class="text-2xl font-bold font-mono text-error">{stats.declined}</p>
+				<p class="text-xs font-medium text-error mt-1">Declined</p>
 			</div>
-			<div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
+			<div class="rounded-lg border border-neutral-200 p-4 bg-neutral-50">
 				<div class="flex items-baseline gap-2">
-					<p class="text-2xl font-bold text-slate-700">{stats.totalHeadcount}</p>
+					<p class="text-2xl font-bold font-mono text-neutral-700">{stats.totalHeadcount}</p>
 					{#if stats.totalHeadcount !== stats.total}
-						<p class="text-xs text-slate-500">({stats.total} + {stats.totalHeadcount - stats.total} guests)</p>
+						<p class="text-xs text-neutral-500">({stats.total} + {stats.totalHeadcount - stats.total} guests)</p>
 					{/if}
 				</div>
-				<p class="text-xs font-medium text-slate-600 mt-1">Total</p>
+				<p class="text-xs font-medium text-neutral-600 mt-1">Total</p>
 			</div>
 		</div>
 
 		{#if stats.waitlisted > 0}
 			<div class="grid grid-cols-1 gap-4 mb-6">
-				<div class="rounded-xl border border-blue-200 p-4 bg-blue-50">
+				<div class="rounded-lg border border-info p-4 bg-info-light">
 					<div class="flex items-baseline gap-2">
-						<p class="text-2xl font-bold text-blue-600">{stats.waitlisted}</p>
+						<p class="text-2xl font-bold font-mono text-info">{stats.waitlisted}</p>
 					</div>
-					<p class="text-xs font-medium text-blue-600 mt-1">Waitlisted</p>
+					<p class="text-xs font-medium text-info mt-1">Waitlisted</p>
 				</div>
 			</div>
 		{/if}
 
 		<!-- Capacity Status -->
 		{#if event.maxCapacity}
-			<div class="mb-6 flex items-center gap-2 text-sm text-slate-600">
-				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<div class="mb-6 flex items-center gap-2 text-sm text-neutral-600">
+				<svg class="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
 				</svg>
 				Capacity: {stats.attendingHeadcount} / {event.maxCapacity}
@@ -598,8 +598,8 @@
 
 		<!-- RSVP Deadline Display -->
 		{#if event.rsvpDeadline}
-			<div class="mb-6 flex items-center gap-2 text-sm text-slate-600">
-				<svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<div class="mb-6 flex items-center gap-2 text-sm text-neutral-600">
+				<svg class="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 				</svg>
 				RSVP Deadline: {formatDateTime(event.rsvpDeadline, event.timezone)}
@@ -612,7 +612,7 @@
 		<!-- Reminder management -->
 		<Card class="mb-6">
 			{#snippet header()}
-				<h2 class="text-lg font-semibold text-slate-900">Scheduled Reminders</h2>
+				<h2 class="text-lg font-semibold font-display text-neutral-900">Scheduled Reminders</h2>
 			{/snippet}
 
 			<form
@@ -653,14 +653,14 @@
 			</form>
 
 			{#if reminders.length === 0}
-				<p class="text-sm text-slate-500 text-center py-8 border-t border-slate-200 mt-6">
+				<p class="text-sm text-neutral-500 text-center py-8 border-t border-neutral-200 mt-6">
 					No reminders scheduled.
 				</p>
 			{:else}
-				<div class="divide-y divide-slate-200 -mx-6 -mb-4 border-t border-slate-200 mt-6">
+				<div class="divide-y divide-neutral-200 -mx-6 -mb-4 border-t border-neutral-200 mt-6">
 					{#each reminders as reminder (reminder.id)}
 						{#if editingReminderId === reminder.id}
-							<div class="px-6 py-4 space-y-4 bg-slate-50">
+							<div class="px-6 py-4 space-y-4 bg-neutral-50">
 								<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 									<DateTimePicker
 										label="Remind At"
@@ -691,14 +691,14 @@
 						{:else}
 							<div class="px-6 py-4 flex items-center justify-between gap-4">
 								<div class="min-w-0">
-									<p class="text-sm font-medium text-slate-900">
+									<p class="text-sm font-medium text-neutral-900">
 										{formatDateTime(reminder.remindAt)}
 									</p>
-									<p class="text-xs text-slate-500 mt-0.5">
+									<p class="text-xs text-neutral-500 mt-0.5">
 										Audience: {reminder.targetGroup}
 									</p>
 									{#if reminder.message}
-										<p class="text-sm text-slate-700 mt-2 whitespace-pre-wrap">{reminder.message}</p>
+										<p class="text-sm text-neutral-700 mt-2 whitespace-pre-wrap">{reminder.message}</p>
 									{/if}
 								</div>
 								<div class="flex items-center gap-2">
@@ -720,7 +720,7 @@
 			{#snippet header()}
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-3">
-						<h2 class="text-lg font-semibold text-slate-900">Attendees</h2>
+						<h2 class="text-lg font-semibold font-display text-neutral-900">Attendees</h2>
 						<!-- CSV Export split-button -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div class="relative inline-flex" role="group" bind:this={exportDropdownRef} onkeydown={handleExportKeydown}>
@@ -732,7 +732,7 @@
 								aria-expanded={exportMenuOpen}
 								aria-haspopup="true"
 								aria-label="Export options"
-								class="inline-flex items-center rounded-l-none rounded-r-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+								class="inline-flex items-center rounded-l-none rounded-r-lg border border-neutral-300 bg-surface px-2 py-1.5 text-neutral-500 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary/40"
 							>
 								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -740,20 +740,20 @@
 							</button>
 							{#if exportMenuOpen}
 								<div
-									class="absolute right-0 z-10 mt-1 w-48 rounded-lg bg-white shadow-lg border border-slate-200 py-1 top-full"
+									class="absolute right-0 z-10 mt-1 w-48 rounded-lg bg-surface shadow-lg border border-neutral-200 py-1 top-full"
 									role="menu"
 									aria-label="Export filter options"
 								>
-									<button onclick={() => exportCSV('attending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+									<button onclick={() => exportCSV('attending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none">
 										Attending Only
 									</button>
-									<button onclick={() => exportCSV('maybe')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+									<button onclick={() => exportCSV('maybe')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none">
 										Maybe Only
 									</button>
-									<button onclick={() => exportCSV('declined')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+									<button onclick={() => exportCSV('declined')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none">
 										Declined Only
 									</button>
-									<button onclick={() => exportCSV('pending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
+									<button onclick={() => exportCSV('pending')} role="menuitem" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 focus:bg-neutral-50 focus:outline-none">
 										Pending Only
 									</button>
 								</div>
@@ -765,8 +765,8 @@
 							<button
 								type="button"
 								class="px-3 py-1 rounded-full text-xs font-medium transition-colors {activeFilter === filter
-									? 'bg-indigo-600 text-white'
-									: 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+									? 'bg-primary text-white'
+									: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}"
 								onclick={() => (activeFilter = filter)}
 							>
 								{filter.charAt(0).toUpperCase() + filter.slice(1)}
@@ -777,30 +777,30 @@
 			{/snippet}
 
 			{#if filteredAttendees.length === 0}
-				<p class="text-sm text-slate-500 text-center py-8">
+				<p class="text-sm text-neutral-500 text-center py-8">
 					{attendees.length === 0 ? 'No attendees yet. Share your event to start receiving RSVPs.' : 'No attendees match this filter.'}
 				</p>
 			{:else}
-				<div class="divide-y divide-slate-200 -mx-6 -mb-4">
+				<div class="divide-y divide-neutral-200 -mx-6 -mb-4">
 					{#each filteredAttendees as attendee (attendee.id)}
 						{#if editingAttendeeId === attendee.id}
-							<div class="px-6 py-4 space-y-4 bg-slate-50">
+							<div class="px-6 py-4 space-y-4 bg-neutral-50">
 								<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 									<div>
-										<label for="edit-name" class="block text-xs font-medium text-slate-700 mb-1">Name</label>
-										<input id="edit-name" type="text" bind:value={editAttendee.name} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500" />
+										<label for="edit-name" class="block text-xs font-medium text-neutral-700 mb-1">Name</label>
+										<input id="edit-name" type="text" bind:value={editAttendee.name} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
 									</div>
 									<div>
-										<label for="edit-email" class="block text-xs font-medium text-slate-700 mb-1">Email</label>
-										<input id="edit-email" type="email" bind:value={editAttendee.email} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500" />
+										<label for="edit-email" class="block text-xs font-medium text-neutral-700 mb-1">Email</label>
+										<input id="edit-email" type="email" bind:value={editAttendee.email} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
 									</div>
 									<div>
-										<label for="edit-phone" class="block text-xs font-medium text-slate-700 mb-1">Phone</label>
-										<input id="edit-phone" type="tel" bind:value={editAttendee.phone} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500" />
+										<label for="edit-phone" class="block text-xs font-medium text-neutral-700 mb-1">Phone</label>
+										<input id="edit-phone" type="tel" bind:value={editAttendee.phone} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
 									</div>
 									<div>
-										<label for="edit-status" class="block text-xs font-medium text-slate-700 mb-1">Status</label>
-										<select id="edit-status" bind:value={editAttendee.rsvpStatus} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500">
+										<label for="edit-status" class="block text-xs font-medium text-neutral-700 mb-1">Status</label>
+										<select id="edit-status" bind:value={editAttendee.rsvpStatus} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary">
 											<option value="attending">Attending</option>
 											<option value="maybe">Maybe</option>
 											<option value="declined">Declined</option>
@@ -809,12 +809,12 @@
 										</select>
 									</div>
 									<div>
-										<label for="edit-dietary" class="block text-xs font-medium text-slate-700 mb-1">Dietary Notes</label>
-										<input id="edit-dietary" type="text" bind:value={editAttendee.dietaryNotes} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500" />
+										<label for="edit-dietary" class="block text-xs font-medium text-neutral-700 mb-1">Dietary Notes</label>
+										<input id="edit-dietary" type="text" bind:value={editAttendee.dietaryNotes} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
 									</div>
 									<div>
-										<label for="edit-plusones" class="block text-xs font-medium text-slate-700 mb-1">Plus Ones</label>
-										<input id="edit-plusones" type="number" min="0" max="10" bind:value={editAttendee.plusOnes} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500" />
+										<label for="edit-plusones" class="block text-xs font-medium text-neutral-700 mb-1">Plus Ones</label>
+										<input id="edit-plusones" type="number" min="0" max="10" bind:value={editAttendee.plusOnes} class="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
 									</div>
 								</div>
 								<div class="flex items-center justify-end gap-2">
@@ -825,17 +825,17 @@
 						{:else}
 							<div class="px-6 py-3 flex items-center justify-between">
 								<div class="flex-1 min-w-0">
-									<p class="text-sm font-medium text-slate-900">{attendee.name}</p>
-									<p class="text-xs text-slate-500">
+									<p class="text-sm font-medium text-neutral-900">{attendee.name}</p>
+									<p class="text-xs text-neutral-500">
 										{attendee.email || attendee.phone || 'No contact info'}
 									</p>
 								</div>
 								<div class="flex items-center gap-3 ml-4">
 									{#if attendee.dietaryNotes}
-										<span class="text-xs text-slate-500" title="Dietary notes">{attendee.dietaryNotes}</span>
+										<span class="text-xs text-neutral-500" title="Dietary notes">{attendee.dietaryNotes}</span>
 									{/if}
 									{#if attendee.plusOnes > 0}
-										<span class="text-xs text-slate-500">+{attendee.plusOnes}</span>
+										<span class="text-xs text-neutral-500">+{attendee.plusOnes}</span>
 									{/if}
 									<Badge variant={statusVariant(attendee.rsvpStatus)}>
 										{attendee.rsvpStatus}
@@ -858,12 +858,12 @@
 			<Card class="mt-6">
 				{#snippet header()}
 					<div class="flex items-center gap-2">
-						<h2 class="text-lg font-semibold text-slate-900">Co-hosts</h2>
+						<h2 class="text-lg font-semibold font-display text-neutral-900">Co-hosts</h2>
 						<span class="group relative">
-							<svg class="h-4 w-4 text-slate-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<svg class="h-4 w-4 text-neutral-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" />
 							</svg>
-							<span class="invisible group-hover:visible absolute left-6 top-0 z-10 w-64 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg">
+							<span class="invisible group-hover:visible absolute left-6 top-0 z-10 w-64 rounded-lg bg-neutral-800 px-3 py-2 text-xs text-white shadow-lg">
 								Co-hosts can edit event details, manage guests, and send messages. Only the event owner can delete the event or manage co-hosts.
 							</span>
 						</span>
@@ -871,14 +871,14 @@
 				{/snippet}
 
 				{#if cohosts.length === 0}
-					<p class="text-sm text-slate-500 py-2">No co-hosts yet.</p>
+					<p class="text-sm text-neutral-500 py-2">No co-hosts yet.</p>
 				{:else}
-					<div class="divide-y divide-slate-100">
+					<div class="divide-y divide-neutral-100">
 						{#each cohosts as cohost (cohost.id)}
 							<div class="flex items-center justify-between py-3">
 								<div>
-									<p class="text-sm font-medium text-slate-900">{cohost.organizerName || cohost.organizerEmail}</p>
-									<p class="text-xs text-slate-500">{cohost.organizerEmail}</p>
+									<p class="text-sm font-medium text-neutral-900">{cohost.organizerName || cohost.organizerEmail}</p>
+									<p class="text-xs text-neutral-500">{cohost.organizerEmail}</p>
 								</div>
 								<Button variant="ghost" size="sm" onclick={() => removeCoHost(cohost.id)}>
 									Remove
@@ -904,7 +904,7 @@
 						<Button type="submit" size="sm" loading={addingCohost}>Add</Button>
 					</form>
 				{:else}
-					<p class="text-xs text-slate-400 mt-4">Maximum 10 co-hosts reached.</p>
+					<p class="text-xs text-neutral-400 mt-4">Maximum 10 co-hosts reached.</p>
 				{/if}
 			</Card>
 		{/if}
@@ -913,20 +913,20 @@
 		{#if event}
 			<Card class="mt-6">
 				{#snippet header()}
-					<h2 class="text-lg font-semibold text-slate-900">Comments ({eventComments.length})</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Comments ({eventComments.length})</h2>
 				{/snippet}
 				{#if eventComments.length === 0}
-					<p class="text-sm text-slate-500 text-center py-8">No comments yet.</p>
+					<p class="text-sm text-neutral-500 text-center py-8">No comments yet.</p>
 				{:else}
-					<div class="divide-y divide-slate-200 -mx-6 -mb-4">
+					<div class="divide-y divide-neutral-200 -mx-6 -mb-4">
 						{#each eventComments as comment (comment.id)}
 							<div class="px-6 py-3 flex items-start justify-between">
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
-										<p class="text-sm font-medium text-slate-900">{comment.authorName}</p>
-										<span class="text-xs text-slate-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
+										<p class="text-sm font-medium text-neutral-900">{comment.authorName}</p>
+										<span class="text-xs text-neutral-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
 									</div>
-									<p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{comment.body}</p>
+									<p class="text-sm text-neutral-700 mt-1 whitespace-pre-wrap">{comment.body}</p>
 								</div>
 								<Button size="sm" variant="ghost" onclick={() => deleteComment(comment.id)}>Delete</Button>
 							</div>
@@ -940,46 +940,46 @@
 		{#if emailStats && emailStats.totalSent > 0}
 			<Card class="mt-6">
 				{#snippet header()}
-					<h2 class="text-lg font-semibold text-slate-900">Email Delivery</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Email Delivery</h2>
 				{/snippet}
 				<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
 					<div class="text-center">
-						<p class="text-2xl font-bold text-slate-900">{emailStats.totalSent}</p>
-						<p class="text-xs text-slate-500">Sent</p>
+						<p class="text-2xl font-bold font-display text-neutral-900">{emailStats.totalSent}</p>
+						<p class="text-xs text-neutral-500">Sent</p>
 					</div>
 					<div class="text-center">
-						<p class="text-2xl font-bold text-green-600">{emailStats.delivered}</p>
-						<p class="text-xs text-slate-500">Delivered</p>
+						<p class="text-2xl font-bold font-mono text-success">{emailStats.delivered}</p>
+						<p class="text-xs text-neutral-500">Delivered</p>
 					</div>
 					<div class="text-center">
-						<p class="text-2xl font-bold text-blue-600">{emailStats.opened}</p>
-						<p class="text-xs text-slate-500">Opened</p>
+						<p class="text-2xl font-bold font-mono text-info">{emailStats.opened}</p>
+						<p class="text-xs text-neutral-500">Opened</p>
 					</div>
 					<div class="text-center">
-						<p class="text-2xl font-bold text-red-600">{emailStats.bounced}</p>
-						<p class="text-xs text-slate-500">Bounced</p>
+						<p class="text-2xl font-bold font-mono text-error">{emailStats.bounced}</p>
+						<p class="text-xs text-neutral-500">Bounced</p>
 					</div>
 				</div>
 			</Card>
 		{/if}
 	{:else}
 		<Card>
-			<p class="text-center text-slate-500 py-8">Event not found.</p>
+			<p class="text-center text-neutral-500 py-8">Event not found.</p>
 		</Card>
 	{/if}
 
 	{#if event}
 		<Modal bind:open={showCancelModal} title="Cancel Event">
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-neutral-600">
 				Are you sure you want to cancel <strong>{event.title}</strong>? Attendees will no longer be able to RSVP.
 			</p>
 			<label class="flex items-center gap-3 mt-4 cursor-pointer">
 				<input
 					type="checkbox"
 					bind:checked={notifyOnCancel}
-					class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+					class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 				/>
-				<span class="text-sm text-slate-700">Notify attending and maybe attendees about cancellation</span>
+				<span class="text-sm text-neutral-700">Notify attending and maybe attendees about cancellation</span>
 			</label>
 			{#snippet actions()}
 				<Button variant="outline" size="sm" onclick={() => showCancelModal = false}>Keep Event</Button>
@@ -991,7 +991,7 @@
 	{#if removeAttendeeTarget}
 		{@const target = removeAttendeeTarget}
 		<Modal bind:open={showRemoveAttendeeModal} title="Remove Attendee">
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-neutral-600">
 				Are you sure you want to remove <strong>{target.name}</strong>? This action cannot be undone.
 			</p>
 			{#snippet actions()}
@@ -1004,7 +1004,7 @@
 	{#if cancelReminderTarget}
 		{@const target = cancelReminderTarget}
 		<Modal bind:open={showCancelReminderModal} title="Cancel Reminder">
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-neutral-600">
 				Are you sure you want to cancel the reminder scheduled for <strong>{formatDateTime(target.remindAt)}</strong>?
 			</p>
 			{#snippet actions()}

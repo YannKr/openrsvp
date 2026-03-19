@@ -39,21 +39,21 @@
 <AppShell>
 	<div class="flex items-center justify-between mb-8">
 		<div>
-			<a href="/events" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to events</a>
-			<h1 class="mt-2 text-2xl font-bold text-slate-900">Recurring Series</h1>
+			<a href="/events" class="text-sm text-primary hover:text-primary-hover">&larr; Back to events</a>
+			<h1 class="mt-2 text-2xl font-bold font-display text-neutral-900">Recurring Series</h1>
 		</div>
 		<Button href="/events/series/new">Create Series</Button>
 	</div>
 
 	{#if loading}
 		<div class="flex items-center justify-center py-16">
-			<Spinner size="lg" class="text-indigo-500" />
+			<Spinner size="lg" class="text-primary" />
 		</div>
 	{:else if seriesList.length === 0}
 		<Card>
 			<div class="text-center py-12">
 				<svg
-					class="mx-auto h-12 w-12 text-slate-400"
+					class="mx-auto h-12 w-12 text-neutral-400"
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
@@ -65,8 +65,8 @@
 						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
 					/>
 				</svg>
-				<h3 class="mt-4 text-lg font-medium text-slate-900">No recurring series yet</h3>
-				<p class="mt-2 text-sm text-slate-500">Create a series to automatically generate recurring events.</p>
+				<h3 class="mt-4 text-lg font-medium font-display text-neutral-900">No recurring series yet</h3>
+				<p class="mt-2 text-sm text-neutral-500">Create a series to automatically generate recurring events.</p>
 				<div class="mt-6">
 					<Button href="/events/series/new">Create Your First Series</Button>
 				</div>
@@ -80,15 +80,15 @@
 						<div class="flex items-start justify-between">
 							<div class="flex-1 min-w-0">
 								<h3
-									class="text-lg font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors truncate"
+									class="text-lg font-semibold text-neutral-900 group-hover:text-primary transition-colors truncate"
 								>
 									{series.title}
 								</h3>
-								<p class="mt-1 text-sm text-slate-600">
+								<p class="mt-1 text-sm text-neutral-600">
 									{recurrenceLabels[series.recurrenceRule] || series.recurrenceRule} at {series.eventTime}
 								</p>
 								{#if series.location}
-									<p class="mt-1 text-sm text-slate-500 flex items-center gap-1">
+									<p class="mt-1 text-sm text-neutral-500 flex items-center gap-1">
 										<svg
 											class="h-4 w-4 shrink-0"
 											fill="none"
@@ -116,7 +116,7 @@
 								{series.seriesStatus}
 							</Badge>
 						</div>
-						<div class="mt-4 flex items-center justify-between text-xs text-slate-500">
+						<div class="mt-4 flex items-center justify-between text-xs text-neutral-500">
 							<span>{recurrenceLabels[series.recurrenceRule] || series.recurrenceRule}</span>
 							{#if series.maxOccurrences}
 								<span>{series.maxOccurrences} occurrences max</span>

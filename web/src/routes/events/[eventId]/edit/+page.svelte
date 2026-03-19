@@ -160,13 +160,13 @@
 <AppShell>
 	<div class="max-w-3xl mx-auto">
 		<div class="mb-8">
-			<a href="/events/{eventId}" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to event</a>
-			<h1 class="mt-2 text-2xl font-bold text-slate-900">Edit Event</h1>
+			<a href="/events/{eventId}" class="text-sm text-primary hover:text-primary-hover">&larr; Back to event</a>
+			<h1 class="mt-2 text-2xl font-bold font-display text-neutral-900">Edit Event</h1>
 		</div>
 
 		{#if loading}
 			<div class="flex items-center justify-center py-16">
-				<Spinner size="lg" class="text-indigo-500" />
+				<Spinner size="lg" class="text-primary" />
 			</div>
 		{:else}
 			<Card>
@@ -234,24 +234,24 @@
 					/>
 
 					<fieldset class="pt-2">
-						<legend class="text-sm font-medium text-slate-700 mb-3">Guest Visibility</legend>
-						<p class="text-xs text-slate-400 mb-3">Control what attendance info is shown on the public invite page.</p>
+						<legend class="text-sm font-medium text-neutral-700 mb-3">Guest Visibility</legend>
+						<p class="text-xs text-neutral-400 mb-3">Control what attendance info is shown on the public invite page.</p>
 						<div class="space-y-2">
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={showHeadcount}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show attendance count</span>
+								<span class="text-sm text-neutral-700">Show attendance count</span>
 							</label>
 							<label class="flex items-center gap-3 cursor-pointer">
 								<input
 									type="checkbox"
 									bind:checked={showGuestList}
-									class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+									class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 								/>
-								<span class="text-sm text-slate-700">Show guest names</span>
+								<span class="text-sm text-neutral-700">Show guest names</span>
 							</label>
 						</div>
 					</fieldset>
@@ -276,8 +276,8 @@
 					</div>
 
 					{#if capacityWarning}
-						<div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
-							<svg class="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<div class="rounded-lg bg-warning-light border border-warning px-4 py-3 text-sm text-warning flex items-start gap-2">
+							<svg class="h-4 w-4 text-warning mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
 							</svg>
 							<span>
@@ -291,11 +291,11 @@
 							<input
 								type="checkbox"
 								bind:checked={waitlistEnabled}
-								class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/40"
+								class="rounded border-neutral-300 text-primary focus:ring-primary/40"
 							/>
 							<div>
-								<span class="text-sm text-slate-700">Enable waitlist</span>
-								<p class="text-xs text-slate-400">When at capacity, guests can join a waitlist instead of being turned away.</p>
+								<span class="text-sm text-neutral-700">Enable waitlist</span>
+								<p class="text-xs text-neutral-400">When at capacity, guests can join a waitlist instead of being turned away.</p>
 							</div>
 						</label>
 					{/if}
@@ -311,11 +311,11 @@
 								error={errors.retentionDays || ''}
 							/>
 						{:else}
-							<p class="text-xs text-slate-400">
+							<p class="text-xs text-neutral-400">
 								Guest data will be automatically deleted 30 days after the event.
 								<button
 									type="button"
-									class="text-indigo-500 hover:text-indigo-600 underline underline-offset-2"
+									class="text-primary hover:text-primary-hover underline underline-offset-2"
 									onclick={() => (showRetention = true)}
 								>
 									Specify custom data retention
@@ -324,7 +324,7 @@
 						{/if}
 					</div>
 
-					<div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+					<div class="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
 						<Button variant="outline" href="/events/{eventId}">Cancel</Button>
 						<Button type="submit" loading={saving}>Save Changes</Button>
 					</div>

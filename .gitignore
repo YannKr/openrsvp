@@ -34,5 +34,10 @@ Thumbs.db
 # Claude
 .claude/
 
+# Playwright
+web/test-results/
+web/playwright-report/
+
 # Temp
 tmp/
+.gstack/

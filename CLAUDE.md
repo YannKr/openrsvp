@@ -89,6 +89,13 @@ No quick fixes. Always diagnose to the root cause and devise proper solutions. N
 - UUIDv7 for all IDs, RFC3339 for timestamps
 - Each domain follows model/store/service/handler layers
 
+## Design System
+
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
 ## Changelog
 
 When adding features, fixing bugs, or making notable changes, update the **Changelog** section in `README.md`. Add entries under the current version heading. If a new version is tagged, create a new heading for it.

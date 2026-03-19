@@ -24,7 +24,7 @@
 
 <div class="min-h-screen flex items-center justify-center px-4">
 	<div class="text-center">
-		<Spinner size="md" class="text-indigo-500 mx-auto" />
-		<p class="mt-4 text-slate-600">Signing you out...</p>
+		<Spinner size="md" class="text-primary mx-auto" />
+		<p class="mt-4 text-neutral-600">Signing you out...</p>
 	</div>
 </div>

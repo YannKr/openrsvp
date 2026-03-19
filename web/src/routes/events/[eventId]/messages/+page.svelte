@@ -157,22 +157,22 @@
 <AppShell>
 	<div class="max-w-3xl mx-auto">
 		<div class="mb-6">
-			<a href="/events/{eventId}" class="text-sm text-indigo-600 hover:text-indigo-500">&larr; Back to event</a>
-			<h1 class="mt-2 text-2xl font-bold text-slate-900">Messages</h1>
+			<a href="/events/{eventId}" class="text-sm text-primary hover:text-primary-hover">&larr; Back to event</a>
+			<h1 class="mt-2 text-2xl font-bold font-display text-neutral-900">Messages</h1>
 			{#if event}
-				<p class="text-sm text-slate-500">{event.title}</p>
+				<p class="text-sm text-neutral-500">{event.title}</p>
 			{/if}
 		</div>
 
 		{#if loading}
 			<div class="flex items-center justify-center py-16">
-				<Spinner size="lg" class="text-indigo-500" />
+				<Spinner size="lg" class="text-primary" />
 			</div>
 		{:else}
 			<!-- Compose form -->
 			<Card class="mb-6">
 				{#snippet header()}
-					<h2 class="text-lg font-semibold text-slate-900">Compose Message</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">Compose Message</h2>
 				{/snippet}
 
 				<form
@@ -185,12 +185,12 @@
 				>
 					{#if replyToAttendeeId}
 						<div class="flex items-center gap-2">
-							<span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-sm font-medium text-indigo-800">
+							<span class="inline-flex items-center gap-1 rounded-full bg-primary-lighter px-3 py-1 text-sm font-medium text-primary">
 								Replying to {replyToAttendeeName}
 								<button
 									type="button"
 									onclick={cancelReply}
-									class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-indigo-600 hover:bg-indigo-200 hover:text-indigo-800"
+									class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-primary hover:bg-primary-light hover:text-primary"
 									aria-label="Cancel reply"
 								>
 									&times;
@@ -234,19 +234,19 @@
 			<!-- Message list -->
 			<Card>
 				{#snippet header()}
-					<h2 class="text-lg font-semibold text-slate-900">All Messages</h2>
+					<h2 class="text-lg font-semibold font-display text-neutral-900">All Messages</h2>
 				{/snippet}
 
 				{#if messages.length === 0}
-					<p class="text-sm text-slate-500 text-center py-8">No messages yet.</p>
+					<p class="text-sm text-neutral-500 text-center py-8">No messages yet.</p>
 				{:else}
-					<div class="divide-y divide-slate-200 -mx-6 -mb-4">
+					<div class="divide-y divide-neutral-200 -mx-6 -mb-4">
 						{#each messages as message (message.id)}
-							<div class="px-6 py-4 {isIncoming(message) ? 'bg-indigo-50/50' : ''}">
+							<div class="px-6 py-4 {isIncoming(message) ? 'bg-primary-lighter/50' : ''}">
 								<div class="flex items-start justify-between">
 									<div class="flex-1 min-w-0">
-										<p class="text-sm font-medium text-slate-900">{message.subject}</p>
-										<p class="text-xs text-slate-500 mt-0.5">
+										<p class="text-sm font-medium text-neutral-900">{message.subject}</p>
+										<p class="text-xs text-neutral-500 mt-0.5">
 											{messageLabel(message)}
 											&middot; {formatDateTime(message.createdAt)}
 										</p>
@@ -255,13 +255,13 @@
 										<button
 											type="button"
 											onclick={() => handleReply(message)}
-											class="ml-3 shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+											class="ml-3 shrink-0 text-xs font-medium text-primary hover:text-primary-hover"
 										>
 											Reply
 										</button>
 									{/if}
 								</div>
-								<p class="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{message.body}</p>
+								<p class="mt-2 text-sm text-neutral-700 whitespace-pre-wrap">{message.body}</p>
 							</div>
 						{/each}
 					</div>

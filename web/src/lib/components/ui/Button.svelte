@@ -26,14 +26,14 @@
 	}: Props = $props();
 
 	const baseClasses =
-		'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+		'inline-flex items-center justify-center font-medium rounded-md transition-colors duration-short ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
 	const variantClasses: Record<string, string> = {
-		primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
-		secondary: 'bg-pink-100 text-pink-700 hover:bg-pink-200 focus:ring-pink-500',
-		outline: 'border border-slate-300 text-slate-700 hover:bg-slate-50 focus:ring-indigo-500',
-		ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-indigo-500',
-		danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
+		primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-primary',
+		secondary: 'bg-primary-light text-primary hover:bg-primary-lighter focus:ring-primary',
+		outline: 'border border-neutral-300 text-neutral-700 hover:bg-neutral-50 focus:ring-primary',
+		ghost: 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 focus:ring-primary',
+		danger: 'bg-error text-white hover:bg-red-700 focus:ring-error'
 	};
 
 	const sizeClasses: Record<string, string> = {

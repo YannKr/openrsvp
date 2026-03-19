@@ -9,19 +9,19 @@
 	let { variant = 'neutral', children }: Props = $props();
 
 	const variantClasses: Record<string, string> = {
-		success: 'bg-green-50 text-green-700',
-		warning: 'bg-yellow-50 text-yellow-700',
-		error: 'bg-red-50 text-red-700',
-		info: 'bg-blue-50 text-blue-700',
-		neutral: 'bg-slate-100 text-slate-700'
+		success: 'bg-success-light text-success',
+		warning: 'bg-warning-light text-warning',
+		error: 'bg-error-light text-error',
+		info: 'bg-info-light text-info',
+		neutral: 'bg-neutral-100 text-neutral-700'
 	};
 
 	const dotClasses: Record<string, string> = {
-		success: 'bg-green-500',
-		warning: 'bg-yellow-500',
-		error: 'bg-red-500',
-		info: 'bg-blue-500',
-		neutral: 'bg-slate-400'
+		success: 'bg-success',
+		warning: 'bg-warning',
+		error: 'bg-error',
+		info: 'bg-info',
+		neutral: 'bg-neutral-400'
 	};
 </script>
 

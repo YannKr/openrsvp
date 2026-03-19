@@ -48,18 +48,18 @@
 					wrapperClass: 'balloon-party',
 					decorBefore: '\u{1F388}',
 					decorAfter: '\u{1F389}',
-					bgGradient: `linear-gradient(135deg, ${primaryColor || '#f97316'}22, ${secondaryColor || '#eab308'}22)`,
-					borderColor: primaryColor || '#f97316',
-					accentColor: secondaryColor || '#eab308'
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#ea580c'}22, ${secondaryColor || '#d97706'}22)`,
+					borderColor: primaryColor || '#ea580c',
+					accentColor: secondaryColor || '#d97706'
 				};
 			case 'confetti':
 				return {
 					wrapperClass: 'confetti',
 					decorBefore: '\u{1F38A}',
 					decorAfter: '\u{1F38A}',
-					bgGradient: `linear-gradient(135deg, ${primaryColor || '#ec4899'}11, ${secondaryColor || '#8b5cf6'}11, ${primaryColor || '#ec4899'}11)`,
-					borderColor: primaryColor || '#ec4899',
-					accentColor: secondaryColor || '#8b5cf6'
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#E54666'}11, ${secondaryColor || '#f472b6'}11, ${primaryColor || '#E54666'}11)`,
+					borderColor: primaryColor || '#E54666',
+					accentColor: secondaryColor || '#f472b6'
 				};
 			case 'unicorn-magic':
 				return {
@@ -93,9 +93,9 @@
 					wrapperClass: 'elegant-affair',
 					decorBefore: '\u{1F48E}',
 					decorAfter: '\u{1F48E}',
-					bgGradient: `linear-gradient(135deg, ${primaryColor || '#7c3aed'}08, ${secondaryColor || '#c084fc'}08)`,
-					borderColor: primaryColor || '#7c3aed',
-					accentColor: secondaryColor || '#c084fc'
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#E54666'}08, ${secondaryColor || '#d4a574'}08)`,
+					borderColor: primaryColor || '#E54666',
+					accentColor: secondaryColor || '#d4a574'
 				};
 			case 'clean-minimal':
 				return {
@@ -103,8 +103,8 @@
 					decorBefore: '',
 					decorAfter: '',
 					bgGradient: '#ffffff',
-					borderColor: primaryColor || '#94a3b8',
-					accentColor: secondaryColor || '#64748b'
+					borderColor: primaryColor || '#E7E5E4',
+					accentColor: secondaryColor || '#E54666'
 				};
 			case 'tropical-vibes':
 				return {
@@ -129,18 +129,18 @@
 					wrapperClass: 'chalkboard',
 					decorBefore: '\u{270D}',
 					decorAfter: '\u{270D}',
-					bgGradient: '#1e293b',
-					borderColor: primaryColor || '#475569',
-					accentColor: secondaryColor || '#94a3b8'
+					bgGradient: '#1C1917',
+					borderColor: primaryColor || '#44403C',
+					accentColor: secondaryColor || '#A8A29E'
 				};
 			default:
 				return {
 					wrapperClass: 'default-template',
 					decorBefore: '',
 					decorAfter: '',
-					bgGradient: `linear-gradient(135deg, ${primaryColor || '#6366f1'}22, ${secondaryColor || '#ec4899'}22)`,
-					borderColor: primaryColor || '#6366f1',
-					accentColor: secondaryColor || '#ec4899'
+					bgGradient: `linear-gradient(135deg, ${primaryColor || '#E54666'}22, ${secondaryColor || '#f472b6'}22)`,
+					borderColor: primaryColor || '#E54666',
+					accentColor: secondaryColor || '#f472b6'
 				};
 		}
 	});
@@ -168,8 +168,8 @@
 <div
 	class="invite-card {templateConfig.wrapperClass}"
 	style="
-		--primary: {primaryColor || '#6366f1'};
-		--secondary: {secondaryColor || '#ec4899'};
+		--primary: {primaryColor || '#E54666'};
+		--secondary: {secondaryColor || '#f472b6'};
 		--card-bg: {templateConfig.bgGradient};
 		--border-color: {templateConfig.borderColor};
 		--accent-color: {templateConfig.accentColor};
@@ -195,7 +195,7 @@
 					style="
 						left: {Math.random() * 100}%;
 						top: {Math.random() * 100}%;
-						background: {['#ec4899', '#8b5cf6', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'][i % 6]};
+						background: {['#E54666', '#f472b6', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'][i % 6]};
 						animation-delay: {Math.random() * 2}s;
 						width: {4 + Math.random() * 6}px;
 						height: {4 + Math.random() * 6}px;
@@ -319,7 +319,7 @@
 		border-radius: 1.5rem;
 		padding: 2.5rem 2rem;
 		text-align: center;
-		font-family: var(--card-font);
+		font-family: var(--card-font, var(--font-body));
 		max-width: 32rem;
 		width: 100%;
 		margin: 0 auto;
@@ -340,7 +340,7 @@
 		z-index: 0;
 	}
 	.bg-image-overlay-dark {
-		background: rgba(30, 41, 59, 0.88);
+		background: rgba(28, 25, 23, 0.88);
 	}
 
 	/* Balloon Party */
@@ -363,7 +363,7 @@
 	.confetti {
 		border-width: 3px;
 		border-style: solid;
-		border-image: linear-gradient(135deg, #ec4899, #8b5cf6, #f59e0b, #10b981) 1;
+		border-image: linear-gradient(135deg, #E54666, #f472b6, #f59e0b, #10b981) 1;
 		border-radius: 0;
 		overflow: hidden;
 	}
@@ -396,13 +396,13 @@
 	.unicorn-magic {
 		border-color: var(--primary);
 		border-width: 2px;
-		background: linear-gradient(135deg, #a855f722, #ec489922, #818cf822);
+		background: linear-gradient(135deg, #a855f722, #ec489922, #c084fc22);
 		box-shadow: 0 0 30px #a855f733, 0 0 60px #ec489911;
 	}
 	.unicorn-magic .card-heading {
 		font-size: 2rem;
 		font-weight: 800;
-		background: linear-gradient(135deg, #a855f7, #ec4899, #818cf8);
+		background: linear-gradient(135deg, #a855f7, #ec4899, #c084fc);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
@@ -509,16 +509,17 @@
 	.clean-minimal .card-heading {
 		font-size: 1.75rem;
 		font-weight: 600;
-		color: #1e293b;
+		color: var(--color-neutral-900);
+		font-family: var(--font-display);
 	}
 	.clean-minimal .event-title {
-		color: #475569;
+		color: var(--color-neutral-700);
 	}
 	.clean-minimal .detail-row {
-		color: #64748b;
+		color: var(--color-neutral-500);
 	}
 	.clean-minimal .card-body p {
-		color: #475569;
+		color: var(--color-neutral-700);
 	}
 
 	/* Tropical Vibes */
@@ -584,30 +585,31 @@
 		border-width: 2px;
 		border-color: var(--border-color);
 		border-radius: 0.5rem;
-		background: #1e293b;
+		background: var(--color-neutral-900);
 	}
 	.chalkboard .card-heading {
 		font-size: 2rem;
 		font-weight: 700;
-		color: #f1f5f9;
+		color: var(--color-neutral-100);
+		font-family: var(--font-display);
 	}
 	.chalkboard .decor-emoji {
 		font-size: 1.25rem;
 	}
 	.chalkboard .event-title {
-		color: #cbd5e1;
+		color: var(--color-neutral-300);
 	}
 	.chalkboard .detail-row {
-		color: #94a3b8;
+		color: var(--color-neutral-400);
 	}
 	.chalkboard .detail-icon {
-		color: #94a3b8;
+		color: var(--color-neutral-400);
 	}
 	.chalkboard .card-body p {
-		color: #e2e8f0;
+		color: var(--color-neutral-200);
 	}
 	.chalkboard .card-footer p {
-		color: #94a3b8;
+		color: var(--color-neutral-400);
 	}
 	.chalk-dots {
 		position: absolute;
@@ -617,7 +619,7 @@
 	.chalk-dot {
 		position: absolute;
 		border-radius: 50%;
-		background: #f8fafc;
+		background: var(--color-neutral-50);
 	}
 
 	/* Default template */
@@ -641,6 +643,7 @@
 	.card-heading {
 		line-height: 1.2;
 		margin: 0;
+		font-family: var(--font-display);
 	}
 
 	.decor-emoji {
@@ -660,7 +663,7 @@
 	.event-title {
 		font-size: 1.125rem;
 		font-weight: 600;
-		color: #334155;
+		color: var(--color-neutral-700);
 		margin: 0;
 	}
 
@@ -669,7 +672,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		color: #475569;
+		color: var(--color-neutral-700);
 		font-size: 0.9375rem;
 	}
 
@@ -690,7 +693,7 @@
 	}
 
 	.card-body p {
-		color: #334155;
+		color: var(--color-neutral-700);
 		font-size: 1rem;
 		line-height: 1.6;
 		margin: 0;
@@ -703,7 +706,7 @@
 	}
 
 	.card-footer p {
-		color: #64748b;
+		color: var(--color-neutral-500);
 		font-size: 0.875rem;
 		font-style: italic;
 		margin: 0;
