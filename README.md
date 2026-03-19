@@ -409,6 +409,24 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ## 📝 Changelog
 
+### v1.5.0
+
+**Design System Overhaul:**
+- New warm rose (`#E54666`) brand palette replacing indigo, with stone (warm gray) neutrals
+- Satoshi (display), Plus Jakarta Sans (body), and Geist Mono (data) fonts — self-hosted, no CDN dependency
+- Semantic color tokens via Tailwind CSS v4 `@theme` — change your brand in one file (`app.css`)
+- Full dark mode with toggle in navbar, localStorage persistence, and system preference detection
+- `bg-surface` token for cards/modals that flips white→dark automatically
+- All 17 shared UI components updated to semantic design tokens
+- All 19 page files updated with consistent design language
+- InviteCardPreview: all 10 invite themes reworked with design system defaults
+- Go `EmailColors` struct — email template colors defined once, used across 9 templates
+- `/design` route: live component gallery showcasing all variants in light + dark mode
+- Playwright visual regression tests for automated screenshot comparison
+- Email rendering test framework via mailpit integration
+- `DESIGN.md` — documented color system, typography, spacing, motion, and shadows
+- Toast system deduplicated (single `Toast.svelte` component)
+
 ### v1.4.2
 
 **Features:**
