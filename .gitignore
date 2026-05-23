@@ -41,3 +41,7 @@ web/playwright-report/
 # Temp
 tmp/
 .gstack/
+
+# Worktrees
+.worktrees/
+.worktrees/

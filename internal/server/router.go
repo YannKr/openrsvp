@@ -22,6 +22,8 @@ func (s *Server) routes() *chi.Mux {
 	r := chi.NewRouter()
 
 	// --- Middleware ---
+	// Set baseline security headers on every response.
+	r.Use(security.SecurityHeadersMiddleware())
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{s.cfg.BaseURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

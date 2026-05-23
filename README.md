@@ -409,6 +409,27 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 
 ## 📝 Changelog
 
+### v1.5.1
+
+**CVE patches:**
+- Bump `github.com/go-chi/chi/v5` v5.2.1 → v5.3.0 (fixes GO-2025-3770: Host header injection → open redirect in `RedirectSlashes`)
+- Bump `golang.org/x/net` v0.33.0 → v0.40.0 (fixes GO-2025-3595: html.Tokenizer incorrect input neutralization called via bluemonday)
+- Bump Dockerfile base image `golang:1.23-alpine` → `golang:1.26-alpine` to pick up patched std-lib (go1.26.3): html/template XSS escaper bypass (GO-2026-4980), net/mail quadratic concat (GO-2026-4977), net/http2 frame infinite loop (GO-2026-4918)
+- Frontend: `npm audit fix` resolved 3 high / 2 moderate / 2 low CVEs in svelte, vite, @sveltejs/kit, devalue, picomatch
+- Production `govulncheck` clean: **0 callable vulnerabilities** in the shipped binary
+- Fix race condition in `TestExecuteCSVImport_SendInvitations` — switch shared slice to `atomic.Int32` so the asyncNotify goroutines cannot race with the test goroutine
+
+**Security hardening (full audit pass):**
+- Fix HTML injection in feedback email body — user-supplied `message` is now HTML-escaped before being embedded in the operator email (`internal/feedback/service.go`)
+- Remove hardcoded Postgres credentials from `docker-compose.postgres.yml`; the file now requires `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from `.env` and binds the Postgres port to `127.0.0.1` only
+- Add global `SecurityHeadersMiddleware` — sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, and `Strict-Transport-Security` (HTTPS only) on every response
+- Defang CSV formula injection on export — cells starting with `=`, `+`, `-`, `@`, tab, or CR are now prefixed with a single quote so opening the file in Excel/Sheets/Calc cannot execute attacker-supplied formulas (DDE, HYPERLINK exfil)
+- Validate invite-card customization server-side — `primaryColor`/`secondaryColor` must match `#hex`, `font` is allowlisted, and `customData.backgroundImage` must be a `/`-relative path or http(s) URL with no CSS-breakout characters; client-side `InviteCardPreview` re-validates the URL as defense-in-depth
+- Strengthen image-upload validation — every uploaded image is verified against its format-specific magic bytes (PNG signature, JPEG SOI+EOI markers, RIFF/WEBP), not just `http.DetectContentType`
+- Align session cookie `MaxAge` with `cfg.SessionExpiry` so the browser cookie no longer outlives the server-side session
+- Add `ReadHeaderTimeout` (5s) and `MaxHeaderBytes` (1MB) to the HTTP server to defeat slowloris
+- Defensive CRLF stripping on SMTP `From` / `To` / `Subject` headers
+
 ### v1.5.0
 
 **Design System Overhaul:**

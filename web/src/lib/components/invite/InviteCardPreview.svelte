@@ -37,7 +37,29 @@
 		}
 	});
 
-	const backgroundImage = $derived(parsedCustomData?.backgroundImage || '');
+	// Validate the background image URL before binding it to a CSS
+	// background-image: url(...) attribute. Without this, an organizer could
+	// craft customData.backgroundImage with javascript:, data:, or unclosed
+	// url() syntax that escapes the property and injects arbitrary CSS into
+	// the guest-facing page. We only permit http(s) origins or relative
+	// paths that begin with /; everything else is dropped.
+	function sanitizeBackgroundURL(raw: unknown): string {
+		if (typeof raw !== 'string' || raw === '') return '';
+		const trimmed = raw.trim();
+		// Reject anything containing CSS-syntax breakout characters.
+		if (/[()'"<>\\]/.test(trimmed)) return '';
+		// Allow same-origin relative paths.
+		if (trimmed.startsWith('/')) return trimmed;
+		// Otherwise require a fully-qualified http(s) URL.
+		try {
+			const u = new URL(trimmed);
+			if (u.protocol === 'http:' || u.protocol === 'https:') return trimmed;
+		} catch {
+			/* fall through */
+		}
+		return '';
+	}
+	const backgroundImage = $derived(sanitizeBackgroundURL(parsedCustomData?.backgroundImage));
 
 	const isDarkTemplate = $derived(templateId === 'chalkboard');
 

@@ -3,6 +3,7 @@ package rsvp
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -389,11 +390,12 @@ func TestExecuteCSVImport_SendInvitations(t *testing.T) {
 	require.NoError(t, err)
 	ev := createPublishedEvent(t, eventSvc, org.ID)
 
-	// Track invitations sent.
-	var invited []string
+	// Track invitation count via atomic so the asyncNotify goroutines spawned
+	// inside ExecuteCSVImport cannot race with the test goroutine.
+	var invitedCount atomic.Int32
 	svc.SetOnImportInvite(func(ctx context.Context, eventID string, attendee *Attendee) {
 		if attendee.Email != nil {
-			invited = append(invited, *attendee.Email)
+			invitedCount.Add(1)
 		}
 	})
 
@@ -410,6 +412,7 @@ func TestExecuteCSVImport_SendInvitations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, result.Imported)
 	assert.Equal(t, 2, result.Invited)
+	_ = invitedCount.Load() // keep variable live; assertion above covers behavior
 }
 
 func TestExecuteCSVImport_NoInvitationsWhenNotRequested(t *testing.T) {
