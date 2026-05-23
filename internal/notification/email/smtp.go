@@ -59,9 +59,12 @@ func (p *SMTPProvider) Send(ctx context.Context, msg *notification.Message) (*no
 	addr := net.JoinHostPort(p.host, p.port)
 
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("From: %s\r\n", p.from))
-	buf.WriteString(fmt.Sprintf("To: %s\r\n", msg.To))
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("utf-8", msg.Subject)))
+	// Defensive: strip CR/LF from header values to defeat header injection
+	// even if upstream validation is bypassed. mime.QEncoding handles the
+	// Subject separately by encoding non-printable bytes.
+	buf.WriteString(fmt.Sprintf("From: %s\r\n", stripCRLF(p.from)))
+	buf.WriteString(fmt.Sprintf("To: %s\r\n", stripCRLF(msg.To)))
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("utf-8", stripCRLF(msg.Subject))))
 	buf.WriteString("MIME-Version: 1.0\r\n")
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z)))
 
@@ -164,6 +167,17 @@ func (p *SMTPProvider) SendBatch(ctx context.Context, msgs []*notification.Messa
 		results[i], errs[i] = p.Send(ctx, msg)
 	}
 	return results, errs
+}
+
+// stripCRLF removes carriage returns and line feeds from a header value to
+// prevent SMTP header injection. We replace with empty string rather than
+// space because legitimate header values do not contain raw CR/LF.
+func stripCRLF(s string) string {
+	if !strings.ContainsAny(s, "\r\n") {
+		return s
+	}
+	r := strings.NewReplacer("\r", "", "\n", "")
+	return r.Replace(s)
 }
 
 // HealthCheck dials the SMTP server to verify connectivity.

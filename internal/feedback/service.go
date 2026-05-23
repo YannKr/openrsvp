@@ -3,6 +3,7 @@ package feedback
 import (
 	"context"
 	"fmt"
+	"html"
 
 	"github.com/rs/zerolog/log"
 
@@ -78,9 +79,18 @@ func (s *Service) submitGitHub(ctx context.Context, organizerEmail, feedbackType
 func (s *Service) submitEmail(ctx context.Context, organizerEmail, feedbackType, message string) error {
 	subject := fmt.Sprintf("[OpenRSVP Feedback - %s] %s", feedbackType, truncate(message, 60))
 	plain := fmt.Sprintf("Type: %s\nFrom: %s\n\n%s", feedbackType, organizerEmail, message)
-	html := fmt.Sprintf("<p><strong>Type:</strong> %s</p><p><strong>From:</strong> %s</p><hr><p>%s</p>", feedbackType, organizerEmail, message)
+	// HTML-escape every user/organizer-controlled field before interpolating
+	// into the email body. The message originates from an authenticated
+	// organizer but is rendered in the operator's mail client, so an
+	// unescaped <script> or <img onerror=...> would execute there.
+	htmlBody := fmt.Sprintf(
+		"<p><strong>Type:</strong> %s</p><p><strong>From:</strong> %s</p><hr><pre>%s</pre>",
+		html.EscapeString(feedbackType),
+		html.EscapeString(organizerEmail),
+		html.EscapeString(message),
+	)
 
-	return s.sendEmail(ctx, s.feedbackEmail, subject, html, plain)
+	return s.sendEmail(ctx, s.feedbackEmail, subject, htmlBody, plain)
 }
 
 func truncate(s string, maxLen int) string {

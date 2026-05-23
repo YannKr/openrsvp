@@ -5,25 +5,34 @@ services:
         condition: service_healthy
     environment:
       - DB_DRIVER=postgres
-      - DB_DSN=postgres://openrsvp:openrsvp@postgres:5432/openrsvp?sslmode=disable
+      # The DSN is read from the same .env that supplies POSTGRES_USER/PASSWORD/DB
+      # below; do NOT hardcode credentials here.
+      - DB_DSN=postgres://${POSTGRES_USER:?POSTGRES_USER required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB required}?sslmode=disable
     volumes: []
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: openrsvp
-      POSTGRES_PASSWORD: openrsvp
-      POSTGRES_DB: openrsvp
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required (set in .env)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required (set in .env)}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB required (set in .env)}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Bind to loopback only so the database is not reachable from outside the
+    # host. Production deployments should keep Postgres on a private network
+    # and never expose it to 0.0.0.0.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openrsvp"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+# Production note: this compose file uses sslmode=disable, which is only
+# acceptable for the local docker bridge network. For production Postgres,
+# set sslmode=require (or verify-full) and supply TLS certificates.
 
 volumes:
   postgres-data:

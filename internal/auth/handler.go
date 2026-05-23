@@ -111,13 +111,16 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the session cookie.
+	// Set the session cookie. MaxAge mirrors the server-side session
+	// lifetime so the browser-side cookie does not outlive the database
+	// record (otherwise the cookie sits around looking valid while every
+	// authenticated request 401s).
 	secure := !h.cfg.IsDevelopment()
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    resp.Token,
 		Path:     "/",
-		MaxAge:   int(7 * 24 * time.Hour / time.Second),
+		MaxAge:   int(h.cfg.SessionExpiry / time.Second),
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,

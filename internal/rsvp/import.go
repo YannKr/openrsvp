@@ -386,3 +386,25 @@ func parseCSVRow(record []string, colMap map[string]int) CSVImportRow {
 
 	return row
 }
+
+// DefangCSVCell neutralises CSV formula-injection payloads. Spreadsheet
+// applications (Excel, Google Sheets, LibreOffice Calc) interpret cells
+// beginning with =, +, -, @, tab, or carriage return as formulas — and will
+// auto-execute them when the organizer opens the exported guest list,
+// enabling DDE attacks, data exfiltration via HYPERLINK, and similar.
+// Prepending a single quote tells the spreadsheet to treat the value as a
+// literal string. Excel hides the leading quote on display.
+//
+// This is only applied at CSV export time. Storage retains the raw value
+// so downstream consumers (SMS dispatch, API responses, UI rendering with
+// HTML escaping) see the unmodified data.
+func DefangCSVCell(v string) string {
+	if v == "" {
+		return v
+	}
+	switch v[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + v
+	}
+	return v
+}

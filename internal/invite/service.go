@@ -4,12 +4,103 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
 )
+
+// colorPattern matches a CSS color in #RGB, #RRGGBB, or #RRGGBBAA form.
+// Anything that does not match is rejected (named colors like "red" and
+// rgb()/hsl() syntax are intentionally excluded because they widen the
+// attack surface for CSS-context breakouts via ; and {}.
+var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+
+// fontPattern matches a comma-separated font-family list of single-quoted,
+// double-quoted, or bare identifiers. Bare identifiers may contain letters,
+// digits, hyphens, and spaces only. Anything outside this grammar is
+// rejected to defeat CSS-context injection via the --card-font variable.
+var fontPattern = regexp.MustCompile(`^[A-Za-z0-9 ,\-_'"]+$`)
+
+// sanitizeColor returns the trimmed color value when it matches the
+// allowlisted #hex format. Empty strings are returned as-is so that
+// the default-fill logic in Save() can substitute the template default.
+func sanitizeColor(c string) string {
+	c = strings.TrimSpace(c)
+	if c == "" {
+		return ""
+	}
+	if colorPattern.MatchString(c) {
+		return c
+	}
+	return ""
+}
+
+// sanitizeFont returns the trimmed font value when it matches the
+// allowlist; otherwise returns empty so the default font is used.
+func sanitizeFont(f string) string {
+	f = strings.TrimSpace(f)
+	if f == "" || len(f) > 100 {
+		return ""
+	}
+	if fontPattern.MatchString(f) {
+		return f
+	}
+	return ""
+}
+
+// sanitizeCustomData re-encodes the JSON blob with a validated
+// backgroundImage URL: only relative paths starting with / or absolute
+// http(s) URLs are allowed; anything else (data:, javascript:, URLs
+// containing CSS-breakout characters) is dropped. Other custom fields are
+// preserved as-is. If the JSON is invalid, an empty object is returned.
+func sanitizeCustomData(raw string) string {
+	if raw == "" {
+		return "{}"
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		return "{}"
+	}
+	if bg, ok := data["backgroundImage"].(string); ok {
+		if cleaned := sanitizeBackgroundURL(bg); cleaned == "" {
+			delete(data, "backgroundImage")
+		} else {
+			data["backgroundImage"] = cleaned
+		}
+	}
+	out, err := json.Marshal(data)
+	if err != nil {
+		return "{}"
+	}
+	return string(out)
+}
+
+func sanitizeBackgroundURL(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	// Reject any character that could break out of a CSS url() context.
+	if strings.ContainsAny(s, "()\"'<>\\") {
+		return ""
+	}
+	// Same-origin relative paths only.
+	if strings.HasPrefix(s, "/") {
+		return s
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return ""
+	}
+	return s
+}
 
 // builtInTemplates holds the default set of invite card templates.
 var builtInTemplates = []*Template{
@@ -78,10 +169,10 @@ func (s *Service) Save(ctx context.Context, eventID string, req SaveInviteReques
 		Heading:        req.Heading,
 		Body:           req.Body,
 		Footer:         req.Footer,
-		PrimaryColor:   req.PrimaryColor,
-		SecondaryColor: req.SecondaryColor,
-		Font:           req.Font,
-		CustomData:     req.CustomData,
+		PrimaryColor:   sanitizeColor(req.PrimaryColor),
+		SecondaryColor: sanitizeColor(req.SecondaryColor),
+		Font:           sanitizeFont(req.Font),
+		CustomData:     sanitizeCustomData(req.CustomData),
 	}
 
 	if card.PrimaryColor == "" {

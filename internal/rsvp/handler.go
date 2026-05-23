@@ -306,12 +306,16 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		if a.Phone != nil {
 			phone = *a.Phone
 		}
+		// Defang formula-prefix characters on every cell so that opening
+		// the exported CSV in a spreadsheet cannot execute attacker-supplied
+		// formulas (e.g. a guest named "=cmd|'/c calc'!A0" or a phone of
+		// "+cmd|...").
 		row := []string{
-			a.Name,
-			email,
-			phone,
-			a.RSVPStatus,
-			a.DietaryNotes,
+			DefangCSVCell(a.Name),
+			DefangCSVCell(email),
+			DefangCSVCell(phone),
+			DefangCSVCell(a.RSVPStatus),
+			DefangCSVCell(a.DietaryNotes),
 			strconv.Itoa(a.PlusOnes),
 			a.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
@@ -324,7 +328,7 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 				if attendeeAnswers != nil {
 					answer = attendeeAnswers[qID]
 				}
-				row = append(row, answer)
+				row = append(row, DefangCSVCell(answer))
 			}
 		}
 
