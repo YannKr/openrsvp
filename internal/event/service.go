@@ -634,12 +634,26 @@ func isValidContactRequirement(s string) bool {
 // generateBase62Token generates a random token of the given length using base62
 // characters (0-9, a-z, A-Z).
 func generateBase62Token(length int) (string, error) {
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("read random bytes: %w", err)
+	// max is the largest multiple of the alphabet size that fits in a byte.
+	// Rejecting random bytes >= max eliminates the modulo bias that would
+	// otherwise favor the first (256 % len(base62Chars)) characters.
+	const max = 256 - (256 % len(base62Chars))
+	out := make([]byte, length)
+	buf := make([]byte, length)
+	for i := 0; i < length; {
+		if _, err := rand.Read(buf); err != nil {
+			return "", fmt.Errorf("read random bytes: %w", err)
+		}
+		for _, b := range buf {
+			if int(b) >= max {
+				continue
+			}
+			out[i] = base62Chars[int(b)%len(base62Chars)]
+			i++
+			if i == length {
+				break
+			}
+		}
 	}
-	for i := range b {
-		b[i] = base62Chars[int(b[i])%len(base62Chars)]
-	}
-	return string(b), nil
+	return string(out), nil
 }

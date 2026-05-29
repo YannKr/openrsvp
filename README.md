@@ -49,7 +49,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+ (the `toolchain go1.26.3` directive auto-fetches the patched compiler when `GOTOOLCHAIN=auto`, the default)
 - Node.js 22+
 - Make
 
@@ -408,6 +408,19 @@ docker compose exec postgres pg_dump -U openrsvp openrsvp > backup.sql
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.5.2 (2026-05-29)
+
+**Dependency upgrades + CVE patches:**
+- Bump `golang.org/x/net` v0.40.0 → v0.55.0 (fixes GO-2026-4918: net/http2 infinite loop on bad `SETTINGS_MAX_FRAME_SIZE`) and `golang.org/x/sys` v0.33.0 → v0.45.0
+- Add explicit `toolchain go1.26.3` directive to `go.mod` so local builds and CI (not just Docker) compile against the patched std-lib that fixes GO-2026-4980/4982 (html/template XSS escaper bypass), GO-2026-4977/4986 (net/mail quadratic concat), and GO-2026-4971 (net Dial NUL byte). `go` directive bumped 1.23.0 → 1.25.0 (required by upgraded modules)
+- Upgrade all remaining Go modules to latest patch/minor: `aws-sdk-go-v2` suite, `go-chi/cors` v1.2.1 → v1.2.2, `golang-migrate/migrate/v4` v4.18.2 → v4.19.1, `lib/pq` v1.10.9 → v1.12.3, `mattn/go-sqlite3` v1.14.24 → v1.14.44, `rs/zerolog` v1.33.0 → v1.35.1, `smithy-go` v1.24.1 → v1.26.0
+- Backend `govulncheck` clean: **0 vulnerabilities** (was 6 callable std-lib/x-net vulns)
+- Frontend majors: `vite` 7 → 8, `typescript` 5 → 6, `@sveltejs/vite-plugin-svelte` 6 → 7; minors: `@sveltejs/kit` → 2.61.1, `svelte` → 5.55.10, `tailwindcss`/`@tailwindcss/vite` → 4.3.0, `@playwright/test` → 1.60.0, `svelte-check` → 4.4.8
+- Add npm `overrides` pinning `cookie` ^0.7.2 (fixes GHSA-pxg6-pf52-xh8x: out-of-bounds chars in cookie name/path/domain; SvelteKit still transitively pins `cookie@^0.6.0`). Frontend `npm audit` clean: **0 vulnerabilities**
+
+**Security hardening:**
+- Eliminate modulo bias in base62 token generation for RSVP guest tokens (`internal/rsvp/service.go`) and event share tokens (`internal/event/service.go`) — switch to rejection sampling so all 62 alphabet characters are uniformly distributed (previously the first 8 characters were ~25% more likely)
 
 ### v1.5.1
 
