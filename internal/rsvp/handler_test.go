@@ -241,7 +241,10 @@ func TestHandleGetPublicInvite_WithAttendance(t *testing.T) {
 	assert.Equal(t, float64(3), attendance["headcount"]) // 1 + 2 plus ones
 	names, ok := attendance["names"].([]any)
 	require.True(t, ok)
-	assert.Equal(t, "Alice", names[0])
+	alice, ok := names[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "Alice", alice["name"])
+	assert.Equal(t, float64(2), alice["plusOnes"])
 }
 
 func TestHandleGetPublicInvite_NoAttendanceWhenDisabled(t *testing.T) {

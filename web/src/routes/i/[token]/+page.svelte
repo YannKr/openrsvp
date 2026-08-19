@@ -25,7 +25,7 @@
 	let attendance = $state<PublicAttendance | null>(null);
 	let eventQuestions = $state<EventQuestion[]>([]);
 	let showAllNames = $state(false);
-	const displayNames = $derived(
+	const displayGuests = $derived(
 		attendance?.names
 			? (showAllNames ? attendance.names : attendance.names.slice(0, 50))
 			: []
@@ -417,9 +417,9 @@
 						{/if}
 						{#if attendance.names && attendance.names.length > 0}
 							<div class="mt-3 flex flex-wrap gap-2">
-								{#each displayNames as guestName}
-									<span class="inline-flex items-center rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary border border-primary-light">
-										{guestName}
+								{#each displayGuests as guest}
+									<span class="inline-flex items-center gap-1 rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary border border-primary-light">
+										{guest.name}{#if guest.plusOnes}<span class="opacity-80">+{guest.plusOnes}</span>{/if}
 									</span>
 								{/each}
 								{#if !showAllNames && attendance.names.length > 50}

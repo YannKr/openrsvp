@@ -31,6 +31,12 @@ type RSVPRequest struct {
 	Answers       map[string]string `json:"answers,omitempty"` // questionID -> answer
 }
 
+// PublicGuest is an attending guest shown on public invite and RSVP pages.
+type PublicGuest struct {
+	Name     string `json:"name"`
+	PlusOnes int    `json:"plusOnes,omitempty"`
+}
+
 // RSVPStats holds aggregate counts of RSVP responses for an event.
 type RSVPStats struct {
 	Attending          int `json:"attending"`

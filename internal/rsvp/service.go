@@ -194,8 +194,8 @@ func (s *Service) asyncNotify(fn func()) {
 
 // PublicAttendance holds the attendance data visible on the public invite page.
 type PublicAttendance struct {
-	Headcount int      `json:"headcount"`
-	Names     []string `json:"names,omitempty"`
+	Headcount int           `json:"headcount"`
+	Names     []PublicGuest `json:"names,omitempty"`
 }
 
 // PublicInviteData holds the combined event and invite data for the public invite page.
@@ -241,7 +241,7 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 	}
 
 	if ev.ShowHeadcount || ev.ShowGuestList {
-		headcount, names, err := s.store.GetPublicAttendance(ctx, ev.ID)
+		headcount, guests, err := s.store.GetPublicAttendance(ctx, ev.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get public attendance: %w", err)
 		}
@@ -250,7 +250,7 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 			attendance.Headcount = headcount
 		}
 		if ev.ShowGuestList {
-			attendance.Names = names
+			attendance.Names = guests
 		}
 		data.Attendance = attendance
 	}
@@ -572,7 +572,7 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 	}
 
 	if ev.ShowHeadcount || ev.ShowGuestList {
-		headcount, names, err := s.store.GetPublicAttendance(ctx, a.EventID)
+		headcount, guests, err := s.store.GetPublicAttendance(ctx, a.EventID)
 		if err != nil {
 			return nil, fmt.Errorf("get public attendance: %w", err)
 		}
@@ -581,7 +581,7 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 			attendance.Headcount = headcount
 		}
 		if ev.ShowGuestList {
-			attendance.Names = names
+			attendance.Names = guests
 		}
 		result.Attendance = attendance
 	}

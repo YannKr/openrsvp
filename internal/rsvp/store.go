@@ -172,9 +172,9 @@ func (s *Store) GetStats(ctx context.Context, eventID string) (*RSVPStats, error
 }
 
 // GetPublicAttendance returns the headcount (attendees + plus_ones) and the
-// sorted list of names for attending guests. Only guests with rsvp_status =
-// 'attending' are included.
-func (s *Store) GetPublicAttendance(ctx context.Context, eventID string) (int, []string, error) {
+// sorted list of attending guests (name + plus-ones). Only guests with
+// rsvp_status = 'attending' are included.
+func (s *Store) GetPublicAttendance(ctx context.Context, eventID string) (int, []PublicGuest, error) {
 	// Headcount: count of attending attendees + sum of their plus_ones.
 	var headcount int
 	err := s.db.QueryRowContext(ctx,
@@ -184,30 +184,30 @@ func (s *Store) GetPublicAttendance(ctx context.Context, eventID string) (int, [
 		return 0, nil, fmt.Errorf("get public attendance headcount: %w", err)
 	}
 
-	// Names: sorted list of attending guest names.
+	// Guests: sorted list of attending names with plus-one counts.
 	// Cap the number of names returned to prevent excessively large responses.
 	const maxPublicNames = 500
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT name FROM attendees WHERE event_id = ? AND rsvp_status = 'attending' ORDER BY name ASC LIMIT ?`, eventID, maxPublicNames,
+		`SELECT name, plus_ones FROM attendees WHERE event_id = ? AND rsvp_status = 'attending' ORDER BY name ASC LIMIT ?`, eventID, maxPublicNames,
 	)
 	if err != nil {
 		return 0, nil, fmt.Errorf("get public attendance names: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var names []string
+	var guests []PublicGuest
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var g PublicGuest
+		if err := rows.Scan(&g.Name, &g.PlusOnes); err != nil {
 			return 0, nil, fmt.Errorf("scan attendance name: %w", err)
 		}
-		names = append(names, name)
+		guests = append(guests, g)
 	}
 	if err := rows.Err(); err != nil {
 		return 0, nil, fmt.Errorf("iterate attendance names: %w", err)
 	}
 
-	return headcount, names, nil
+	return headcount, guests, nil
 }
 
 // FindFirstWaitlisted retrieves the earliest waitlisted attendee for an event.

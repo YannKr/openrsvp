@@ -712,8 +712,11 @@ func TestGetPublicAttendanceWithAttendees(t *testing.T) {
 	require.NotNil(t, data.Attendance)
 	// Headcount = Alice(1+2) + Bob(1+1) = 5 (only attending)
 	assert.Equal(t, 5, data.Attendance.Headcount)
-	// Names = only attending, sorted alphabetically
-	assert.Equal(t, []string{"Alice", "Bob"}, data.Attendance.Names)
+	// Names = only attending, sorted alphabetically, with plus-ones
+	assert.Equal(t, []PublicGuest{
+		{Name: "Alice", PlusOnes: 2},
+		{Name: "Bob", PlusOnes: 1},
+	}, data.Attendance.Names)
 }
 
 func TestGetPublicAttendanceHeadcountOnly(t *testing.T) {
@@ -769,7 +772,7 @@ func TestGetPublicAttendanceGuestListOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, data.Attendance)
 	assert.Equal(t, 0, data.Attendance.Headcount)
-	assert.Equal(t, []string{"Alice"}, data.Attendance.Names)
+	assert.Equal(t, []PublicGuest{{Name: "Alice"}}, data.Attendance.Names)
 }
 
 func TestGetPublicAttendanceDisabled(t *testing.T) {
@@ -818,7 +821,7 @@ func TestGetByTokenWithEventIncludesAttendance(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result.Attendance)
 	assert.Equal(t, 2, result.Attendance.Headcount) // 1 + 1 plus one
-	assert.Equal(t, []string{"Alice"}, result.Attendance.Names)
+	assert.Equal(t, []PublicGuest{{Name: "Alice", PlusOnes: 1}}, result.Attendance.Names)
 }
 
 func TestRemoveAttendeeWrongEvent(t *testing.T) {
