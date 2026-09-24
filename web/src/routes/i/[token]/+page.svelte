@@ -460,6 +460,7 @@
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 						</svg>
 					</div>
+					{#if rsvpToken}
 					<h2 class="font-display text-2xl font-bold text-neutral-900 mb-2">RSVP Received!</h2>
 					<p class="text-neutral-600 mb-4">
 						Thank you, <strong>{name}</strong>! Your response has been recorded.
@@ -470,6 +471,16 @@
 							{statusLabel}
 						</span>
 					</div>
+					{:else}
+					<h2 class="font-display text-2xl font-bold text-neutral-900 mb-2">You Already Replied</h2>
+					<p class="text-neutral-600 mb-4">
+						{#if email.trim()}
+							You already replied to this event. We sent you an email with a link. Use this link to change your reply.
+						{:else}
+							You already replied to this event. We did not change your first reply.
+						{/if}
+					</p>
+					{/if}
 					{#if (rsvpStatus === 'attending' || rsvpStatus === 'maybe')}
 						<div class="mt-4 flex justify-center">
 							<AddToCalendar event={eventData} shareToken={token} />

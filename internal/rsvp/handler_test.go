@@ -307,6 +307,26 @@ func TestHandleSubmitRSVP_Success(t *testing.T) {
 	assert.NotEmpty(t, data["rsvpToken"])
 }
 
+func TestHandleSubmitRSVP_DuplicateEmailHidesToken(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+	payload := map[string]any{
+		"name":       "Alice",
+		"email":      "alice@example.com",
+		"rsvpStatus": "attending",
+	}
+
+	rr := testutil.DoRequest(t, h, "POST", "/public/"+shareToken, payload)
+	require.Equal(t, http.StatusCreated, rr.Code)
+
+	rr = testutil.DoRequest(t, h, "POST", "/public/"+shareToken, payload)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Empty(t, data["rsvpToken"])
+}
+
 func TestHandleSubmitRSVP_InvalidJSON(t *testing.T) {
 	h, _, eventSvc, org := setupRSVPHandler(t)
 	shareToken, _ := publishEvent(t, eventSvc, org.ID)

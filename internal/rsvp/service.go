@@ -284,8 +284,9 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 }
 
 // SubmitRSVP processes an RSVP submission for an event identified by its share
-// token. It deduplicates by email or phone, performing an upsert when a
-// matching attendee already exists.
+// token. It deduplicates by email or phone. When a matching attendee already
+// exists, it leaves the row unchanged, returns no token, and emails the manage
+// link to the stored address.
 func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPRequest) (*Attendee, error) {
 	if req.Name == "" {
 		return nil, validationErrorf("name is required")
@@ -406,57 +407,25 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 
 	if existing != nil {
-		// For existing attendee updates, check capacity if changing to attending.
-		if req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
-			stats, err := s.store.GetStats(ctx, ev.ID)
-			if err != nil {
-				return nil, fmt.Errorf("check capacity: %w", err)
-			}
-			// Subtract current attendee's contribution before checking.
-			currentContribution := 0
-			if existing.RSVPStatus == "attending" {
-				currentContribution = 1 + existing.PlusOnes
-			}
-			newContribution := 1 + req.PlusOnes
-			if stats.AttendingHeadcount-currentContribution+newContribution > *ev.MaxCapacity {
-				if ev.WaitlistEnabled {
-					req.RSVPStatus = "waitlisted"
-				} else {
-					return nil, validationErrorf("Event is at capacity")
-				}
+		// Do not change the existing RSVP and do not return its token. Anyone
+		// who knows the email or phone could otherwise take the RSVP over.
+		// Send the manage link to the inbox of the owner instead. Without an
+		// email address there is no safe channel, so send nothing.
+		if hasEmail {
+			if err := s.SendRSVPLookupEmail(ctx, shareToken, *req.Email); err != nil {
+				s.logger.Error().Err(err).Str("event_id", ev.ID).Msg("duplicate rsvp: failed to send lookup email")
 			}
 		}
-
-		// Update the existing RSVP.
-		existing.Name = req.Name
-		existing.RSVPStatus = req.RSVPStatus
-		existing.DietaryNotes = req.DietaryNotes
-		existing.PlusOnes = req.PlusOnes
-		existing.ContactMethod = req.ContactMethod
-		if req.Email != nil {
-			existing.Email = req.Email
-		}
-		if req.Phone != nil {
-			existing.Phone = req.Phone
-		}
-		if err := s.store.Update(ctx, existing); err != nil {
-			return nil, err
-		}
-		// Validate and save question answers if provided.
-		if len(req.Answers) > 0 && s.validateAnswers != nil {
-			if err := s.validateAnswers(ctx, existing.ID, ev.ID, req.Answers); err != nil {
-				return nil, err
-			}
-		}
-		if s.notifyRSVP != nil {
-			notifyFn := s.notifyRSVP
-			eventID := ev.ID
-			a := existing
-			s.asyncNotify(func() {
-				notifyFn(context.Background(), eventID, a)
-			})
-		}
-		return existing, nil
+		return &Attendee{
+			EventID:       ev.ID,
+			Name:          req.Name,
+			Email:         req.Email,
+			Phone:         req.Phone,
+			RSVPStatus:    req.RSVPStatus,
+			ContactMethod: req.ContactMethod,
+			DietaryNotes:  req.DietaryNotes,
+			PlusOnes:      req.PlusOnes,
+		}, nil
 	}
 
 	// Check capacity for new attendees.

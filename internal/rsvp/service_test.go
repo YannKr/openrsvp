@@ -82,13 +82,33 @@ func TestSubmitRSVPDuplicateEmail(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	emailSent := make(chan string, 1)
+	svc.SetEmailSender(func(ctx context.Context, to, subject, htmlBody, plainBody string) error {
+		emailSent <- plainBody
+		return nil
+	})
+
+	// A second submission with the same email must not overwrite the RSVP or
+	// return its token: anyone who knows the address could otherwise take it
+	// over. The manage link goes to the inbox of the owner instead.
 	second, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
 		Name: "Alice Updated", Email: strPtr("alice@example.com"), RSVPStatus: "maybe",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, first.ID, second.ID)
-	assert.Equal(t, "Alice Updated", second.Name)
-	assert.Equal(t, "maybe", second.RSVPStatus)
+	assert.Empty(t, second.RSVPToken)
+	assert.Empty(t, second.ID)
+
+	stored, err := svc.GetByToken(ctx, first.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "Alice", stored.Name)
+	assert.Equal(t, "attending", stored.RSVPStatus)
+
+	select {
+	case body := <-emailSent:
+		assert.Contains(t, body, first.RSVPToken)
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected lookup email to be sent")
+	}
 }
 
 func TestSubmitRSVPDuplicatePhone(t *testing.T) {
@@ -115,8 +135,12 @@ func TestSubmitRSVPDuplicatePhone(t *testing.T) {
 		Name: "Bob Updated", Phone: strPtr("+15551234567"), RSVPStatus: "declined", ContactMethod: "sms",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, first.ID, second.ID)
-	assert.Equal(t, "declined", second.RSVPStatus)
+	assert.Empty(t, second.RSVPToken)
+
+	stored, err := svc.GetByToken(ctx, first.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "Bob", stored.Name)
+	assert.Equal(t, "attending", stored.RSVPStatus)
 }
 
 func TestSubmitRSVPUnpublishedEvent(t *testing.T) {
@@ -997,7 +1021,7 @@ func TestSubmitRSVPUpsertCapacityCheck(t *testing.T) {
 	ev := createPublishedEventWithCapacity(t, eventSvc, org.ID, 2)
 
 	// Submit as "maybe" (does not count toward capacity).
-	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+	alice, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
 		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "maybe",
 	})
 	require.NoError(t, err)
@@ -1008,12 +1032,19 @@ func TestSubmitRSVPUpsertCapacityCheck(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Alice's upsert to "attending" should fail (capacity is 2, Bob takes 2 spots).
+	// A resubmission with Alice's email no longer updates her RSVP, so it
+	// cannot push the event over capacity.
 	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
 		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
 	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Event is at capacity")
+	require.NoError(t, err)
+
+	stats, err := svc.GetStats(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, stats.AttendingHeadcount)
+	stored, err := svc.GetByToken(ctx, alice.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "maybe", stored.RSVPStatus)
 }
 
 func TestUpdateByTokenCapacityEnforced(t *testing.T) {
