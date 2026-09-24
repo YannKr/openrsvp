@@ -423,7 +423,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if location == "" {
 				location = "TBD"
 			}
-			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+			// Link to the guest's own RSVP. The public invite page would make
+			// a known guest submit a new RSVP, which the duplicate check refuses.
+			inviteURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
 
 			htmlBody, plainBody, err := templates.RenderEventReminder(
 				ev.Title, eventDate, location,
@@ -598,7 +600,6 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				return
 			}
 
-			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
 			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
 			location := ev.Location
 			if location == "" {
@@ -615,6 +616,8 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 					continue
 				}
 
+				// Each recipient is a known guest: link to their own RSVP.
+				inviteURL := cfg.BaseURL + "/r/" + a.RSVPToken
 				htmlBody, plainBody, err := templates.RenderEventReminder(ev.Title, eventDate, location, body, inviteURL)
 				if err != nil {
 					logger.Error().Err(err).Str("attendee_id", a.ID).Msg("message notify: failed to render template")

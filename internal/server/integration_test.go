@@ -28,6 +28,13 @@ import (
 // configured, so every notification send is a no-op (hermetic, no network).
 func newTestServer(t *testing.T) (*Server, database.DB) {
 	t.Helper()
+	return newTestServerWith(t, nil)
+}
+
+// newTestServerWith is newTestServer with a hook to change the config before
+// New() runs, for example to point the SMTP provider at a capture server.
+func newTestServerWith(t *testing.T, configure func(*config.Config)) (*Server, database.DB) {
+	t.Helper()
 
 	db := testutil.NewTestDB(t)
 
@@ -44,6 +51,9 @@ func newTestServer(t *testing.T) (*Server, database.DB) {
 		DefaultRetentionDays:      30,
 		MaxCoHostsPerEvent:        10,
 		UploadsDir:                t.TempDir(),
+	}
+	if configure != nil {
+		configure(cfg)
 	}
 
 	srv := New(cfg, db, zerolog.Nop())
