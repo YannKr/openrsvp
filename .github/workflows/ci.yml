@@ -15,10 +15,10 @@ jobs:
     name: Frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
       - run: cd web && npm ci
@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ['1.24', '1.25']
+        go: ['1.25', '1.27']
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
       - name: Install dependencies
@@ -51,7 +51,7 @@ jobs:
         run: go tool cover -func=coverage.out | tail -1
       - name: Upload coverage to Codecov
         if: matrix.go == '1.25'
-        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.out
           fail_ci_if_error: false
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: openrsvp
           POSTGRES_PASSWORD: openrsvp
@@ -77,8 +77,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgres://openrsvp:openrsvp@localhost:5432/openrsvp_test?sslmode=disable
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25'
       - name: Install dependencies
@@ -93,44 +93,42 @@ jobs:
     name: Lint (golangci-lint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.1'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: golangci-lint
-        # Blocking gate. golangci-lint v2.12.2 binaries are built with go1.26.x
-        # and type-check the go1.26 codebase cleanly (the old go/types panic on
-        # v2.1.0 is gone). Findings fail the build; see .golangci.yml for the
-        # enabled linters and the documented pre-existing burn-down allow-list.
-        uses: golangci/golangci-lint-action@db582008a42febd596419635a5abc9d9815daa9c # v9.2.1
+        # Blocking gate. golangci-lint v2.13.2 binaries are built with go1.27.x
+        # and type-check the go1.27 codebase cleanly. A binary built with an
+        # older Go refuses to run against the go1.27 toolchain directive.
+        # Findings fail the build; see .golangci.yml for the enabled linters
+        # and the documented pre-existing burn-down allow-list.
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.13.2
 
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    # Run on the toolchain the project actually targets. go1.26.6 patches seven
-    # stdlib advisories that 1.26.5 carries: GO-2026-6218 (net/url),
-    # GO-2026-6091 (html/template), GO-2026-6090 (crypto/tls), GO-2026-6089
-    # (net/http), GO-2026-6088 (encoding/xml), GO-2026-5972 (encoding/asn1) and
-    # GO-2026-5026 (x/net/idna). GOTOOLCHAIN=local pins the analysis to the
-    # installed version so the scan reflects 1.26.6.
+    # Run on the toolchain the project actually targets (the toolchain
+    # directive in go.mod). GOTOOLCHAIN=local pins the analysis to the
+    # installed version so the scan reflects 1.27.1.
     # Keep this current as new stdlib advisories land, and keep it in step with
     # the pinned base image in the Dockerfile. Both must name the same patch
     # version, so that this gate scans what the released binary is built with.
     env:
       GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.6'
+          go-version: '1.27.1'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Run govulncheck
         # Blocking gate. Reported vulnerabilities fail the build.
         run: govulncheck ./...
@@ -140,9 +138,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [frontend, backend]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
