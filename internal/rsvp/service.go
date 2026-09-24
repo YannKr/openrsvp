@@ -666,7 +666,13 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 				newPlusOnes = *req.PlusOnes
 			}
 			if stats.AttendingHeadcount+1+newPlusOnes > *ev.MaxCapacity {
-				return nil, validationErrorf("Event is at capacity")
+				// Join the waitlist, as a public submission does. An imported
+				// (pending) guest gives the first reply here.
+				if !ev.WaitlistEnabled {
+					return nil, validationErrorf("Event is at capacity")
+				}
+				waitlisted := "waitlisted"
+				req.RSVPStatus = &waitlisted
 			}
 		} else if req.PlusOnes != nil && *req.PlusOnes > a.PlusOnes {
 			// Already attending but increasing plus-ones.
@@ -714,7 +720,8 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		a.Name = *req.Name
 	}
 	if req.RSVPStatus != nil {
-		// Validation already done above — only attending/maybe/declined allowed.
+		// Validation already done above — only attending/maybe/declined allowed,
+		// or waitlisted when the capacity check set it.
 		a.RSVPStatus = *req.RSVPStatus
 	}
 	if req.DietaryNotes != nil {

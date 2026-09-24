@@ -1605,3 +1605,51 @@ func TestSubmitRSVPInvalidAnswersStoresNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Alice", stored.Name)
 }
+
+// An imported guest is pending and gets a /r/{token} link. The first reply
+// goes through UpdateByToken, so it must work like a public submission: status,
+// answers, and the waitlist when the event is full.
+func TestUpdateByTokenFirstReplyFromPending(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEventWithCapacityAndWaitlist(t, eventSvc, org.ID, 1)
+
+	qSvc := question.NewService(question.NewStore(svc.store.db))
+	q, err := qSvc.Create(ctx, ev.ID, question.CreateQuestionRequest{Label: "Meal", Type: "text"})
+	require.NoError(t, err)
+	svc.SetValidateAnswers(qSvc.ValidateAndSaveAnswers)
+	svc.SetCheckAnswers(qSvc.ValidateAnswers)
+
+	result, err := svc.ExecuteCSVImport(ctx, ev.ID, org.ID, CSVImportRequest{Rows: []CSVImportRow{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+	}})
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Imported)
+	attendees, err := svc.ListByEvent(ctx, ev.ID)
+	require.NoError(t, err)
+	byName := map[string]*Attendee{}
+	for _, a := range attendees {
+		require.Equal(t, "pending", a.RSVPStatus)
+		byName[a.Name] = a
+	}
+
+	alice, err := svc.UpdateByToken(ctx, byName["Alice"].RSVPToken, UpdateRSVPRequest{
+		RSVPStatus: strPtr("attending"), Answers: map[string]string{q.ID: "Fish"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "attending", alice.RSVPStatus)
+	answers, err := qSvc.GetAnswersForAttendee(ctx, alice.ID)
+	require.NoError(t, err)
+	require.Len(t, answers, 1)
+	assert.Equal(t, "Fish", answers[0].Answer)
+
+	// The event is now full. With the waitlist on, Bob joins it, as he would
+	// through the public invite page.
+	bob, err := svc.UpdateByToken(ctx, byName["Bob"].RSVPToken, UpdateRSVPRequest{RSVPStatus: strPtr("attending")})
+	require.NoError(t, err)
+	assert.Equal(t, "waitlisted", bob.RSVPStatus)
+}

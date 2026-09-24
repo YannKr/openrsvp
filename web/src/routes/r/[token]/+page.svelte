@@ -60,9 +60,10 @@
 	// RSVP closed check
 	const rsvpsClosed = $derived(eventData?.rsvpsClosed === true);
 
-	// When at capacity and user is NOT already attending, disable the attending option.
+	// When at capacity and user is NOT already attending, disable the attending
+	// option, unless the waitlist is on: then attending puts the guest on it.
 	const attendingDisabled = $derived(
-		eventData?.atCapacity === true && attendee?.rsvpStatus !== 'attending'
+		eventData?.atCapacity === true && attendee?.rsvpStatus !== 'attending' && !eventData?.waitlistEnabled
 	);
 
 	onMount(async () => {
@@ -337,9 +338,15 @@
 
 			<!-- Capacity Notice -->
 			{#if eventData.atCapacity && attendee.rsvpStatus !== 'attending' && attendee.rsvpStatus !== 'waitlisted'}
+				{#if eventData.waitlistEnabled}
+					<div class="mb-4 rounded-md bg-info-light border border-info/20 px-4 py-3 text-sm text-info text-center">
+						This event is full. If you select "Attending", you go on the waitlist.
+					</div>
+				{:else}
 				<div class="mb-4 rounded-md bg-error-light border border-error/20 px-4 py-3 text-sm text-error text-center">
 					This event is at capacity. You can still RSVP as "maybe" or "declined".
 				</div>
+				{/if}
 			{/if}
 
 			<!-- RSVP Closed Notice -->
