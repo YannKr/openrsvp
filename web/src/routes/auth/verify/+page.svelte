@@ -26,7 +26,7 @@
 		replaceState('/auth/verify', {});
 
 		try {
-			const result = await api.post<{ token: string; organizer: Organizer }>('/auth/verify', { token });
+			const result = await api.post<{ organizer: Organizer }>('/auth/verify', { token });
 			$currentUser = result.organizer;
 			toast.success('Successfully signed in!');
 			goto('/events');
