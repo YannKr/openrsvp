@@ -951,7 +951,7 @@ func (s *Service) PromoteAttendee(ctx context.Context, eventID, attendeeID strin
 		return nil, fmt.Errorf("attendee does not belong to this event")
 	}
 	if a.RSVPStatus != "waitlisted" {
-		return nil, fmt.Errorf("attendee is not waitlisted")
+		return nil, validationErrorf("attendee is not waitlisted")
 	}
 
 	a.RSVPStatus = "attending"

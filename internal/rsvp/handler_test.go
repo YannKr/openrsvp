@@ -826,6 +826,42 @@ func TestExportCSV_SpecialCharacters(t *testing.T) {
 	assert.Contains(t, body, "Marta")
 }
 
+// --- Promote ---
+
+func TestHandlePromoteAttendee_NotWaitlistedReturns400(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	a := doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+
+	rr := testutil.DoRequest(t, h, "POST", "/event/"+eventID+"/"+a.ID+"/promote", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "attendee is not waitlisted", body["message"])
+}
+
+// A database failure used to come back as 400 with the raw driver error.
+func TestHandlePromoteAttendee_InternalErrorIsGeneric(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	cfg := testutil.TestConfig()
+	eventSvc := event.NewService(event.NewStore(db), cfg.DefaultRetentionDays)
+	inviteSvc := invite.NewService(invite.NewStore(db), t.TempDir())
+	svc := rsvp.NewService(rsvp.NewStore(db), eventSvc, inviteSvc, zerolog.Nop())
+	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
+		return auth.ContextWithOrganizer(ctx, &auth.Organizer{ID: "org-1"})
+	})
+	allowAll := func(ctx context.Context, eventID, organizerID string) error { return nil }
+	h := rsvp.NewHandler(svc, authMW, rsvpOrgFromCtx(), allowAll, zerolog.Nop()).Routes()
+	require.NoError(t, db.Close())
+
+	rr := testutil.DoRequest(t, h, "POST", "/event/ev-1/att-1/promote", nil)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "internal_error", body["error"])
+	assert.NotContains(t, body["message"], "sql")
+}
+
 // A question label is organizer or co-host input and becomes a CSV header
 // cell, so it needs the same formula defang as the data cells.
 func TestExportCSV_DefangsQuestionLabels(t *testing.T) {
