@@ -12,10 +12,11 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 
 	interface SetupConfig {
-		instance_name: string;
-		default_timezone: string;
-		allow_signups: boolean;
-		support_email: string;
+		instanceName: string;
+		defaultTimezone: string;
+		allowSignups: boolean;
+		supportEmail: string;
+		configured: boolean;
 	}
 
 	const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -51,10 +52,11 @@
 		try {
 			// Admin-only endpoint. Load current values to prefill the form.
 			const cfg = await api.get<ApiResponse<SetupConfig>>('/setup/config');
-			instanceName = cfg.data.instance_name ?? '';
-			defaultTimezone = cfg.data.default_timezone || browserTz;
-			allowSignups = cfg.data.allow_signups ?? true;
-			supportEmail = cfg.data.support_email ?? '';
+			instanceName = cfg.data.instanceName ?? '';
+			defaultTimezone = cfg.data.defaultTimezone || browserTz;
+			// An unsaved instance reports false; keep the env default (on) for first run.
+			allowSignups = cfg.data.configured ? cfg.data.allowSignups : true;
+			supportEmail = cfg.data.supportEmail ?? '';
 		} catch (e: unknown) {
 			const apiErr = e as { status?: number };
 			if (apiErr.status === 401 || apiErr.status === 403) {
@@ -83,10 +85,10 @@
 		submitting = true;
 		try {
 			await api.post('/setup/config', {
-				instance_name: instanceName.trim(),
-				default_timezone: defaultTimezone,
-				allow_signups: allowSignups,
-				support_email: supportEmail.trim()
+				instanceName: instanceName.trim(),
+				defaultTimezone: defaultTimezone,
+				allowSignups: allowSignups,
+				supportEmail: supportEmail.trim()
 			});
 			configured = true;
 			toast.success('Instance configured');
