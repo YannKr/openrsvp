@@ -254,3 +254,28 @@ func TestServerIntegration(t *testing.T) {
 		}
 	})
 }
+
+// TestAPIRejectsNonJSONBody covers the login CSRF on the CSRF-exempt verify
+// route: a cross-site <form enctype="text/plain"> can post a JSON-shaped body.
+func TestAPIRejectsNonJSONBody(t *testing.T) {
+	srv, _ := newTestServer(t)
+	h := srv.http.Handler
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify", bytes.NewReader([]byte(`{"token":"x"}`)))
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("text/plain POST /auth/verify: got %d, want 415 (body=%s)", rr.Code, rr.Body.String())
+	}
+
+	// The SES webhook stays reachable: Amazon SNS posts text/plain. Without a
+	// configured secret it answers 404, not 415.
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/notifications/webhooks/ses", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "text/plain; charset=UTF-8")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusUnsupportedMediaType {
+		t.Fatalf("SES webhook: got 415, want the webhook handler to answer")
+	}
+}

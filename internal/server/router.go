@@ -54,8 +54,12 @@ func (s *Server) routes() *chi.Mux {
 	r.Route("/api/v1", func(api chi.Router) {
 		// General rate limiting applies to API routes only (not static SPA files).
 		api.Use(security.RateLimitMiddleware(s.securityMw.GeneralRateLimiter))
-		// Limit request body size to 1 MB for API routes.
-		api.Use(security.BodyLimitMiddleware(1 << 20))
+		// Limit request body size to 1 MB for API routes, 4 MB for multipart
+		// uploads (the upload handlers set their own, smaller limits).
+		api.Use(security.BodyLimitMiddleware(1<<20, 4<<20))
+		// Accept only JSON and multipart bodies. Amazon SNS posts SES events
+		// as text/plain, so the provider webhooks are exempt.
+		api.Use(security.RequireJSONOrMultipart("/api/v1/notifications/webhooks/"))
 		// Sanitize all incoming JSON request bodies.
 		api.Use(s.securityMw.Sanitize)
 
