@@ -168,6 +168,24 @@ func TestVerifyUsedLink(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
+// Two concurrent verifies can both read used_at as NULL. The mark-used update
+// must succeed for only one of them.
+func TestMarkMagicLinkUsedOnlyOnce(t *testing.T) {
+	_, store := setupAuth(t)
+	ctx := context.Background()
+
+	org, err := store.CreateOrganizer(ctx, "once@example.com")
+	require.NoError(t, err)
+	tokenHash := testHash("3333333333333333333333333333333333333333333333333333333333333333")
+	err = store.CreateMagicLink(ctx, tokenHash, org.ID, time.Now().UTC().Add(15*time.Minute))
+	require.NoError(t, err)
+	ml, err := store.FindMagicLinkByHash(ctx, tokenHash)
+	require.NoError(t, err)
+
+	require.NoError(t, store.MarkMagicLinkUsed(ctx, ml.ID))
+	assert.ErrorIs(t, store.MarkMagicLinkUsed(ctx, ml.ID), ErrInvalidToken)
+}
+
 func TestValidateSession(t *testing.T) {
 	svc, store := setupAuth(t)
 	ctx := context.Background()
