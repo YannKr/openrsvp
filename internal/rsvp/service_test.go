@@ -1521,3 +1521,44 @@ func TestRemoveAttendee_TriggersPromotion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "attending", data.Attendee.RSVPStatus)
 }
+
+// plusOnes had no upper bound. A value near 2^62 overflowed the SQLite SUM in
+// GetStats, which broke the stats of the event for good, and wrapped the
+// capacity arithmetic.
+func TestPlusOnesUpperBound(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+	huge := 1 << 62
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: huge,
+	})
+	require.Error(t, err)
+	assert.True(t, isRSVPValidationError(err))
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: maxPlusOnes + 1,
+	})
+	require.Error(t, err)
+
+	a, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending", PlusOnes: maxPlusOnes,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateByToken(ctx, a.RSVPToken, UpdateRSVPRequest{PlusOnes: intPtr(huge)})
+	require.Error(t, err)
+	assert.True(t, isRSVPValidationError(err))
+
+	_, err = svc.UpdateAttendeeAsOrganizer(ctx, ev.ID, a.ID, OrganizerUpdateAttendeeRequest{PlusOnes: intPtr(huge)})
+	require.Error(t, err)
+	assert.True(t, isRSVPValidationError(err))
+
+	stats, err := svc.GetStats(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1+maxPlusOnes, stats.AttendingHeadcount)
+}

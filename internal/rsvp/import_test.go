@@ -621,3 +621,42 @@ func TestParseCSVPreview_TooManyRows(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
 }
+
+func TestParseCSVPreview_TooManyPlusOnes(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	csv := "Name,Plus Ones\nAlice,4611686018427387904\n"
+	preview, err := svc.ParseCSVPreview(ctx, ev.ID, org.ID, strings.NewReader(csv))
+	require.NoError(t, err)
+	assert.Equal(t, 1, preview.ErrorRows)
+	assert.Contains(t, preview.Rows[0].Error, "plus ones must be")
+}
+
+// The execute step receives the rows back from the client, so it must not
+// trust that the preview step rejected them.
+func TestExecuteCSVImport_SkipsInvalidPlusOnes(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	req := CSVImportRequest{
+		Rows: []CSVImportRow{
+			{Name: "Alice", Email: "alice@example.com", PlusOnes: 1 << 62},
+			{Name: "Bob", Email: "bob@example.com", PlusOnes: -1},
+			{Name: "Carol", Email: "carol@example.com", PlusOnes: 2},
+		},
+	}
+
+	result, err := svc.ExecuteCSVImport(ctx, ev.ID, org.ID, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Imported)
+	assert.Equal(t, 2, result.Skipped)
+}

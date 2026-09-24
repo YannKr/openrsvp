@@ -28,6 +28,7 @@ const (
 	maxEmailLen        = 254 // RFC 5321
 	maxPhoneLen        = 20
 	maxDietaryNotesLen = 500
+	maxPlusOnes        = 20
 )
 
 // validationErrorf builds a client-safe validation error. See
@@ -327,6 +328,9 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	if req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
 	}
+	if req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
+	}
 	if req.ContactMethod == "" {
 		req.ContactMethod = "email"
 	}
@@ -615,6 +619,9 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 	if req.PlusOnes != nil && *req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
 	}
+	if req.PlusOnes != nil && *req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
+	}
 
 	// Prevent waitlisted guests from changing directly to attending.
 	if a.RSVPStatus == "waitlisted" && req.RSVPStatus != nil && *req.RSVPStatus == "attending" {
@@ -840,6 +847,9 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	}
 	if req.PlusOnes != nil && *req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
+	}
+	if req.PlusOnes != nil && *req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
 	}
 
 	oldStatus := a.RSVPStatus
