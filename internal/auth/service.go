@@ -65,6 +65,11 @@ func (s *Service) RequestMagicLink(ctx context.Context, email string) error {
 	}
 
 	if organizer == nil {
+		// With signups closed, only admin emails can create an account.
+		// Return the same success so the caller cannot tell the cases apart.
+		if !s.cfg.AllowSignups && !s.cfg.IsAdminEmail(email) {
+			return nil
+		}
 		organizer, err = s.store.CreateOrganizer(ctx, email)
 		if err != nil {
 			return fmt.Errorf("create organizer: %w", err)

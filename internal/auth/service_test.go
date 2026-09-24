@@ -60,6 +60,44 @@ func TestRequestMagicLinkExistingUser(t *testing.T) {
 	assert.Equal(t, org.ID, found.ID)
 }
 
+// ALLOW_SIGNUPS=false used to have no effect: any email got an organizer row.
+func TestRequestMagicLinkSignupsDisabled(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	store := NewStore(db)
+	cfg := testutil.TestConfig()
+	cfg.AllowSignups = false
+	cfg.AdminEmails = []string{"admin@example.com"}
+	svc := NewService(store, cfg, zerolog.Nop())
+	var sentTo []string
+	svc.SetEmailSender(func(ctx context.Context, to, subject, htmlBody, plainBody string) error {
+		sentTo = append(sentTo, to)
+		return nil
+	})
+	ctx := context.Background()
+
+	// A new, non-admin email gets the generic success, but no row and no mail.
+	err := svc.RequestMagicLink(ctx, "stranger@example.com")
+	require.NoError(t, err)
+	org, err := store.FindOrganizerByEmail(ctx, "stranger@example.com")
+	require.NoError(t, err)
+	assert.Nil(t, org)
+	assert.Empty(t, sentTo)
+
+	// An admin email can still sign up.
+	err = svc.RequestMagicLink(ctx, "admin@example.com")
+	require.NoError(t, err)
+	org, err = store.FindOrganizerByEmail(ctx, "admin@example.com")
+	require.NoError(t, err)
+	assert.NotNil(t, org)
+
+	// An existing organizer can still sign in.
+	_, err = store.CreateOrganizer(ctx, "existing@example.com")
+	require.NoError(t, err)
+	err = svc.RequestMagicLink(ctx, "existing@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"admin@example.com", "existing@example.com"}, sentTo)
+}
+
 func TestRequestMagicLinkInvalidEmail(t *testing.T) {
 	svc, _ := setupAuth(t)
 	ctx := context.Background()
