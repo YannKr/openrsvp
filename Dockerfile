@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
-# Use Go 1.26 (or newer) to pick up patched std-lib (html/template XSS
+# Use Go 1.27.1 (or newer) to pick up patched std-lib (html/template XSS
 # escaper bypass, net/mail quadratic concat, net/http2 frame infinite loop).
 # go.mod's go directive expresses minimum source compatibility, not the
 # toolchain we build with.

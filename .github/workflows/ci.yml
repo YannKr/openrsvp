@@ -102,8 +102,9 @@ jobs:
       - name: golangci-lint
         # Blocking gate. golangci-lint v2.13.2 binaries are built with go1.27.x
         # and type-check the go1.27 codebase cleanly. A binary built with an
-        # older Go refuses to run against the go1.27 toolchain directive. Findings fail the build; see .golangci.yml for the
-        # enabled linters and the documented pre-existing burn-down allow-list.
+        # older Go refuses to run against the go1.27 toolchain directive.
+        # Findings fail the build; see .golangci.yml for the enabled linters
+        # and the documented pre-existing burn-down allow-list.
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.2
