@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -253,6 +255,31 @@ func TestServerIntegration(t *testing.T) {
 			t.Error("expected Retry-After header on 429 response")
 		}
 	})
+}
+
+// TestUploadsNoDirectoryListing covers GET /api/v1/uploads/, where
+// filepath.Base("") is "." and http.ServeFile listed the uploads directory.
+func TestUploadsNoDirectoryListing(t *testing.T) {
+	srv, _ := newTestServer(t)
+	h := srv.http.Handler
+	if err := os.WriteFile(filepath.Join(srv.uploadsDir, "a.png"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(srv.uploadsDir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"/api/v1/uploads/", "/api/v1/uploads/.", "/api/v1/uploads/sub", "/api/v1/uploads/sub/"} {
+		rr := doJSON(h, http.MethodGet, path, nil)
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("GET %s: got %d, want 404 (body=%s)", path, rr.Code, rr.Body.String())
+		}
+	}
+
+	rr := doJSON(h, http.MethodGet, "/api/v1/uploads/a.png", nil)
+	if rr.Code != http.StatusOK {
+		t.Errorf("GET a.png: got %d, want 200", rr.Code)
+	}
 }
 
 // TestAPIRejectsNonJSONBody covers the login CSRF on the CSRF-exempt verify

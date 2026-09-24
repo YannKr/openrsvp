@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -119,7 +120,14 @@ func (s *Server) routes() *chi.Mux {
 			// Prevent the uploaded file from being embedded in a frame.
 			w.Header().Set("X-Frame-Options", "DENY")
 
-			http.ServeFile(w, r, filepath.Join(s.uploadsDir, name))
+			// Serve regular files only. filepath.Base("") is ".", and
+			// http.ServeFile lists a directory.
+			path := filepath.Join(s.uploadsDir, name)
+			if info, err := os.Stat(path); name == "." || name == "/" || err != nil || info.IsDir() {
+				http.NotFound(w, r)
+				return
+			}
+			http.ServeFile(w, r, path)
 		})
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())
