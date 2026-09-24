@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:22-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
@@ -30,7 +30,7 @@ COPY --from=frontend /app/web/build ./internal/server/frontend/
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /openrsvp ./cmd/openrsvp
 
 # Stage 3: Final image
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata && \
     addgroup -S openrsvp && adduser -S openrsvp -G openrsvp
 COPY --from=backend /openrsvp /usr/local/bin/openrsvp
