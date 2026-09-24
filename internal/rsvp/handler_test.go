@@ -826,6 +826,25 @@ func TestExportCSV_SpecialCharacters(t *testing.T) {
 	assert.Contains(t, body, "Marta")
 }
 
+// A question label is organizer or co-host input and becomes a CSV header
+// cell, so it needs the same formula defang as the data cells.
+func TestExportCSV_DefangsQuestionLabels(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+	svc.SetGetExportQuestions(func(ctx context.Context, eventID string) (*rsvp.ExportQuestionsData, error) {
+		return &rsvp.ExportQuestionsData{
+			Labels:      []string{"=HYPERLINK(\"http://evil\")"},
+			QuestionIDs: []string{"q1"},
+		}, nil
+	})
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `RSVP Date,"'=HYPERLINK(""http://evil"")"`)
+}
+
 func TestExportCSV_NullEmailPhone(t *testing.T) {
 	h, svc, eventSvc, org := setupRSVPHandler(t)
 	ctx := context.Background()

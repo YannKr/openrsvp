@@ -293,7 +293,10 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 	// Build header with optional question columns.
 	header := []string{"Name", "Email", "Phone", "RSVP Status", "Dietary Notes", "Plus Ones", "RSVP Date"}
 	if exportData != nil {
-		header = append(header, exportData.Labels...)
+		// Question labels are user input, so defang them like data cells.
+		for _, label := range exportData.Labels {
+			header = append(header, DefangCSVCell(label))
+		}
 	}
 	_ = writer.Write(header)
 
