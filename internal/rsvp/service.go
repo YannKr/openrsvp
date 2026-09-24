@@ -70,6 +70,9 @@ type NotifyWaitlistPromotionFunc func(ctx context.Context, eventID string, atten
 // ValidateAndSaveAnswersFunc validates and saves question answers for an attendee.
 type ValidateAndSaveAnswersFunc func(ctx context.Context, attendeeID, eventID string, answers map[string]string) error
 
+// CheckAnswersFunc validates question answers without saving them.
+type CheckAnswersFunc func(ctx context.Context, eventID string, answers map[string]string) error
+
 // ListQuestionsFunc returns questions for an event (avoids import cycles).
 type ListQuestionsFunc func(ctx context.Context, eventID string) (any, error)
 
@@ -97,6 +100,7 @@ type Service struct {
 	smsEnabled              bool
 	baseURL                 string
 	validateAnswers         ValidateAndSaveAnswersFunc
+	checkAnswers            CheckAnswersFunc
 	listQuestions           ListQuestionsFunc
 	getAnswers              GetAnswersFunc
 	getExportQuestions      GetExportQuestionsFunc
@@ -148,6 +152,12 @@ func (s *Service) SetNotifyWaitlistPromotion(fn NotifyWaitlistPromotionFunc) {
 // answers. Called after question layer wiring to break circular dependencies.
 func (s *Service) SetValidateAnswers(fn ValidateAndSaveAnswersFunc) {
 	s.validateAnswers = fn
+}
+
+// SetCheckAnswers registers the function that validates question answers
+// before the attendee is stored.
+func (s *Service) SetCheckAnswers(fn CheckAnswersFunc) {
+	s.checkAnswers = fn
 }
 
 // SetListQuestions registers the function that lists questions for an event.
@@ -447,6 +457,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 		}
 	}
 
+	// Validate answers before anything is stored.
+	if len(req.Answers) > 0 && s.checkAnswers != nil {
+		if err := s.checkAnswers(ctx, ev.ID, req.Answers); err != nil {
+			return nil, err
+		}
+	}
+
 	// Create a new attendee.
 	rsvpToken, err := generateBase62Token(12)
 	if err != nil {
@@ -685,6 +702,12 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 	}
 	if req.DietaryNotes != nil && len(*req.DietaryNotes) > maxDietaryNotesLen {
 		return nil, validationErrorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
+	}
+
+	if len(req.Answers) > 0 && s.checkAnswers != nil {
+		if err := s.checkAnswers(ctx, a.EventID, req.Answers); err != nil {
+			return nil, err
+		}
 	}
 
 	if req.Name != nil {

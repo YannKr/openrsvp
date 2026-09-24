@@ -190,6 +190,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Wire question validation and listing into the RSVP service.
 	rsvpService.SetValidateAnswers(questionService.ValidateAndSaveAnswers)
+	rsvpService.SetCheckAnswers(questionService.ValidateAnswers)
 	rsvpService.SetListQuestions(func(ctx context.Context, eventID string) (any, error) {
 		return questionService.ListByEvent(ctx, eventID)
 	})

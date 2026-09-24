@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/yannkr/openrsvp/internal/errcode"
 )
 
 // maxQuestionsPerEvent is the maximum number of questions allowed per event.
@@ -207,9 +209,10 @@ func (s *Service) Reorder(ctx context.Context, eventID string, orderedIDs []stri
 	return s.store.UpdateSortOrders(ctx, eventID, orderedIDs)
 }
 
-// ValidateAndSaveAnswers validates answers against the event's questions and
-// persists them.
-func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventID string, answers map[string]string) error {
+// ValidateAnswers checks answers against the event's questions without
+// storing anything. Callers run it before they persist the attendee, so a
+// rejected submission leaves no row behind. The errors are validation errors.
+func (s *Service) ValidateAnswers(ctx context.Context, eventID string, answers map[string]string) error {
 	questions, err := s.store.FindByEventID(ctx, eventID)
 	if err != nil {
 		return fmt.Errorf("get questions: %w", err)
@@ -226,12 +229,11 @@ func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventI
 		if q.Required {
 			answer, provided := answers[q.ID]
 			if !provided || strings.TrimSpace(answer) == "" {
-				return fmt.Errorf("answer required for question: %s", q.Label)
+				return errcode.Validationf("answer required for question: %s", q.Label)
 			}
 		}
 	}
 
-	// Validate and save each answer.
 	for questionID, answer := range answers {
 		q, exists := questionMap[questionID]
 		if !exists {
@@ -242,7 +244,7 @@ func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventI
 		switch q.Type {
 		case "text":
 			if len(answer) > maxTextAnswerLength {
-				return fmt.Errorf("answer for %q exceeds maximum length of %d characters", q.Label, maxTextAnswerLength)
+				return errcode.Validationf("answer for %q exceeds maximum length of %d characters", q.Label, maxTextAnswerLength)
 			}
 
 		case "select":
@@ -252,7 +254,7 @@ func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventI
 					optionSet[opt] = true
 				}
 				if !optionSet[answer] {
-					return fmt.Errorf("invalid option for %q: %s", q.Label, answer)
+					return errcode.Validationf("invalid option for %q: %s", q.Label, answer)
 				}
 			}
 
@@ -260,7 +262,7 @@ func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventI
 			if answer != "" {
 				var selected []string
 				if err := json.Unmarshal([]byte(answer), &selected); err != nil {
-					return fmt.Errorf("checkbox answer for %q must be a JSON array", q.Label)
+					return errcode.Validationf("checkbox answer for %q must be a JSON array", q.Label)
 				}
 				optionSet := make(map[string]bool, len(q.Options))
 				for _, opt := range q.Options {
@@ -268,12 +270,37 @@ func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventI
 				}
 				for _, sel := range selected {
 					if !optionSet[sel] {
-						return fmt.Errorf("invalid option for %q: %s", q.Label, sel)
+						return errcode.Validationf("invalid option for %q: %s", q.Label, sel)
 					}
 				}
 			}
 		}
+	}
 
+	return nil
+}
+
+// ValidateAndSaveAnswers validates answers against the event's questions and
+// persists them.
+func (s *Service) ValidateAndSaveAnswers(ctx context.Context, attendeeID, eventID string, answers map[string]string) error {
+	if err := s.ValidateAnswers(ctx, eventID, answers); err != nil {
+		return err
+	}
+
+	questions, err := s.store.FindByEventID(ctx, eventID)
+	if err != nil {
+		return fmt.Errorf("get questions: %w", err)
+	}
+	known := make(map[string]bool, len(questions))
+	for _, q := range questions {
+		known[q.ID] = true
+	}
+
+	for questionID, answer := range answers {
+		if !known[questionID] {
+			// Skip answers for unknown questions (they may have been deleted).
+			continue
+		}
 		a := &Answer{
 			ID:         uuid.Must(uuid.NewV7()).String(),
 			AttendeeID: attendeeID,

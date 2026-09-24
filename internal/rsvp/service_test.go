@@ -14,6 +14,7 @@ import (
 	"github.com/yannkr/openrsvp/internal/auth"
 	"github.com/yannkr/openrsvp/internal/event"
 	"github.com/yannkr/openrsvp/internal/invite"
+	"github.com/yannkr/openrsvp/internal/question"
 	"github.com/yannkr/openrsvp/internal/testutil"
 )
 
@@ -1561,4 +1562,46 @@ func TestPlusOnesUpperBound(t *testing.T) {
 	stats, err := svc.GetStats(ctx, ev.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 1+maxPlusOnes, stats.AttendingHeadcount)
+}
+
+// SubmitRSVP stored the attendee before it validated the answers, so a
+// rejected submission still left a row (and a token) behind.
+func TestSubmitRSVPInvalidAnswersStoresNothing(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	qSvc := question.NewService(question.NewStore(svc.store.db))
+	required := true
+	_, err = qSvc.Create(ctx, ev.ID, question.CreateQuestionRequest{Label: "Meal", Type: "text", Required: &required})
+	require.NoError(t, err)
+	svc.SetValidateAnswers(qSvc.ValidateAndSaveAnswers)
+	svc.SetCheckAnswers(qSvc.ValidateAnswers)
+
+	_, err = svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+		Answers: map[string]string{"unknown": "x"},
+	})
+	require.Error(t, err)
+	assert.True(t, isRSVPValidationError(err))
+
+	attendees, err := svc.ListByEvent(ctx, ev.ID)
+	require.NoError(t, err)
+	assert.Empty(t, attendees)
+
+	// The update path has the same order: a rejected update changes nothing.
+	a, err := svc.SubmitRSVP(ctx, ev.ShareToken, RSVPRequest{
+		Name: "Alice", Email: strPtr("alice@example.com"), RSVPStatus: "attending",
+	})
+	require.NoError(t, err)
+	_, err = svc.UpdateByToken(ctx, a.RSVPToken, UpdateRSVPRequest{
+		Name: strPtr("Mallory"), Answers: map[string]string{"unknown": "x"},
+	})
+	require.Error(t, err)
+	stored, err := svc.GetByToken(ctx, a.RSVPToken)
+	require.NoError(t, err)
+	assert.Equal(t, "Alice", stored.Name)
 }
