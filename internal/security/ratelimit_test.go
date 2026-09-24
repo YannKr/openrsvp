@@ -2,11 +2,39 @@ package security
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+// One client usually holds a whole IPv6 /64. Keyed on the full address, it
+// got a new bucket for each of its 2^64 addresses.
+func TestRateLimitMiddlewareGroupsIPv6By64(t *testing.T) {
+	rl := NewRateLimiter(1, time.Minute)
+	defer rl.Stop()
+	handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	do := func(remote string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = remote
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		return rr.Code
+	}
+
+	assert.Equal(t, http.StatusOK, do("[2001:db8:1:2::1]:5000"))
+	assert.Equal(t, http.StatusTooManyRequests, do("[2001:db8:1:2:ffff::9]:5001"))
+	// A different /64 has its own bucket.
+	assert.Equal(t, http.StatusOK, do("[2001:db8:1:3::1]:5000"))
+	// IPv4 stays per address, also in the IPv4-mapped form.
+	assert.Equal(t, http.StatusOK, do("192.0.2.1:5000"))
+	assert.Equal(t, http.StatusTooManyRequests, do("[::ffff:192.0.2.1]:5000"))
+	assert.Equal(t, http.StatusOK, do("192.0.2.2:5000"))
+}
 
 // trackedKeys returns the number of keys the limiter currently holds.
 func trackedKeys(rl *RateLimiter) int {

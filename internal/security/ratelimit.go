@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -153,6 +154,16 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 			key := r.RemoteAddr
 			if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 				key = host
+			}
+			// One client usually holds a whole IPv6 /64, so key IPv6 on the
+			// /64 prefix. IPv4 (also IPv4-mapped IPv6) stays per address.
+			if addr, err := netip.ParseAddr(key); err == nil {
+				addr = addr.Unmap()
+				if prefix, err := addr.Prefix(64); addr.Is6() && err == nil {
+					key = prefix.String()
+				} else {
+					key = addr.String()
+				}
 			}
 
 			if !limiter.Allow(key) {
