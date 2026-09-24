@@ -54,8 +54,8 @@
 			const cfg = await api.get<ApiResponse<SetupConfig>>('/setup/config');
 			instanceName = cfg.data.instanceName ?? '';
 			defaultTimezone = cfg.data.defaultTimezone || browserTz;
-			// An unsaved instance reports false; keep the env default (on) for first run.
-			allowSignups = cfg.data.configured ? cfg.data.allowSignups : true;
+			// The API reports the value in effect (the env value before the first save).
+			allowSignups = cfg.data.allowSignups;
 			supportEmail = cfg.data.supportEmail ?? '';
 		} catch (e: unknown) {
 			const apiErr = e as { status?: number };

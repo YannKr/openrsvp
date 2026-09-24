@@ -935,6 +935,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		cfg.ApplyInstanceOverrides(overrides)
 	}
 	instanceConfigHandler := instanceconfig.NewHandler(instanceConfigService, authMiddleware, adminMiddleware, logger)
+	// The stored setting is loaded into cfg above. From here the auth service
+	// holds the value in effect, and a wizard save changes it.
+	authService.SetAllowSignups(cfg.AllowSignups)
+	instanceConfigHandler.SetAllowSignupsHooks(authService.AllowSignups, authService.SetAllowSignups)
+	if !cfg.AllowSignups && len(cfg.AdminEmails) == 0 {
+		logger.Warn().Msg("ALLOW_SIGNUPS is false and ADMIN_EMAILS is empty: only existing organizers can sign in, and a new instance has none")
+	}
 
 	s := &Server{
 		cfg:                   cfg,

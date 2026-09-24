@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -32,15 +33,30 @@ type Service struct {
 	cfg       *config.Config
 	logger    zerolog.Logger
 	sendEmail EmailSender
+	// allowSignups is the signup setting in effect. It starts from the config
+	// and the setup wizard changes it while the server runs.
+	allowSignups atomic.Bool
 }
 
 // NewService creates a new auth Service.
 func NewService(store *Store, cfg *config.Config, logger zerolog.Logger) *Service {
-	return &Service{
+	s := &Service{
 		store:  store,
 		cfg:    cfg,
 		logger: logger,
 	}
+	s.allowSignups.Store(cfg.AllowSignups)
+	return s
+}
+
+// AllowSignups reports whether a new email can create an organizer.
+func (s *Service) AllowSignups() bool {
+	return s.allowSignups.Load()
+}
+
+// SetAllowSignups changes the signup setting without a restart.
+func (s *Service) SetAllowSignups(allow bool) {
+	s.allowSignups.Store(allow)
 }
 
 // SetEmailSender sets the email sending function. Called after notification
@@ -67,7 +83,7 @@ func (s *Service) RequestMagicLink(ctx context.Context, email string) error {
 	if organizer == nil {
 		// With signups closed, only admin emails can create an account.
 		// Return the same success so the caller cannot tell the cases apart.
-		if !s.cfg.AllowSignups && !s.cfg.IsAdminEmail(email) {
+		if !s.allowSignups.Load() && !s.cfg.IsAdminEmail(email) {
 			return nil
 		}
 		organizer, err = s.store.CreateOrganizer(ctx, email)

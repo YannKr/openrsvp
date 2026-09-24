@@ -98,6 +98,27 @@ func TestRequestMagicLinkSignupsDisabled(t *testing.T) {
 	assert.Equal(t, []string{"admin@example.com", "existing@example.com"}, sentTo)
 }
 
+// The setup wizard changes the signup setting while the server runs, so the
+// value must apply without a restart.
+func TestRequestMagicLinkSignupsLiveToggle(t *testing.T) {
+	svc, store := setupAuth(t)
+	ctx := context.Background()
+	assert.True(t, svc.AllowSignups())
+
+	svc.SetAllowSignups(false)
+	assert.False(t, svc.AllowSignups())
+	require.NoError(t, svc.RequestMagicLink(ctx, "late@example.com"))
+	org, err := store.FindOrganizerByEmail(ctx, "late@example.com")
+	require.NoError(t, err)
+	assert.Nil(t, org)
+
+	svc.SetAllowSignups(true)
+	require.NoError(t, svc.RequestMagicLink(ctx, "late@example.com"))
+	org, err = store.FindOrganizerByEmail(ctx, "late@example.com")
+	require.NoError(t, err)
+	assert.NotNil(t, org)
+}
+
 func TestRequestMagicLinkInvalidEmail(t *testing.T) {
 	svc, _ := setupAuth(t)
 	ctx := context.Background()
