@@ -209,6 +209,12 @@ func (s *Service) ParseCSVPreview(ctx context.Context, eventID, organizerID stri
 			resp.Rows = append(resp.Rows, row)
 			continue
 		}
+		if row.PlusOnes > maxPlusOnes {
+			row.Error = fmt.Sprintf("plus ones must be %d or less", maxPlusOnes)
+			resp.ErrorRows++
+			resp.Rows = append(resp.Rows, row)
+			continue
+		}
 
 		// Check for duplicates by email.
 		if row.Email != "" && existingEmails[strings.ToLower(row.Email)] {
@@ -268,6 +274,12 @@ func (s *Service) ExecuteCSVImport(ctx context.Context, eventID, organizerID str
 
 		// Validate name.
 		if row.Name == "" {
+			result.Skipped++
+			continue
+		}
+
+		// The rows come back from the client, so check plus ones again.
+		if row.PlusOnes < 0 || row.PlusOnes > maxPlusOnes {
 			result.Skipped++
 			continue
 		}

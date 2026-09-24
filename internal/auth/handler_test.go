@@ -269,7 +269,9 @@ func TestHandleVerify_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	body := testutil.ParseJSON(t, rr)
-	assert.NotEmpty(t, body["token"])
+	// The session token travels only in the HttpOnly cookie. A copy in the
+	// body is readable by any script on the page.
+	assert.NotContains(t, body, "token")
 	organizer, ok := body["organizer"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, org.ID, organizer["id"])

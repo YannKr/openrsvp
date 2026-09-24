@@ -239,7 +239,12 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 		if location == "" {
 			location = "TBD"
 		}
+		// Link a known guest to their own RSVP. The public invite page would
+		// make them submit a new RSVP, which the duplicate check refuses.
 		inviteURL := j.baseURL + "/i/" + ev.shareToken
+		if attendee.rsvpToken != "" {
+			inviteURL = j.baseURL + "/r/" + attendee.rsvpToken
+		}
 
 		htmlBody, plainBody, err := templates.RenderEventReminder(ev.title, eventDate, location, message, inviteURL)
 		if err != nil {
@@ -258,12 +263,9 @@ func (j *ReminderJob) sendToAttendee(ctx context.Context, reminder *Reminder, at
 		// Attach ICS calendar file for attending and maybe attendees,
 		// or when the reminder targets all attendees.
 		if reminder.TargetGroup == "attending" || reminder.TargetGroup == "maybe" || reminder.TargetGroup == "all" {
-			// Use the RSVP management URL when available so the guest can manage
-			// their response; fall back to the public invite URL.
+			// inviteURL is already the RSVP management URL when the guest has
+			// a token.
 			calURL := inviteURL
-			if attendee.rsvpToken != "" {
-				calURL = j.baseURL + "/r/" + attendee.rsvpToken
-			}
 			icsData := calendar.GenerateICS(calendar.EventData{
 				ID:          ev.id,
 				Title:       ev.title,

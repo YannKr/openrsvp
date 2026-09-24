@@ -33,7 +33,7 @@ export async function getAuthToken(email: string): Promise<string> {
 	throw new Error(`Could not find magic link token in Docker logs for ${email}`);
 }
 
-/** Verify a magic link token and return the session token. */
+/** Verify a magic link token and return the session token from the cookie. */
 export async function verifyMagicLink(token: string): Promise<string> {
 	const res = await fetch(`${BASE}/api/v1/auth/verify`, {
 		method: 'POST',
@@ -41,8 +41,9 @@ export async function verifyMagicLink(token: string): Promise<string> {
 		body: JSON.stringify({ token })
 	});
 	if (!res.ok) throw new Error(`Verify failed: ${res.status}`);
-	const data = await res.json();
-	return data.token;
+	const cookie = res.headers.getSetCookie().find((c) => c.startsWith('session='));
+	if (!cookie) throw new Error('Verify response has no session cookie');
+	return cookie.split(';')[0].slice('session='.length);
 }
 
 /** Get or create a cached session for the given email. */

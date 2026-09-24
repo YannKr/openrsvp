@@ -190,6 +190,7 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 
 	// Wire question validation and listing into the RSVP service.
 	rsvpService.SetValidateAnswers(questionService.ValidateAndSaveAnswers)
+	rsvpService.SetCheckAnswers(questionService.ValidateAnswers)
 	rsvpService.SetListQuestions(func(ctx context.Context, eventID string) (any, error) {
 		return questionService.ListByEvent(ctx, eventID)
 	})
@@ -422,7 +423,9 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 			if location == "" {
 				location = "TBD"
 			}
-			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
+			// Link to the guest's own RSVP. The public invite page would make
+			// a known guest submit a new RSVP, which the duplicate check refuses.
+			inviteURL := cfg.BaseURL + "/r/" + attendee.RSVPToken
 
 			htmlBody, plainBody, err := templates.RenderEventReminder(
 				ev.Title, eventDate, location,
@@ -597,7 +600,6 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 				return
 			}
 
-			inviteURL := cfg.BaseURL + "/i/" + ev.ShareToken
 			eventDate := ev.EventDate.Format("January 2, 2006 at 3:04 PM")
 			location := ev.Location
 			if location == "" {
@@ -614,6 +616,8 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 					continue
 				}
 
+				// Each recipient is a known guest: link to their own RSVP.
+				inviteURL := cfg.BaseURL + "/r/" + a.RSVPToken
 				htmlBody, plainBody, err := templates.RenderEventReminder(ev.Title, eventDate, location, body, inviteURL)
 				if err != nil {
 					logger.Error().Err(err).Str("attendee_id", a.ID).Msg("message notify: failed to render template")
@@ -931,6 +935,13 @@ func New(cfg *config.Config, db database.DB, logger zerolog.Logger) *Server {
 		cfg.ApplyInstanceOverrides(overrides)
 	}
 	instanceConfigHandler := instanceconfig.NewHandler(instanceConfigService, authMiddleware, adminMiddleware, logger)
+	// The stored setting is loaded into cfg above. From here the auth service
+	// holds the value in effect, and a wizard save changes it.
+	authService.SetAllowSignups(cfg.AllowSignups)
+	instanceConfigHandler.SetAllowSignupsHooks(authService.AllowSignups, authService.SetAllowSignups)
+	if !cfg.AllowSignups && len(cfg.AdminEmails) == 0 {
+		logger.Warn().Msg("ALLOW_SIGNUPS is false and ADMIN_EMAILS is empty: only existing organizers can sign in, and a new instance has none")
+	}
 
 	s := &Server{
 		cfg:                   cfg,

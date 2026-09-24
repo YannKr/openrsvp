@@ -293,7 +293,10 @@ func (h *Handler) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 	// Build header with optional question columns.
 	header := []string{"Name", "Email", "Phone", "RSVP Status", "Dietary Notes", "Plus Ones", "RSVP Date"}
 	if exportData != nil {
-		header = append(header, exportData.Labels...)
+		// Question labels are user input, so defang them like data cells.
+		for _, label := range exportData.Labels {
+			header = append(header, DefangCSVCell(label))
+		}
 	}
 	_ = writer.Write(header)
 
@@ -480,7 +483,13 @@ func (h *Handler) handlePromoteAttendee(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		if isRSVPValidationError(err) {
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		ref := errcode.Ref()
+		h.logger.Error().Err(err).Str("error_ref", ref).Str("event_id", eventID).Str("attendee_id", attendeeID).Msg("failed to promote attendee")
+		writeError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred (ref: "+ref+")")
 		return
 	}
 

@@ -280,7 +280,15 @@ func init() {
 		"127.0.0.0/8",
 		"169.254.0.0/16",
 		"0.0.0.0/8",
+		"100.64.0.0/10", // carrier-grade NAT
+		"198.18.0.0/15", // benchmarking
+		"224.0.0.0/4",   // multicast
+		"240.0.0.0/4",   // reserved, broadcast
 		"::1/128",
+		"::/96",          // IPv4-compatible (deprecated), embeds an IPv4 address
+		"64:ff9b::/96",   // NAT64, embeds an IPv4 address
+		"64:ff9b:1::/48", // local-use NAT64
+		"2002::/16",      // 6to4, embeds an IPv4 address
 		"fc00::/7",
 		"fe80::/10",
 	}
@@ -294,14 +302,15 @@ func init() {
 }
 
 // isPrivateIP returns true if the given IP address falls within a private,
-// loopback, or link-local range.
+// loopback, link-local, multicast, reserved or IPv4-embedding range.
 func isPrivateIP(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
 
 	// Check unspecified addresses.
-	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsPrivate() || ip.IsMulticast() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return true
 	}
 

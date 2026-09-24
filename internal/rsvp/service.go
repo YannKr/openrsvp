@@ -28,6 +28,7 @@ const (
 	maxEmailLen        = 254 // RFC 5321
 	maxPhoneLen        = 20
 	maxDietaryNotesLen = 500
+	maxPlusOnes        = 20
 )
 
 // validationErrorf builds a client-safe validation error. See
@@ -69,6 +70,9 @@ type NotifyWaitlistPromotionFunc func(ctx context.Context, eventID string, atten
 // ValidateAndSaveAnswersFunc validates and saves question answers for an attendee.
 type ValidateAndSaveAnswersFunc func(ctx context.Context, attendeeID, eventID string, answers map[string]string) error
 
+// CheckAnswersFunc validates question answers without saving them.
+type CheckAnswersFunc func(ctx context.Context, eventID string, answers map[string]string) error
+
 // ListQuestionsFunc returns questions for an event (avoids import cycles).
 type ListQuestionsFunc func(ctx context.Context, eventID string) (any, error)
 
@@ -96,6 +100,7 @@ type Service struct {
 	smsEnabled              bool
 	baseURL                 string
 	validateAnswers         ValidateAndSaveAnswersFunc
+	checkAnswers            CheckAnswersFunc
 	listQuestions           ListQuestionsFunc
 	getAnswers              GetAnswersFunc
 	getExportQuestions      GetExportQuestionsFunc
@@ -147,6 +152,12 @@ func (s *Service) SetNotifyWaitlistPromotion(fn NotifyWaitlistPromotionFunc) {
 // answers. Called after question layer wiring to break circular dependencies.
 func (s *Service) SetValidateAnswers(fn ValidateAndSaveAnswersFunc) {
 	s.validateAnswers = fn
+}
+
+// SetCheckAnswers registers the function that validates question answers
+// before the attendee is stored.
+func (s *Service) SetCheckAnswers(fn CheckAnswersFunc) {
+	s.checkAnswers = fn
 }
 
 // SetListQuestions registers the function that lists questions for an event.
@@ -284,8 +295,9 @@ func (s *Service) GetPublicInvite(ctx context.Context, shareToken string) (*Publ
 }
 
 // SubmitRSVP processes an RSVP submission for an event identified by its share
-// token. It deduplicates by email or phone, performing an upsert when a
-// matching attendee already exists.
+// token. It deduplicates by email or phone. When a matching attendee already
+// exists, it leaves the row unchanged, returns no token, and emails the manage
+// link to the stored address.
 func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPRequest) (*Attendee, error) {
 	if req.Name == "" {
 		return nil, validationErrorf("name is required")
@@ -325,6 +337,9 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 	if req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
+	}
+	if req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
 	}
 	if req.ContactMethod == "" {
 		req.ContactMethod = "email"
@@ -406,57 +421,25 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 	}
 
 	if existing != nil {
-		// For existing attendee updates, check capacity if changing to attending.
-		if req.RSVPStatus == "attending" && ev.MaxCapacity != nil {
-			stats, err := s.store.GetStats(ctx, ev.ID)
-			if err != nil {
-				return nil, fmt.Errorf("check capacity: %w", err)
-			}
-			// Subtract current attendee's contribution before checking.
-			currentContribution := 0
-			if existing.RSVPStatus == "attending" {
-				currentContribution = 1 + existing.PlusOnes
-			}
-			newContribution := 1 + req.PlusOnes
-			if stats.AttendingHeadcount-currentContribution+newContribution > *ev.MaxCapacity {
-				if ev.WaitlistEnabled {
-					req.RSVPStatus = "waitlisted"
-				} else {
-					return nil, validationErrorf("Event is at capacity")
-				}
+		// Do not change the existing RSVP and do not return its token. Anyone
+		// who knows the email or phone could otherwise take the RSVP over.
+		// Send the manage link to the inbox of the owner instead. Without an
+		// email address there is no safe channel, so send nothing.
+		if hasEmail {
+			if err := s.SendRSVPLookupEmail(ctx, shareToken, *req.Email); err != nil {
+				s.logger.Error().Err(err).Str("event_id", ev.ID).Msg("duplicate rsvp: failed to send lookup email")
 			}
 		}
-
-		// Update the existing RSVP.
-		existing.Name = req.Name
-		existing.RSVPStatus = req.RSVPStatus
-		existing.DietaryNotes = req.DietaryNotes
-		existing.PlusOnes = req.PlusOnes
-		existing.ContactMethod = req.ContactMethod
-		if req.Email != nil {
-			existing.Email = req.Email
-		}
-		if req.Phone != nil {
-			existing.Phone = req.Phone
-		}
-		if err := s.store.Update(ctx, existing); err != nil {
-			return nil, err
-		}
-		// Validate and save question answers if provided.
-		if len(req.Answers) > 0 && s.validateAnswers != nil {
-			if err := s.validateAnswers(ctx, existing.ID, ev.ID, req.Answers); err != nil {
-				return nil, err
-			}
-		}
-		if s.notifyRSVP != nil {
-			notifyFn := s.notifyRSVP
-			eventID := ev.ID
-			a := existing
-			s.asyncNotify(func() {
-				notifyFn(context.Background(), eventID, a)
-			})
-		}
-		return existing, nil
+		return &Attendee{
+			EventID:       ev.ID,
+			Name:          req.Name,
+			Email:         req.Email,
+			Phone:         req.Phone,
+			RSVPStatus:    req.RSVPStatus,
+			ContactMethod: req.ContactMethod,
+			DietaryNotes:  req.DietaryNotes,
+			PlusOnes:      req.PlusOnes,
+		}, nil
 	}
 
 	// Check capacity for new attendees.
@@ -471,6 +454,13 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 			} else {
 				return nil, validationErrorf("Event is at capacity")
 			}
+		}
+	}
+
+	// Validate answers before anything is stored.
+	if len(req.Answers) > 0 && s.checkAnswers != nil {
+		if err := s.checkAnswers(ctx, ev.ID, req.Answers); err != nil {
+			return nil, err
 		}
 	}
 
@@ -646,6 +636,9 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 	if req.PlusOnes != nil && *req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
 	}
+	if req.PlusOnes != nil && *req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
+	}
 
 	// Prevent waitlisted guests from changing directly to attending.
 	if a.RSVPStatus == "waitlisted" && req.RSVPStatus != nil && *req.RSVPStatus == "attending" {
@@ -673,7 +666,13 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 				newPlusOnes = *req.PlusOnes
 			}
 			if stats.AttendingHeadcount+1+newPlusOnes > *ev.MaxCapacity {
-				return nil, validationErrorf("Event is at capacity")
+				// Join the waitlist, as a public submission does. An imported
+				// (pending) guest gives the first reply here.
+				if !ev.WaitlistEnabled {
+					return nil, validationErrorf("Event is at capacity")
+				}
+				waitlisted := "waitlisted"
+				req.RSVPStatus = &waitlisted
 			}
 		} else if req.PlusOnes != nil && *req.PlusOnes > a.PlusOnes {
 			// Already attending but increasing plus-ones.
@@ -711,11 +710,18 @@ func (s *Service) UpdateByToken(ctx context.Context, rsvpToken string, req Updat
 		return nil, validationErrorf("dietaryNotes must be %d characters or less", maxDietaryNotesLen)
 	}
 
+	if len(req.Answers) > 0 && s.checkAnswers != nil {
+		if err := s.checkAnswers(ctx, a.EventID, req.Answers); err != nil {
+			return nil, err
+		}
+	}
+
 	if req.Name != nil {
 		a.Name = *req.Name
 	}
 	if req.RSVPStatus != nil {
-		// Validation already done above — only attending/maybe/declined allowed.
+		// Validation already done above — only attending/maybe/declined allowed,
+		// or waitlisted when the capacity check set it.
 		a.RSVPStatus = *req.RSVPStatus
 	}
 	if req.DietaryNotes != nil {
@@ -872,6 +878,9 @@ func (s *Service) UpdateAttendeeAsOrganizer(ctx context.Context, eventID, attend
 	if req.PlusOnes != nil && *req.PlusOnes < 0 {
 		return nil, validationErrorf("plusOnes must not be negative")
 	}
+	if req.PlusOnes != nil && *req.PlusOnes > maxPlusOnes {
+		return nil, validationErrorf("plusOnes must be %d or less", maxPlusOnes)
+	}
 
 	oldStatus := a.RSVPStatus
 
@@ -972,7 +981,7 @@ func (s *Service) PromoteAttendee(ctx context.Context, eventID, attendeeID strin
 		return nil, fmt.Errorf("attendee does not belong to this event")
 	}
 	if a.RSVPStatus != "waitlisted" {
-		return nil, fmt.Errorf("attendee is not waitlisted")
+		return nil, validationErrorf("attendee is not waitlisted")
 	}
 
 	a.RSVPStatus = "attending"

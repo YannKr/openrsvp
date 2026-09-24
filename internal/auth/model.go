@@ -53,9 +53,10 @@ type VerifyRequest struct {
 	Token string `json:"token"`
 }
 
-// AuthResponse is returned after successful authentication.
+// AuthResponse is returned after successful authentication. Token goes out
+// only in the HttpOnly session cookie, never in the JSON body.
 type AuthResponse struct {
-	Token     string     `json:"token"`
+	Token     string     `json:"-"`
 	Organizer *Organizer `json:"organizer"`
 }
 

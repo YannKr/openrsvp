@@ -272,6 +272,27 @@ func TestProcessReminderSendsOnePerAttendeeAndMarksSent(t *testing.T) {
 	assert.Equal(t, "sent", got.Status, "reminder marked sent after successful processing")
 }
 
+// The public /i/ link makes a known guest submit a new RSVP, which the
+// duplicate check refuses. The reminder must link to the guest's own RSVP.
+func TestProcessReminderLinksToGuestRSVP(t *testing.T) {
+	env := setupReminderJob(t)
+	ctx := context.Background()
+
+	id := addAttendee(t, env.db, env.eventID, "Alice", "alice@example.com", "", "pending")
+	var token string
+	require.NoError(t, env.db.QueryRowContext(ctx, "SELECT rsvp_token FROM attendees WHERE id = ?", id).Scan(&token))
+	addReminder(t, env.store, env.eventID, "all", time.Now().UTC().Add(-time.Minute), "scheduled")
+
+	require.NoError(t, env.job.Run(ctx))
+
+	require.Equal(t, 1, env.email.count())
+	env.email.mu.Lock()
+	plain := env.email.sent[0].Plain
+	env.email.mu.Unlock()
+	assert.Contains(t, plain, "http://localhost:8080/r/"+token)
+	assert.NotContains(t, plain, "/i/")
+}
+
 func TestProcessReminderTargetGroupFiltersByRSVPStatus(t *testing.T) {
 	env := setupReminderJob(t)
 	ctx := context.Background()

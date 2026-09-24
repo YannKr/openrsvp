@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -25,6 +27,13 @@ import (
 // in-memory SQLite DB and a temp uploads dir. No email/SMS provider is
 // configured, so every notification send is a no-op (hermetic, no network).
 func newTestServer(t *testing.T) (*Server, database.DB) {
+	t.Helper()
+	return newTestServerWith(t, nil)
+}
+
+// newTestServerWith is newTestServer with a hook to change the config before
+// New() runs, for example to point the SMTP provider at a capture server.
+func newTestServerWith(t *testing.T, configure func(*config.Config)) (*Server, database.DB) {
 	t.Helper()
 
 	db := testutil.NewTestDB(t)
@@ -42,6 +51,9 @@ func newTestServer(t *testing.T) (*Server, database.DB) {
 		DefaultRetentionDays:      30,
 		MaxCoHostsPerEvent:        10,
 		UploadsDir:                t.TempDir(),
+	}
+	if configure != nil {
+		configure(cfg)
 	}
 
 	srv := New(cfg, db, zerolog.Nop())
@@ -253,4 +265,54 @@ func TestServerIntegration(t *testing.T) {
 			t.Error("expected Retry-After header on 429 response")
 		}
 	})
+}
+
+// TestUploadsNoDirectoryListing covers GET /api/v1/uploads/, where
+// filepath.Base("") is "." and http.ServeFile listed the uploads directory.
+func TestUploadsNoDirectoryListing(t *testing.T) {
+	srv, _ := newTestServer(t)
+	h := srv.http.Handler
+	if err := os.WriteFile(filepath.Join(srv.uploadsDir, "a.png"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(srv.uploadsDir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"/api/v1/uploads/", "/api/v1/uploads/.", "/api/v1/uploads/sub", "/api/v1/uploads/sub/"} {
+		rr := doJSON(h, http.MethodGet, path, nil)
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("GET %s: got %d, want 404 (body=%s)", path, rr.Code, rr.Body.String())
+		}
+	}
+
+	rr := doJSON(h, http.MethodGet, "/api/v1/uploads/a.png", nil)
+	if rr.Code != http.StatusOK {
+		t.Errorf("GET a.png: got %d, want 200", rr.Code)
+	}
+}
+
+// TestAPIRejectsNonJSONBody covers the login CSRF on the CSRF-exempt verify
+// route: a cross-site <form enctype="text/plain"> can post a JSON-shaped body.
+func TestAPIRejectsNonJSONBody(t *testing.T) {
+	srv, _ := newTestServer(t)
+	h := srv.http.Handler
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify", bytes.NewReader([]byte(`{"token":"x"}`)))
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("text/plain POST /auth/verify: got %d, want 415 (body=%s)", rr.Code, rr.Body.String())
+	}
+
+	// The SES webhook stays reachable: Amazon SNS posts text/plain. Without a
+	// configured secret it answers 404, not 415.
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/notifications/webhooks/ses", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "text/plain; charset=UTF-8")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code == http.StatusUnsupportedMediaType {
+		t.Fatalf("SES webhook: got 415, want the webhook handler to answer")
+	}
 }

@@ -135,6 +135,7 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 | `TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of trusted reverse proxies (e.g. `10.0.0.0/8,172.16.0.0/12`). When set, `X-Forwarded-For` / `X-Real-IP` headers are trusted to determine client IP. When empty (default), only `RemoteAddr` is used, which prevents IP spoofing. **Set this when running behind a reverse proxy (Nginx, Caddy, etc.)** |
 | `WEBHOOK_SECRET` | _(empty)_ | Shared secret for the SendGrid and SES delivery webhooks. It must be 32 characters or more. `openssl rand -hex 32` gives 64 characters, which is a good value. Give the provider the webhook URL with `?token=<secret>` appended. While this value is empty, the webhook routes answer `404` for every request. **The token travels in the URL, so reverse-proxy access logs record it. Rotate the secret if you share those logs.** |
 | `MAX_COHOSTS_PER_EVENT` | `10` | Maximum number of co-hosts allowed per event |
+| `ALLOW_SIGNUPS` | `true` | If `true`, any email can create an organizer account with a magic link. If `false`, only existing organizers and the emails in `ADMIN_EMAILS` can sign in. The setup wizard can change this value while the server runs. **If you set `false`, also set `ADMIN_EMAILS`. Otherwise nobody can sign in to a new instance** |
 | `ADMIN_EMAILS` | _(empty)_ | Comma-separated list of instance admin emails (e.g. `admin@example.com,ops@example.com`). Admin status is synced on every page load — add or remove emails and changes take effect immediately without requiring re-login |
 
 ### 📧 Email Providers
@@ -448,6 +449,26 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.8.3 (2026-09-23)
+
+**Security:**
+- A public RSVP with the email or phone of an existing guest changed that RSVP and returned its `rsvpToken`. A person who knew the address of a guest was able to change the reply and get the manage link. A repeat RSVP now changes nothing and returns an empty `rsvpToken` with the same `201`. If the request has an email, the server sends the manage link to the stored address. Invitations from the CSV import, organizer messages and reminders now link each guest to the page of their own RSVP (`/r/{token}`). On that page, an imported guest can give the first reply. When the event is full and the waitlist is on, "Attending" puts the guest on the waitlist
+- `plusOnes` had no upper limit, so a guest was able to store a value near 2^62. The SQLite `SUM` in the event stats then failed on each call, and the capacity check overflowed. The API now rejects `plusOnes` above 20 on all write paths, also in the CSV import
+- The body size limit did not apply to multipart requests, so a client without an account was able to send a body of any size. Multipart bodies now have a 4 MB limit
+- API handlers read JSON from a body of any `Content-Type`. A page on a different site was able to post a `text/plain` form to `/api/v1/auth/verify`. This signed the visitor in to the account of the attacker. A `POST`, `PUT`, `PATCH` or `DELETE` request with a body now needs `application/json` or `multipart/form-data`, else the API answers `415`. The provider webhooks are exempt
+- `ALLOW_SIGNUPS=false` had no effect, because a magic link request created an organizer for any email. With signups off, a new email that is not in `ADMIN_EMAILS` now gets the usual success message. The server creates no account and sends no email for it. If you set `ALLOW_SIGNUPS=false` and new organizers must still sign up, set it to `true` or add their emails to `ADMIN_EMAILS`. A change in the setup wizard now applies without a restart. The server logs a warning at startup when `ALLOW_SIGNUPS` is false and `ADMIN_EMAILS` is empty
+- The webhook address guard did not block carrier-grade NAT, the benchmark range, multicast, `240.0.0.0/4` or the IPv6 forms that contain an IPv4 address (`::a.b.c.d`, `64:ff9b::/96`, `2002::/16`). An organizer was able to use these forms to reach an internal address. The guard now blocks them
+- `GET /api/v1/uploads/` returned a list of all uploaded files. The route now serves files only and answers `404` for a directory
+- Two verify requests with the same magic link at the same time were able to both get a session. The server now marks the link as used in one conditional update, so only one request gets a session
+- `POST /api/v1/auth/verify` returned the session token in the JSON body and also in the `HttpOnly` cookie. A script on the page was able to read the copy in the body. The body no longer contains the token. Bearer authentication still works. If your client read `token` from the body, read the `session` cookie instead
+- The CSV export did not defang the question labels in the header row. A label that starts with `=` ran as a formula in a spreadsheet. The header now gets the same defang as the data cells
+- The rate limiter used the full IPv6 address as its key. One client usually has a full `/64`, so it was able to use a new address for each request. The key for an IPv6 client is now its `/64` prefix
+
+**Fixes:**
+- The setup page sent `snake_case` keys, but the API expects `camelCase` keys. Each save failed with `400`. The page now sends the correct keys, and the signup switch shows the value in effect
+- An RSVP with an incorrect answer to a custom question failed, but the server stored the guest first. An update had the same fault. The server now validates the answers before it stores anything. Answer errors now return `400` with the message, not `500`
+- A failed waitlist promotion returned the raw error text with `400`, also for database errors. A database error now returns the usual `500` with a reference, and the server writes the error to the log
 
 ### v1.8.2 (2026-08-14)
 

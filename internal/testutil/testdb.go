@@ -177,5 +177,6 @@ func TestConfig() *config.Config {
 		SMTPFrom:                  "test@openrsvp.local",
 		DefaultRetentionDays:      30,
 		MaxCoHostsPerEvent:        10,
+		AllowSignups:              true,
 	}
 }

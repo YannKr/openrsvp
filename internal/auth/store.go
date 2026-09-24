@@ -164,12 +164,21 @@ func (s *Store) MarkMagicLinkUsedTx(ctx context.Context, tx database.Tx, id stri
 func markMagicLinkUsed(ctx context.Context, exec executor, id string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	_, err := exec.ExecContext(ctx,
-		"UPDATE magic_links SET used_at = ? WHERE id = ?",
+	// "used_at IS NULL" makes the update the single point of consumption: of
+	// two concurrent verifies, only one changes the row.
+	result, err := exec.ExecContext(ctx,
+		"UPDATE magic_links SET used_at = ? WHERE id = ? AND used_at IS NULL",
 		now, id,
 	)
 	if err != nil {
 		return fmt.Errorf("mark magic link used: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark magic link used: %w", err)
+	}
+	if rows == 0 {
+		return ErrInvalidToken
 	}
 
 	return nil

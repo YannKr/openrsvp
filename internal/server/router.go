@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -54,8 +55,12 @@ func (s *Server) routes() *chi.Mux {
 	r.Route("/api/v1", func(api chi.Router) {
 		// General rate limiting applies to API routes only (not static SPA files).
 		api.Use(security.RateLimitMiddleware(s.securityMw.GeneralRateLimiter))
-		// Limit request body size to 1 MB for API routes.
-		api.Use(security.BodyLimitMiddleware(1 << 20))
+		// Limit request body size to 1 MB for API routes, 4 MB for multipart
+		// uploads (the upload handlers set their own, smaller limits).
+		api.Use(security.BodyLimitMiddleware(1<<20, 4<<20))
+		// Accept only JSON and multipart bodies. Amazon SNS posts SES events
+		// as text/plain, so the provider webhooks are exempt.
+		api.Use(security.RequireJSONOrMultipart("/api/v1/notifications/webhooks/"))
 		// Sanitize all incoming JSON request bodies.
 		api.Use(s.securityMw.Sanitize)
 
@@ -115,7 +120,14 @@ func (s *Server) routes() *chi.Mux {
 			// Prevent the uploaded file from being embedded in a frame.
 			w.Header().Set("X-Frame-Options", "DENY")
 
-			http.ServeFile(w, r, filepath.Join(s.uploadsDir, name))
+			// Serve regular files only. filepath.Base("") is ".", and
+			// http.ServeFile lists a directory.
+			path := filepath.Join(s.uploadsDir, name)
+			if info, err := os.Stat(path); name == "." || name == "/" || err != nil || info.IsDir() {
+				http.NotFound(w, r)
+				return
+			}
+			http.ServeFile(w, r, path)
 		})
 		api.Mount("/messages", s.messageHandler.Routes())
 		api.Mount("/reminders", s.reminderHandler.Routes())

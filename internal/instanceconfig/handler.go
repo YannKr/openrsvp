@@ -17,6 +17,10 @@ type Handler struct {
 	authMiddleware  func(http.Handler) http.Handler
 	adminMiddleware func(http.Handler) http.Handler
 	logger          zerolog.Logger
+	// getAllowSignups and setAllowSignups read and change the signup setting
+	// in effect, so a save applies without a restart.
+	getAllowSignups func() bool
+	setAllowSignups func(bool)
 }
 
 // NewHandler creates a new setup Handler.
@@ -27,6 +31,13 @@ func NewHandler(service *Service, authMiddleware func(http.Handler) http.Handler
 		adminMiddleware: adminMiddleware,
 		logger:          logger,
 	}
+}
+
+// SetAllowSignupsHooks connects the handler to the signup setting in effect.
+// GET /config reports that value, and a save changes it.
+func (h *Handler) SetAllowSignupsHooks(get func() bool, set func(bool)) {
+	h.getAllowSignups = get
+	h.setAllowSignups = set
 }
 
 // Routes returns a chi.Router with the setup wizard routes.
@@ -64,6 +75,10 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeInternal(w, err, "failed to read setup config")
 		return
+	}
+	// Report the value in effect: the env default until a save stores one.
+	if h.getAllowSignups != nil {
+		settings.AllowSignups = h.getAllowSignups()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": settings})
 }
@@ -116,6 +131,9 @@ func (h *Handler) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.SaveSettings(r.Context(), settings); err != nil {
 		h.writeInternal(w, err, "failed to save setup config")
 		return
+	}
+	if h.setAllowSignups != nil {
+		h.setAllowSignups(req.AllowSignups)
 	}
 
 	settings.Configured = true

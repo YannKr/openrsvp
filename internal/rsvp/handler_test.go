@@ -307,6 +307,26 @@ func TestHandleSubmitRSVP_Success(t *testing.T) {
 	assert.NotEmpty(t, data["rsvpToken"])
 }
 
+func TestHandleSubmitRSVP_DuplicateEmailHidesToken(t *testing.T) {
+	h, _, eventSvc, org := setupRSVPHandler(t)
+	shareToken, _ := publishEvent(t, eventSvc, org.ID)
+	payload := map[string]any{
+		"name":       "Alice",
+		"email":      "alice@example.com",
+		"rsvpStatus": "attending",
+	}
+
+	rr := testutil.DoRequest(t, h, "POST", "/public/"+shareToken, payload)
+	require.Equal(t, http.StatusCreated, rr.Code)
+
+	rr = testutil.DoRequest(t, h, "POST", "/public/"+shareToken, payload)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Empty(t, data["rsvpToken"])
+}
+
 func TestHandleSubmitRSVP_InvalidJSON(t *testing.T) {
 	h, _, eventSvc, org := setupRSVPHandler(t)
 	shareToken, _ := publishEvent(t, eventSvc, org.ID)
@@ -804,6 +824,61 @@ func TestExportCSV_SpecialCharacters(t *testing.T) {
 	assert.Contains(t, body, `"O'Brien, ""Bob"""`)
 	assert.Contains(t, body, `"No nuts, ""strictly"" vegan"`)
 	assert.Contains(t, body, "Marta")
+}
+
+// --- Promote ---
+
+func TestHandlePromoteAttendee_NotWaitlistedReturns400(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	a := doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+
+	rr := testutil.DoRequest(t, h, "POST", "/event/"+eventID+"/"+a.ID+"/promote", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "attendee is not waitlisted", body["message"])
+}
+
+// A database failure used to come back as 400 with the raw driver error.
+func TestHandlePromoteAttendee_InternalErrorIsGeneric(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	cfg := testutil.TestConfig()
+	eventSvc := event.NewService(event.NewStore(db), cfg.DefaultRetentionDays)
+	inviteSvc := invite.NewService(invite.NewStore(db), t.TempDir())
+	svc := rsvp.NewService(rsvp.NewStore(db), eventSvc, inviteSvc, zerolog.Nop())
+	authMW := testutil.FakeAuthMiddleware(func(ctx context.Context) context.Context {
+		return auth.ContextWithOrganizer(ctx, &auth.Organizer{ID: "org-1"})
+	})
+	allowAll := func(ctx context.Context, eventID, organizerID string) error { return nil }
+	h := rsvp.NewHandler(svc, authMW, rsvpOrgFromCtx(), allowAll, zerolog.Nop()).Routes()
+	require.NoError(t, db.Close())
+
+	rr := testutil.DoRequest(t, h, "POST", "/event/ev-1/att-1/promote", nil)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	body := testutil.ParseJSON(t, rr)
+	assert.Equal(t, "internal_error", body["error"])
+	assert.NotContains(t, body["message"], "sql")
+}
+
+// A question label is organizer or co-host input and becomes a CSV header
+// cell, so it needs the same formula defang as the data cells.
+func TestExportCSV_DefangsQuestionLabels(t *testing.T) {
+	h, svc, eventSvc, org := setupRSVPHandler(t)
+	shareToken, eventID := publishEvent(t, eventSvc, org.ID)
+	doRSVP(t, svc, shareToken, "Alice", "alice@example.com")
+	svc.SetGetExportQuestions(func(ctx context.Context, eventID string) (*rsvp.ExportQuestionsData, error) {
+		return &rsvp.ExportQuestionsData{
+			Labels:      []string{"=HYPERLINK(\"http://evil\")"},
+			QuestionIDs: []string{"q1"},
+		}, nil
+	})
+
+	rr := testutil.DoRequest(t, h, "GET", "/event/"+eventID+"/export", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `RSVP Date,"'=HYPERLINK(""http://evil"")"`)
 }
 
 func TestExportCSV_NullEmailPhone(t *testing.T) {
