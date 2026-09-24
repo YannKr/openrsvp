@@ -1,7 +1,7 @@
 # golangci-lint v2 configuration. Run as a BLOCKING gate in CI via
 # golangci-lint-action v9 (see .github/workflows/ci.yml, `lint` job), pinned to
-# golangci-lint v2.12.2 whose binaries are built with go1.26.x and type-check the
-# go1.26 codebase cleanly. Findings FAIL the build.
+# golangci-lint v2.13.2 whose binaries are built with go1.27.x and type-check the
+# go1.27 codebase cleanly. Findings FAIL the build.
 #
 # This gate is genuine: errcheck, govet, ineffassign, the staticcheck SA/ST
 # bug-and-style series, and unused all run with no codebase-wide suppressions.

@@ -11,13 +11,12 @@ RUN npm run build
 # escaper bypass, net/mail quadratic concat, net/http2 frame infinite loop).
 # go.mod's go directive expresses minimum source compatibility, not the
 # toolchain we build with.
-# Pin the patch version. The floating golang:1.26-alpine tag currently gives
-# go1.26.5, which carries seven advisories that go1.26.6 fixes. The toolchain
-# directive in go.mod would download go1.26.6 during the build, but that
-# download runs once per architecture under emulation and makes the multi-arch
-# release build many times slower. Keep this version in step with the
-# govulncheck pin in .github/workflows/ci.yml.
-FROM golang:1.26.6-alpine AS backend
+# Pin the patch version, and keep it equal to the toolchain directive in
+# go.mod. If the two differ, the build downloads that toolchain once per
+# architecture under emulation, and the multi-arch release build becomes many
+# times slower. Keep this version in step with the govulncheck pin in
+# .github/workflows/ci.yml.
+FROM golang:1.27.1-alpine AS backend
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY go.mod go.sum ./

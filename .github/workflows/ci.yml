@@ -96,27 +96,24 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.1'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: golangci-lint
-        # Blocking gate. golangci-lint v2.12.2 binaries are built with go1.26.x
-        # and type-check the go1.26 codebase cleanly (the old go/types panic on
-        # v2.1.0 is gone). Findings fail the build; see .golangci.yml for the
+        # Blocking gate. golangci-lint v2.13.2 binaries are built with go1.27.x
+        # and type-check the go1.27 codebase cleanly. A binary built with an
+        # older Go refuses to run against the go1.27 toolchain directive. Findings fail the build; see .golangci.yml for the
         # enabled linters and the documented pre-existing burn-down allow-list.
         uses: golangci/golangci-lint-action@db582008a42febd596419635a5abc9d9815daa9c # v9.2.1
         with:
-          version: v2.12.2
+          version: v2.13.2
 
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    # Run on the toolchain the project actually targets. go1.26.6 patches seven
-    # stdlib advisories that 1.26.5 carries: GO-2026-6218 (net/url),
-    # GO-2026-6091 (html/template), GO-2026-6090 (crypto/tls), GO-2026-6089
-    # (net/http), GO-2026-6088 (encoding/xml), GO-2026-5972 (encoding/asn1) and
-    # GO-2026-5026 (x/net/idna). GOTOOLCHAIN=local pins the analysis to the
-    # installed version so the scan reflects 1.26.6.
+    # Run on the toolchain the project actually targets (the toolchain
+    # directive in go.mod). GOTOOLCHAIN=local pins the analysis to the
+    # installed version so the scan reflects 1.27.1.
     # Keep this current as new stdlib advisories land, and keep it in step with
     # the pinned base image in the Dockerfile. Both must name the same patch
     # version, so that this gate scans what the released binary is built with.
@@ -126,11 +123,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.27.1'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Run govulncheck
         # Blocking gate. Reported vulnerabilities fail the build.
         run: govulncheck ./...
