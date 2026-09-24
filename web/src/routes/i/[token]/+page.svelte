@@ -455,12 +455,12 @@
 		{:else if submitted}
 			<div class="w-full max-w-lg">
 				<div class="bg-surface rounded-xl shadow-lg border border-neutral-200 p-8 text-center">
+					{#if rsvpToken}
 					<div class="w-16 h-16 rounded-full bg-success-light flex items-center justify-center mx-auto mb-4">
 						<svg class="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 						</svg>
 					</div>
-					{#if rsvpToken}
 					<h2 class="font-display text-2xl font-bold text-neutral-900 mb-2">RSVP Received!</h2>
 					<p class="text-neutral-600 mb-4">
 						Thank you, <strong>{name}</strong>! Your response has been recorded.
@@ -475,13 +475,13 @@
 					<h2 class="font-display text-2xl font-bold text-neutral-900 mb-2">You Already Replied</h2>
 					<p class="text-neutral-600 mb-4">
 						{#if email.trim()}
-							You already replied to this event. We sent you an email with a link. Use this link to change your reply.
+							You already replied to this event. We did not change your first reply. If this email matches your first reply, we sent you a link to change it.
 						{:else}
 							You already replied to this event. We did not change your first reply.
 						{/if}
 					</p>
 					{/if}
-					{#if (rsvpStatus === 'attending' || rsvpStatus === 'maybe')}
+					{#if rsvpToken && (rsvpStatus === 'attending' || rsvpStatus === 'maybe')}
 						<div class="mt-4 flex justify-center">
 							<AddToCalendar event={eventData} shareToken={token} />
 						</div>
