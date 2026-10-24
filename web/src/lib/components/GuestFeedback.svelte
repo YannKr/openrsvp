@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import { api } from '$lib/api/client';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import { api } from '#lib/api/client.js';
 
 	interface Props {
 		/** Page path recorded as the feedback source. */

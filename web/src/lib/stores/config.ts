@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { api } from '$lib/api/client';
+import { api } from '#lib/api/client.js';
 
 export const smsEnabled = writable(false);
 

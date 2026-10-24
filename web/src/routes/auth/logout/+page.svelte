@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '$lib/api/client';
-	import { currentUser } from '$lib/stores/auth';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { currentUser } from '#lib/stores/auth.js';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { onMount } from 'svelte';
 
 	onMount(async () => {

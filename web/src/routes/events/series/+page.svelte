@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { formatDateTime } from '$lib/utils/dates';
-	import type { EventSeries, Event } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { formatDateTime } from '#lib/utils/dates.js';
+	import type { EventSeries, Event } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(true);

@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 </script>
 
 <svelte:head>
-	<title>{$page.status} — OpenRSVP</title>
+	<title>{page.status} — OpenRSVP</title>
 </svelte:head>
 
 <div class="min-h-screen bg-surface flex flex-col">
@@ -30,7 +30,7 @@
 	<!-- Error content -->
 	<main class="relative z-10 flex-1 flex items-center justify-center px-4 py-16">
 		<div class="text-center max-w-lg">
-			{#if $page.status === 404}
+			{#if page.status === 404}
 				<!-- Envelope illustration -->
 				<div class="relative mx-auto mb-8 w-40 h-40">
 					<!-- Shadow -->
@@ -67,10 +67,10 @@
 					</svg>
 				</div>
 
-				<h1 class="font-display text-6xl font-extrabold tracking-tight text-neutral-900 mb-2">{$page.status}</h1>
+				<h1 class="font-display text-6xl font-extrabold tracking-tight text-neutral-900 mb-2">{page.status}</h1>
 				<h2 class="text-xl font-semibold text-neutral-700 mb-3">Something went wrong</h2>
 				<p class="text-neutral-500 mb-10 leading-relaxed max-w-sm mx-auto">
-					{$page.error?.message || "An unexpected error occurred. Please try again."}
+					{page.error?.message || "An unexpected error occurred. Please try again."}
 				</p>
 			{/if}
 

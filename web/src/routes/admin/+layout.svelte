@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { currentUser, isLoading, isAdmin } from '$lib/stores/auth';
+	import { currentUser, isLoading, isAdmin } from '#lib/stores/auth.js';
 
 	$effect(() => {
 		if (!$isLoading && (!$currentUser || !$isAdmin)) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { EventQuestion } from '$lib/types';
+	import type { EventQuestion } from '#lib/types/index.js';
 
 	interface Props {
 		questions: EventQuestion[];

@@ -1,4 +1,4 @@
-import type { ApiError } from '$lib/types';
+import type { ApiError } from '#lib/types/index.js';
 
 const BASE_URL = '/api/v1';
 const CSRF_COOKIE = 'csrf_token';

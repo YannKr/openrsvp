@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { currentUser, isLoading } from '$lib/stores/auth';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { currentUser, isLoading } from '#lib/stores/auth.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	// Mirror the events layout guard: redirect to login once auth has loaded
 	// and there's no current user.

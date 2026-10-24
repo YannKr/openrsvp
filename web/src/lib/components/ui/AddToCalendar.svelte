@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { PublicEvent } from '$lib/types';
+	import type { PublicEvent } from '#lib/types/index.js';
 
 	interface Props {
 		event: PublicEvent;

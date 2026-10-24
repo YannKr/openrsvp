@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import type { ApiError } from '$lib/types';
+	import { api } from '#lib/api/client.js';
+	import type { ApiError } from '#lib/types/index.js';
 
 	type View = 'loading' | 'invalid' | 'confirm' | 'success' | 'error';
 
@@ -19,7 +19,7 @@
 	const scopeLabel = $derived(eventId ? "this event's emails" : 'all OpenRSVP emails');
 
 	onMount(async () => {
-		const t = $page.url.searchParams.get('token');
+		const t = page.url.searchParams.get('token');
 
 		if (!t) {
 			view = 'invalid';

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import type { EventQuestion } from '$lib/types';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import type { EventQuestion } from '#lib/types/index.js';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	interface Props {
 		eventId: string;

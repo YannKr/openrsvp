@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Textarea from '#lib/components/ui/Textarea.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	let darkMode = $state(false);
 	let modalOpen = $state(false);

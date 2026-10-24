@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { currentUser, isAdmin } from '$lib/stores/auth';
-	import Button from '$lib/components/ui/Button.svelte';
+	import { currentUser, isAdmin } from '#lib/stores/auth.js';
+	import Button from '#lib/components/ui/Button.svelte';
 
 	let mobileMenuOpen = $state(false);
 	let isDark = $state(false);

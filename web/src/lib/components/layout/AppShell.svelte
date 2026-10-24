@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import Navbar from './Navbar.svelte';
 	import FeedbackModal from './FeedbackModal.svelte';
-	import { currentUser } from '$lib/stores/auth';
+	import { currentUser } from '#lib/stores/auth.js';
 
 	interface Props {
 		children: Snippet;

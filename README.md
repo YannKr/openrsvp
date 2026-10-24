@@ -53,7 +53,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 
 ### Prerequisites
 
-- Go 1.25+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.1` directive downloads the patched compiler)
+- Go 1.26+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.3` directive downloads the patched compiler)
 - Node.js 24+
 - Make
 
@@ -464,11 +464,17 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 - `POST /api/v1/auth/verify` returned the session token in the JSON body and also in the `HttpOnly` cookie. A script on the page was able to read the copy in the body. The body no longer contains the token. Bearer authentication still works. If your client read `token` from the body, read the `session` cookie instead
 - The CSV export did not defang the question labels in the header row. A label that starts with `=` ran as a formula in a spreadsheet. The header now gets the same defang as the data cells
 - The rate limiter used the full IPv6 address as its key. One client usually has a full `/64`, so it was able to use a new address for each request. The key for an IPv6 client is now its `/64` prefix
+- The build used go1.27.1, which carries 13 advisories in the standard library that the code reaches. Most of them are in the HTTP/1 and HTTP/2 server and client of `net/http`. Two are in the `html/template` escaper, and the others are in `crypto/x509`, `crypto/tls` and `net/textproto`. The toolchain, the Docker build image and the `govulncheck` job now use go1.27.3, and the scan reports no findings
 
 **Fixes:**
 - The setup page sent `snake_case` keys, but the API expects `camelCase` keys. Each save failed with `400`. The page now sends the correct keys, and the signup switch shows the value in effect
 - An RSVP with an incorrect answer to a custom question failed, but the server stored the guest first. An update had the same fault. The server now validates the answers before it stores anything. Answer errors now return `400` with the message, not `500`
 - A failed waitlist promotion returned the raw error text with `400`, also for database errors. A database error now returns the usual `500` with a reference, and the server writes the error to the log
+
+**Dependencies:**
+- The `go` directive is now 1.26.0, because `golang.org/x/net` v0.61.0 and `golang.org/x/sys` v0.49.0 need it. A build from source now needs Go 1.26 or later. CI tests Go 1.26 and 1.27
+- The frontend now uses SvelteKit 3 (`@sveltejs/kit` 3.1.0, `@sveltejs/adapter-static` 4.0.0). The adapter settings moved from `svelte.config.js` into `vite.config.ts`, imports use the `#lib` alias instead of `$lib`, and pages read `page` from `$app/state` instead of `$app/stores`. The `cookie` override is gone, because SvelteKit 3 uses `cookie` 2
+- The other Go modules, npm packages, CI tools and actions are at their latest releases. TypeScript stays at 6, because SvelteKit 3 and `svelte-check` do not accept TypeScript 7 yet
 
 ### v1.8.2 (2026-08-14)
 
