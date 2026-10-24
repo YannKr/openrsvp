@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import type { PublicEvent, Attendee, Message, PublicAttendance, EventQuestion, QuestionAnswer, ApiError } from '$lib/types';
-	import QuestionRenderer from '$lib/components/questions/QuestionRenderer.svelte';
-	import AddToCalendar from '$lib/components/ui/AddToCalendar.svelte';
-	import GuestFeedback from '$lib/components/GuestFeedback.svelte';
+	import { api } from '#lib/api/client.js';
+	import type { PublicEvent, Attendee, Message, PublicAttendance, EventQuestion, QuestionAnswer, ApiError } from '#lib/types/index.js';
+	import QuestionRenderer from '#lib/components/questions/QuestionRenderer.svelte';
+	import AddToCalendar from '#lib/components/ui/AddToCalendar.svelte';
+	import GuestFeedback from '#lib/components/GuestFeedback.svelte';
 
 	interface RsvpData {
 		attendee: Attendee;
@@ -55,7 +55,7 @@
 	let messages = $state<Message[]>([]);
 	let loadingMessages = $state(false);
 
-	const token = $derived($page.params.token);
+	const token = $derived(page.params.token);
 
 	// RSVP closed check
 	const rsvpsClosed = $derived(eventData?.rsvpsClosed === true);
@@ -701,7 +701,7 @@
 
 			<!-- Powered by -->
 			<div class="mt-8 flex flex-col items-center gap-2 text-center">
-				<GuestFeedback source={$page.url.pathname} />
+				<GuestFeedback source={page.url.pathname} />
 				<a href="/" class="text-xs text-neutral-400 hover:text-neutral-500 transition-colors">
 					Powered by OpenRSVP
 				</a>

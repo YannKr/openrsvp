@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { isValidEmail } from '$lib/utils/validation';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { isValidEmail } from '#lib/utils/validation.js';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
 
 	let email = $state('');
 	let loading = $state(false);

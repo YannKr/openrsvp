@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import type { InstanceStats, ApiResponse } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import type { InstanceStats, ApiResponse } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	let stats = $state<InstanceStats | null>(null);
 	let loading = $state(true);

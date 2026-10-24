@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { smsEnabled, loadAppConfig } from '$lib/stores/config';
-	import { currentUser } from '$lib/stores/auth';
-	import { formatDateTime, isInPast } from '$lib/utils/dates';
-	import { getTimezoneOptions, getTimezoneLabel } from '$lib/utils/timezones';
-	import type { EventSeries, Event } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { page } from '$app/state';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { smsEnabled, loadAppConfig } from '#lib/stores/config.js';
+	import { currentUser } from '#lib/stores/auth.js';
+	import { formatDateTime, isInPast } from '#lib/utils/dates.js';
+	import { getTimezoneOptions, getTimezoneLabel } from '#lib/utils/timezones.js';
+	import type { EventSeries, Event } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Textarea from '#lib/components/ui/Textarea.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(true);
@@ -43,7 +43,7 @@
 	let editMaxCapacity = $state('');
 	let editErrors: Record<string, string> = $state({});
 
-	const seriesId = $derived($page.params.seriesId);
+	const seriesId = $derived(page.params.seriesId);
 
 	const recurrenceLabels: Record<string, string> = {
 		weekly: 'Weekly',

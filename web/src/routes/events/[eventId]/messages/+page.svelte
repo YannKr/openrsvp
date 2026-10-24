@@ -1,19 +1,19 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { formatDateTime } from '$lib/utils/dates';
-	import type { Message, Event, Attendee } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { page } from '$app/state';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { formatDateTime } from '#lib/utils/dates.js';
+	import type { Message, Event, Attendee } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Textarea from '#lib/components/ui/Textarea.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { onMount, tick } from 'svelte';
 
-	const eventId = $derived($page.params.eventId);
+	const eventId = $derived(page.params.eventId);
 
 	let loading = $state(true);
 	let sending = $state(false);

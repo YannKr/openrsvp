@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { currentUser } from '$lib/stores/auth';
-	import { events, eventsLoading } from '$lib/stores/events';
-	import { formatDateTime, daysUntil } from '$lib/utils/dates';
-	import type { Event } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { currentUser } from '#lib/stores/auth.js';
+	import { events, eventsLoading } from '#lib/stores/events.js';
+	import { formatDateTime, daysUntil } from '#lib/utils/dates.js';
+	import type { Event } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { onMount } from 'svelte';
 
 	onMount(async () => {

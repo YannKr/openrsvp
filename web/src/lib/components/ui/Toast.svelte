@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { toast } from '$lib/stores/toast';
+	import { toast } from '#lib/stores/toast.js';
 
 	const typeClasses: Record<string, string> = {
 		success: 'bg-success',

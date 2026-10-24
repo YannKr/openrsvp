@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import type { CSVImportRow, CSVPreviewResponse, CSVImportResult, ApiError } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
+	import { page } from '$app/state';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import type { CSVImportRow, CSVPreviewResponse, CSVImportResult, ApiError } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
 
 	const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 
-	const eventId = $derived($page.params.eventId);
+	const eventId = $derived(page.params.eventId);
 
 	type Step = 'upload' | 'preview' | 'confirm' | 'result';
 

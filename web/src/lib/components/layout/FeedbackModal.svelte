@@ -1,7 +1,7 @@
 <script lang="ts">
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
 
 	let open = $state(false);
 	let feedbackType = $state('bug');

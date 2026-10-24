@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { getTimezoneOptions } from '$lib/utils/timezones';
-	import type { ApiResponse } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { getTimezoneOptions } from '#lib/utils/timezones.js';
+	import type { ApiResponse } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	interface SetupConfig {
 		instanceName: string;

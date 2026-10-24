@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import type { Webhook, WebhookWithSecret, WebhookDelivery, ApiError } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import type { Webhook, WebhookWithSecret, WebhookDelivery, ApiError } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 
-	const eventId = $derived($page.params.eventId);
+	const eventId = $derived(page.params.eventId);
 
 	const EVENT_TYPES = [
 		'rsvp.created',

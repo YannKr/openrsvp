@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { api } from '$lib/api/client';
-	import { toast } from '$lib/stores/toast';
-	import { currentEvent } from '$lib/stores/events';
-	import { formatDateTime, toISOLocal } from '$lib/utils/dates';
-	import { currentUser } from '$lib/stores/auth';
-	import type { Event, Attendee, RSVPStats, Reminder, CoHost, EventComment, EmailStats } from '$lib/types';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import DateTimePicker from '$lib/components/ui/DateTimePicker.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
+	import { page } from '$app/state';
+	import { api } from '#lib/api/client.js';
+	import { toast } from '#lib/stores/toast.js';
+	import { currentEvent } from '#lib/stores/events.js';
+	import { formatDateTime, toISOLocal } from '#lib/utils/dates.js';
+	import { currentUser } from '#lib/stores/auth.js';
+	import type { Event, Attendee, RSVPStats, Reminder, CoHost, EventComment, EmailStats } from '#lib/types/index.js';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Input from '#lib/components/ui/Input.svelte';
+	import Modal from '#lib/components/ui/Modal.svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import DateTimePicker from '#lib/components/ui/DateTimePicker.svelte';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Textarea from '#lib/components/ui/Textarea.svelte';
 	import { onMount } from 'svelte';
 
 	let showCancelModal = $state(false);
@@ -43,7 +43,7 @@
 	let eventComments: EventComment[] = $state([]);
 	let emailStats = $state<EmailStats | null>(null);
 
-	const eventId = $derived($page.params.eventId);
+	const eventId = $derived(page.params.eventId);
 	const currentUserId = $derived($currentUser?.id);
 	const reminderMinDate = $derived(toISOLocal(new Date()));
 
@@ -126,7 +126,7 @@
 	async function copyShareLink() {
 		if (!event) return;
 		try {
-			await navigator.clipboard.writeText(`${$page.url.origin}/i/${event.shareToken}`);
+			await navigator.clipboard.writeText(`${page.url.origin}/i/${event.shareToken}`);
 			copied = true;
 			toast.success('Link copied!');
 			setTimeout(() => (copied = false), 2000);
@@ -512,7 +512,7 @@
 			{#if event.shareToken}
 				<div class="mt-4 pt-4 border-t border-neutral-200 flex items-center gap-2">
 					<p class="text-xs text-neutral-500">
-						Share link: <code class="bg-neutral-100 px-1.5 py-0.5 rounded font-mono text-primary">{$page.url.origin}/i/{event.shareToken}</code>
+						Share link: <code class="bg-neutral-100 px-1.5 py-0.5 rounded font-mono text-primary">{page.url.origin}/i/{event.shareToken}</code>
 					</p>
 					<button
 						type="button"
