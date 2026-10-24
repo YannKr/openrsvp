@@ -53,7 +53,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 
 ### Prerequisites
 
-- Go 1.25+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.1` directive downloads the patched compiler)
+- Go 1.26+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.3` directive downloads the patched compiler)
 - Node.js 24+
 - Make
 
