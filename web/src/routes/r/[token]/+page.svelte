@@ -2,14 +2,16 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
-	import type { PublicEvent, Attendee, Message, PublicAttendance, EventQuestion, QuestionAnswer, ApiError } from '#lib/types/index.js';
+	import type { PublicEvent, Attendee, Message, PublicAttendance, EventQuestion, QuestionAnswer, ApiError, InviteCard } from '#lib/types/index.js';
 	import QuestionRenderer from '#lib/components/questions/QuestionRenderer.svelte';
 	import AddToCalendar from '#lib/components/ui/AddToCalendar.svelte';
+	import InviteCardPreview from '#lib/components/invite/InviteCardPreview.svelte';
 	import GuestFeedback from '#lib/components/GuestFeedback.svelte';
 
 	interface RsvpData {
 		attendee: Attendee;
 		event: PublicEvent;
+		invite?: InviteCard;
 		attendance?: PublicAttendance;
 		shareToken?: string;
 		questions?: EventQuestion[];
@@ -21,6 +23,7 @@
 	let error = $state('');
 	let attendee = $state<Attendee | null>(null);
 	let eventData = $state<PublicEvent | null>(null);
+	let inviteData = $state<InviteCard | null>(null);
 	let attendance = $state<PublicAttendance | null>(null);
 	let shareToken = $state('');
 	let showAllNames = $state(false);
@@ -76,6 +79,7 @@
 			const result = await api.get<{ data: RsvpData }>(`/rsvp/public/token/${token}`);
 			attendee = result.data.attendee;
 			eventData = result.data.event;
+			inviteData = result.data.invite ?? null;
 			attendance = result.data.attendance ?? null;
 			shareToken = result.data.shareToken ?? '';
 			eventQuestions = result.data.questions ?? [];
@@ -294,14 +298,32 @@
 				</div>
 			</div>
 		{:else if attendee && eventData}
-			<!-- Event Info Header -->
-			<div class="text-center mb-6">
-				<h1 class="font-display text-2xl sm:text-3xl font-bold text-neutral-900 mb-1">{eventData.title}</h1>
-				<p class="text-neutral-500 text-sm">{formatDate(eventData.eventDate, eventData.timezone)}</p>
-				{#if eventData.location}
-					<p class="text-neutral-500 text-sm">{eventData.location}</p>
-				{/if}
-			</div>
+			{#if inviteData}
+				<div class="mb-6">
+					<InviteCardPreview
+						templateId={inviteData.templateId}
+						heading={inviteData.heading}
+						body={inviteData.body}
+						footer={inviteData.footer}
+						primaryColor={inviteData.primaryColor}
+						secondaryColor={inviteData.secondaryColor}
+						font={inviteData.font}
+						eventTitle={eventData.title}
+						eventDate={eventData.eventDate}
+						eventLocation={eventData.location}
+						customData={typeof inviteData.customData === 'string' ? inviteData.customData : JSON.stringify(inviteData.customData || {})}
+						timezone={eventData.timezone}
+					/>
+				</div>
+			{:else}
+				<div class="text-center mb-6">
+					<h1 class="font-display text-2xl sm:text-3xl font-bold text-neutral-900 mb-1">{eventData.title}</h1>
+					<p class="text-neutral-500 text-sm">{formatDate(eventData.eventDate, eventData.timezone)}</p>
+					{#if eventData.location}
+						<p class="text-neutral-500 text-sm">{eventData.location}</p>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- Add to Calendar (only for attending or maybe) -->
 			{#if shareToken && (attendee.rsvpStatus === 'attending' || attendee.rsvpStatus === 'maybe')}

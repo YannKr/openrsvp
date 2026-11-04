@@ -2,6 +2,7 @@ package rsvp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -752,6 +753,49 @@ func TestGetPublicAttendanceDisabled(t *testing.T) {
 	data, err := svc.GetPublicInvite(ctx, ev.ShareToken)
 	require.NoError(t, err)
 	assert.Nil(t, data.Attendance)
+}
+
+func TestGetByTokenWithEventIncludesSavedInvite(t *testing.T) {
+	svc, eventSvc, authStore := setupRSVP(t)
+	ctx := context.Background()
+	org, err := authStore.CreateOrganizer(ctx, "org@example.com")
+	require.NoError(t, err)
+	ev := createPublishedEvent(t, eventSvc, org.ID)
+
+	_, err = svc.ExecuteCSVImport(ctx, ev.ID, org.ID, CSVImportRequest{Rows: []CSVImportRow{
+		{Name: "Alice", Email: "alice@example.com"},
+	}})
+	require.NoError(t, err)
+	attendees, err := svc.ListByEvent(ctx, ev.ID)
+	require.NoError(t, err)
+	require.Len(t, attendees, 1)
+	token := attendees[0].RSVPToken
+
+	withoutCard, err := svc.GetByTokenWithEvent(ctx, token)
+	require.NoError(t, err)
+	withoutCardJSON, err := json.Marshal(withoutCard)
+	require.NoError(t, err)
+	assert.NotContains(t, string(withoutCardJSON), `"invite":`)
+
+	_, err = svc.inviteService.Save(ctx, ev.ID, invite.SaveInviteRequest{
+		TemplateID: "confetti",
+		Heading:    "Come celebrate!",
+		Body:       "Join us in the garden.",
+	})
+	require.NoError(t, err)
+	personalized, err := svc.GetByTokenWithEvent(ctx, token)
+	require.NoError(t, err)
+	public, err := svc.GetPublicInvite(ctx, ev.ShareToken)
+	require.NoError(t, err)
+
+	privateJSON, err := json.Marshal(personalized)
+	require.NoError(t, err)
+	var response struct {
+		Invite *invite.InviteCard `json:"invite"`
+	}
+	require.NoError(t, json.Unmarshal(privateJSON, &response))
+	assert.Equal(t, public.Invite, response.Invite)
+	assert.Equal(t, attendees[0].ID, personalized.Attendee.ID)
 }
 
 func TestGetByTokenWithEventIncludesAttendance(t *testing.T) {
