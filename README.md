@@ -450,7 +450,7 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 ## 📝 Changelog
 
-### v1.8.3 (2026-09-23)
+### v1.8.3 (2026-11-06)
 
 **Security:**
 - A public RSVP with the email or phone of an existing guest changed that RSVP and returned its `rsvpToken`. A person who knew the address of a guest was able to change the reply and get the manage link. A repeat RSVP now changes nothing and returns an empty `rsvpToken` with the same `201`. If the request has an email, the server sends the manage link to the stored address. Invitations from the CSV import, organizer messages and reminders now link each guest to the page of their own RSVP (`/r/{token}`). On that page, an imported guest can give the first reply. When the event is full and the waitlist is on, "Attending" puts the guest on the waitlist
@@ -470,6 +470,7 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 - The setup page sent `snake_case` keys, but the API expects `camelCase` keys. Each save failed with `400`. The page now sends the correct keys, and the signup switch shows the value in effect
 - An RSVP with an incorrect answer to a custom question failed, but the server stored the guest first. An update had the same fault. The server now validates the answers before it stores anything. Answer errors now return `400` with the message, not `500`
 - A failed waitlist promotion returned the raw error text with `400`, also for database errors. A database error now returns the usual `500` with a reference, and the server writes the error to the log
+- Guests from the CSV import get a link to their own RSVP page (`/r/{token}`). That page did not show the invitation design that the organizer saved. The page now shows the saved design above the RSVP controls. An event without a saved design shows the event header as before
 
 **Dependencies:**
 - The `go` directive is now 1.26.0, because `golang.org/x/net` v0.61.0 and `golang.org/x/sys` v0.49.0 need it. A build from source now needs Go 1.26 or later. CI tests Go 1.26 and 1.27
