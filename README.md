@@ -473,7 +473,10 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 **Dependencies:**
 - The `go` directive is now 1.26.0, because `golang.org/x/net` v0.61.0 and `golang.org/x/sys` v0.49.0 need it. A build from source now needs Go 1.26 or later. CI tests Go 1.26 and 1.27
-- The frontend now uses SvelteKit 3 (`@sveltejs/kit` 3.1.0, `@sveltejs/adapter-static` 4.0.0). The adapter settings moved from `svelte.config.js` into `vite.config.ts`, imports use the `#lib` alias instead of `$lib`, and pages read `page` from `$app/state` instead of `$app/stores`. The `cookie` override is gone, because SvelteKit 3 uses `cookie` 2
+- The frontend now uses SvelteKit 3 (`@sveltejs/kit` 3.1.1, `@sveltejs/adapter-static` 4.0.1). The adapter settings moved from `svelte.config.js` into `vite.config.ts`, imports use the `#lib` alias instead of `$lib`, and pages read `page` from `$app/state` instead of `$app/stores`. The `cookie` override is gone, because SvelteKit 3 uses `cookie` 2
+- The Docker image builds the frontend with Node.js 26 (`node:26-alpine`), the LTS line since 2026-10-28. The CI frontend job also uses Node.js 26. Node.js 24 can still build the frontend
+- `mattn/go-sqlite3` is now 1.14.53, which contains SQLite 3.54.1
+- CI passes on the `ubuntu-26.04` runner image, which `ubuntu-latest` now selects. The workflows needed no change for it
 - The other Go modules, npm packages, CI tools and actions are at their latest releases. TypeScript stays at 6, because SvelteKit 3 and `svelte-check` do not accept TypeScript 7 yet
 
 ### v1.8.2 (2026-08-14)
