@@ -511,6 +511,7 @@ func (s *Service) SubmitRSVP(ctx context.Context, shareToken string, req RSVPReq
 type RsvpWithEvent struct {
 	Attendee         *Attendee          `json:"attendee"`
 	Event            *event.PublicEvent `json:"event"`
+	Invite           *invite.InviteCard `json:"invite,omitempty"`
 	Attendance       *PublicAttendance  `json:"attendance,omitempty"`
 	ShareToken       string             `json:"shareToken,omitempty"`
 	WaitlistPosition *int               `json:"waitlistPosition,omitempty"`
@@ -549,6 +550,11 @@ func (s *Service) GetByTokenWithEvent(ctx context.Context, rsvpToken string) (*R
 		Attendee:   a,
 		Event:      ev.ToPublic(),
 		ShareToken: ev.ShareToken,
+	}
+
+	// A missing or unavailable design should not prevent guests from managing their RSVP.
+	if card, err := s.inviteService.GetByEventID(ctx, ev.ID); err == nil {
+		result.Invite = card
 	}
 
 	if ev.ShowHeadcount || ev.ShowGuestList {
