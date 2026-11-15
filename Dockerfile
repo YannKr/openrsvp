@@ -7,8 +7,9 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
-# Use Go 1.27.3 (or newer) to pick up patched std-lib (html/template XSS
-# escaper bypass, net/mail quadratic concat, net/http2 frame infinite loop).
+# Use Go 1.27.4 (or newer) to pick up patched std-lib (html/template XSS
+# escaper bypass, net/mail quadratic concat, net/http2 frame infinite loop,
+# net/http MaxBytesReader header race).
 # go.mod's go directive expresses minimum source compatibility, not the
 # toolchain we build with.
 # Pin the patch version, and keep it equal to the toolchain directive in
@@ -16,7 +17,7 @@ RUN npm run build
 # architecture under emulation, and the multi-arch release build becomes many
 # times slower. Keep this version in step with the govulncheck pin in
 # .github/workflows/ci.yml.
-FROM golang:1.27.3-alpine AS backend
+FROM golang:1.27.4-alpine AS backend
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY go.mod go.sum ./
