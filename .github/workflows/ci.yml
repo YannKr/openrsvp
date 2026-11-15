@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: golangci-lint
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run on the toolchain the project actually targets (the toolchain
     # directive in go.mod). GOTOOLCHAIN=local pins the analysis to the
-    # installed version so the scan reflects 1.27.3.
+    # installed version so the scan reflects 1.27.4.
     # Keep this current as new stdlib advisories land, and keep it in step with
     # the pinned base image in the Dockerfile. Both must name the same patch
     # version, so that this gate scans what the released binary is built with.
@@ -124,7 +124,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
       - name: Create frontend placeholder for go:embed
         run: mkdir -p internal/server/frontend && touch internal/server/frontend/index.html
       - name: Install govulncheck
