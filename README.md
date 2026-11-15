@@ -53,7 +53,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 
 ### Prerequisites
 
-- Go 1.26+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.3` directive downloads the patched compiler)
+- Go 1.26+ (when `GOTOOLCHAIN=auto`, the default, the `toolchain go1.27.4` directive downloads the patched compiler)
 - Node.js 24+
 - Make
 
@@ -449,6 +449,16 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 | Deployment | Docker (multi-stage, single binary) |
 
 ## 📝 Changelog
+
+### v1.8.4 (unreleased)
+
+**Security:**
+- The build used go1.27.3, which carries one advisory in the standard library that the code reaches (GO-2026-6859, CVE-2026-97054). An HTTP/1 server that limits the request body with `MaxBytesReader` can stop with a panic when a handler reads the body while it writes the response header. OpenRSVP sets this limit on each request that has a body. The toolchain, the Docker build image and the `govulncheck` job now use go1.27.4, and the scan reports no findings
+
+**Dependencies:**
+- The frontend now uses `@sveltejs/kit` 3.2.0, `@sveltejs/adapter-auto` 8.0.1 and `vite` 8.3.8. The AWS SDK modules and `golang.org/x/sys` are at their latest releases
+- `mattn/go-sqlite3` stays at 1.14.52. Since 1.14.53, `Close` can wait forever when an SQLite callback calls the connection, and the build fails on some Windows toolchains. No release has the fixes yet
+- `@playwright/test` stays at 1.65.0, because 1.65.1 is one day old. TypeScript stays at 6, because SvelteKit 3 and `svelte-check` do not accept TypeScript 7 yet
 
 ### v1.8.3 (2026-11-06)
 
