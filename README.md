@@ -450,7 +450,7 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 ## 📝 Changelog
 
-### v1.8.4 (unreleased)
+### v1.8.4 (2026-11-15)
 
 **Security:**
 - The build used go1.27.3, which carries one advisory in the standard library that the code reaches (GO-2026-6859, CVE-2026-97054). An HTTP/1 server that limits the request body with `MaxBytesReader` can stop with a panic when a handler reads the body while it writes the response header. OpenRSVP sets this limit on each request that has a body. The toolchain, the Docker build image and the `govulncheck` job now use go1.27.4, and the scan reports no findings
