@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
 	clearSession,
 	createEventViaAPI,
+	getAuthToken,
 	getOrCreateSession,
 	setSessionInBrowser,
 	submitRSVPViaAPI
@@ -61,6 +62,17 @@ test.describe.serial('OpenRSVP E2E', () => {
 		// Uses 2 auth requests: POST /magic-link + POST /verify.
 		sessionToken = await getOrCreateSession(ORGANIZER_EMAIL);
 		expect(sessionToken).toBeTruthy();
+	});
+
+	test('authenticate through the browser verification page', async ({ page }) => {
+		const token = await getAuthToken(`e2e-browser-verify-${RUN_ID}@example.com`);
+
+		await page.goto(`/auth/verify?token=${token}`);
+		await page.waitForURL('**/events', { timeout: 10000 });
+
+		expect(page.url()).not.toContain('token=');
+		const me = await page.request.get('/api/v1/auth/me');
+		expect(me.status()).toBe(200);
 	});
 
 	test('session grants access to protected API', async () => {
