@@ -450,6 +450,11 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 ## 📝 Changelog
 
+### v1.8.5 (2026-11-15)
+
+**Fixes:**
+- The login page that opens from a magic link called the SvelteKit `replaceState()` before the router was ready. On some loads this stopped the page with `Cannot read properties of undefined (reading '$set')`, and the login did not complete. The page now removes the token from the address bar with the browser History API. Thanks to @IanWardell (#8)
+
 ### v1.8.4 (2026-11-15)
 
 **Security:**
