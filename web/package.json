@@ -14,7 +14,7 @@
 		"test:visual:update": "playwright test --update-snapshots"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.65.0",
+		"@playwright/test": "^1.65.1",
 		"@sveltejs/adapter-auto": "^8.0.1",
 		"@sveltejs/adapter-static": "^4.0.1",
 		"@sveltejs/kit": "^3.2.0",

@@ -450,6 +450,13 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 ## 📝 Changelog
 
+### v1.8.6 (unreleased)
+
+**Dependencies:**
+- The visual tests and the E2E tests now use `@playwright/test` 1.65.1
+- `mattn/go-sqlite3` stays at 1.14.52. The fixes for the two problems in 1.14.53 are on the upstream master branch, but no release has them yet
+- These releases are less than three days old and stay at their current versions: the AWS SDK modules, `golang.org/x/net` 0.63.0, `@sveltejs/kit` 3.4.0, `svelte` 5.58.0 and `@sveltejs/adapter-auto` 9.0.0. TypeScript stays at 6
+
 ### v1.8.5 (2026-11-15)
 
 **Fixes:**
