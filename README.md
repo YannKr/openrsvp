@@ -454,8 +454,12 @@ If you deployed `docker-compose.postgres.yml` **before v1.5.1**, rotate your Pos
 
 **Dependencies:**
 - The visual tests and the E2E tests now use `@playwright/test` 1.65.1
+- `aws-sdk-go-v2/config` 1.33.19, `aws-sdk-go-v2/credentials` 1.21.1 and `golang.org/x/net` 0.63.0
+- `@sveltejs/kit` 3.3.1 and `svelte` 5.58.0
+- CI uses `actions/setup-go` v7.1.0 and `govulncheck` v1.10.0
 - `mattn/go-sqlite3` stays at 1.14.52. The fixes for the two problems in 1.14.53 are on the upstream master branch, but no release has them yet
-- These releases are less than three days old and stay at their current versions: the AWS SDK modules, `golang.org/x/net` 0.63.0, `@sveltejs/kit` 3.4.0, `svelte` 5.58.0 and `@sveltejs/adapter-auto` 9.0.0. TypeScript stays at 6
+- These releases are less than three days old and stay at their current versions: `aws-sdk-go-v2/config` 1.33.20 and 1.33.21, `aws-sdk-go-v2/credentials` 1.21.2 and 1.21.3, `@sveltejs/kit` 3.4.0, `svelte` 5.58.1 to 5.59.1 and `@sveltejs/adapter-auto` 9.0.0
+- TypeScript stays at 6. SvelteKit and `svelte-check` do not accept TypeScript 7 yet
 
 ### v1.8.5 (2026-11-15)
 
